@@ -53,5 +53,6 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "fix(deps): update pragmatiks-sdk to v${{ inputs.sdk_version }}"
+            git pull --rebase
             git push
           fi
