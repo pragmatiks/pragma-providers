@@ -1,3 +1,9 @@
+## v0.2.4 (2026-01-12)
+
+### Fix
+
+- **ci**: pull before push to avoid race conditions
+
 ## v0.2.3 (2026-01-12)
 
 ### Fix
