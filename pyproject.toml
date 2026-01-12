@@ -1,0 +1,45 @@
+[project]
+name = "pragma-providers"
+version = "0.1.0"
+description = "Pragma-managed cloud providers"
+readme = "README.md"
+requires-python = ">=3.13"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+preview = true
+select = [
+    "E",       # pycodestyle errors
+    "W",       # pycodestyle warnings
+    "F",       # Pyflakes
+    "I",       # isort
+    "UP",      # Pyupgrade
+    "D",       # pydocstyle
+    "DOC",     # docstring checks
+    "PT",      # pytest rules
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**/*.py" = [
+    "D100", "D101", "D102", "D103", "D104", "D107", "DOC",
+]
+
+[tool.ruff.format]
+preview = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = ["-v"]

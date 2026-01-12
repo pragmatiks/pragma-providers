@@ -1,0 +1,26 @@
+version: "3"
+
+includes:
+  gcp:
+    taskfile: ./taskfiles/gcp.Taskfile.yaml
+    dir: ./packages/gcp
+
+tasks:
+  default: task --list-all
+
+  install: uv sync --all-groups
+
+  test:
+    desc: Run all tests across all packages
+    deps:
+      - gcp:test
+
+  format:
+    desc: Format all Python code
+    deps:
+      - gcp:format
+
+  check:
+    desc: Run all checks (ruff + type checking)
+    deps:
+      - gcp:check

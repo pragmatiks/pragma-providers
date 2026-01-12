@@ -1,0 +1,6 @@
+# Changes here will be overwritten by Copier
+_src_path: /Users/thomas/Workspace/pragmatiks/templates/provider
+author_email: team@pragmatiks.io
+author_name: Pragmatiks
+description: GCP provider for Pragmatiks
+name: gcp
