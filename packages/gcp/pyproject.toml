@@ -5,7 +5,7 @@ description = "GCP provider for Pragmatiks"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk",
+    "pragmatiks-sdk>=0.1.0a1",
     "google-cloud-secret-manager>=2.20.0",
 ]
 
@@ -14,8 +14,7 @@ authors = [
 ]
 
 [tool.uv.sources]
-# During development, use the local SDK from the main monorepo
-pragmatiks-sdk = { path = "../../../sdk", editable = true }
+pragmatiks-sdk = { git = "https://github.com/pragmatiks/sdk.git", tag = "v0.1.0a1" }
 
 [dependency-groups]
 dev = [
