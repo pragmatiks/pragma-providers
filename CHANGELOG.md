@@ -1,3 +1,10 @@
+## v0.3.3 (2026-01-13)
+
+### Fix
+
+- use default dist/ directory for PyPI publish
+- **deps**: update pragmatiks-sdk to v0.3.1
+
 ## v0.3.2 (2026-01-13)
 
 ### Fix
