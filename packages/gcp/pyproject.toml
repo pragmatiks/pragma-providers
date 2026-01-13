@@ -5,7 +5,7 @@ description = "GCP provider for Pragmatiks"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk>=0.2.1",
+    "pragmatiks-sdk>=0.3.1",
     "google-cloud-secret-manager>=2.20.0",
 ]
 
@@ -14,7 +14,7 @@ authors = [
 ]
 
 [tool.uv.sources]
-pragmatiks-sdk = { git = "https://github.com/pragmatiks/sdk.git", tag = "v0.2.1" }
+pragmatiks-sdk = { git = "https://github.com/pragmatiks/sdk.git", tag = "v0.3.1" }
 
 [dependency-groups]
 dev = [

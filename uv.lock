@@ -7,8 +7,8 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "gcp-provider",
     "pragma-providers",
+    "pragmatiks-gcp-provider",
 ]
 
 [[package]]
@@ -230,37 +230,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/1d/65/ce7f1b70157833bf3cb851b556a37d4547ceafc158aa9b34b36782f23696/filelock-3.20.3.tar.gz", hash = "sha256:18c57ee915c7ec61cff0ecf7f0f869936c7c30191bb0cf406f1341778d0834e1", size = 19485 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b5/36/7fb70f04bf00bc646cd5bb45aa9eddb15e19437a28b8fb2b4a5249fac770/filelock-3.20.3-py3-none-any.whl", hash = "sha256:4b0dda527ee31078689fc205ec4f1c1bf7d56cf88b6dc9426c4f230e46c2dce1", size = 16701 },
-]
-
-[[package]]
-name = "gcp-provider"
-version = "0.1.0"
-source = { editable = "packages/gcp" }
-dependencies = [
-    { name = "google-cloud-secret-manager" },
-    { name = "pragmatiks-sdk" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "pytest-mock" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "google-cloud-secret-manager", specifier = ">=2.20.0" },
-    { name = "pragmatiks-sdk", git = "https://github.com/pragmatiks/sdk.git?tag=v0.2.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "pytest-asyncio", specifier = ">=1.0.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "pytest-mock", specifier = ">=3.14.0" },
 ]
 
 [[package]]
@@ -557,7 +526,7 @@ wheels = [
 
 [[package]]
 name = "pragma-providers"
-version = "0.2.4"
+version = "0.3.2"
 source = { virtual = "." }
 
 [package.dev-dependencies]
@@ -577,9 +546,40 @@ dev = [
 ]
 
 [[package]]
+name = "pragmatiks-gcp-provider"
+version = "0.1.0"
+source = { editable = "packages/gcp" }
+dependencies = [
+    { name = "google-cloud-secret-manager" },
+    { name = "pragmatiks-sdk" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "google-cloud-secret-manager", specifier = ">=2.20.0" },
+    { name = "pragmatiks-sdk", git = "https://github.com/pragmatiks/sdk.git?tag=v0.3.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-asyncio", specifier = ">=1.0.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
+]
+
+[[package]]
 name = "pragmatiks-sdk"
-version = "0.2.1"
-source = { git = "https://github.com/pragmatiks/sdk.git?tag=v0.2.1#3f50b835a782548c7d62ce4ab2bd4cbe9aadc5ff" }
+version = "0.3.1"
+source = { git = "https://github.com/pragmatiks/sdk.git?tag=v0.3.1#87cc177db15d86cfec32f75ca39b71416900bb92" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
