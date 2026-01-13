@@ -1,27 +1,55 @@
 # Pragma Providers
 
-Pragma-managed cloud providers for the Pragmatiks platform.
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pragmatiks/providers)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
+**[Documentation](https://docs.pragmatiks.io/providers/overview)** | **[SDK](https://github.com/pragmatiks/sdk)** | **[CLI](https://github.com/pragmatiks/cli)**
+
+First-party cloud providers for the Pragmatiks platform.
+
+<!-- TODO: Add logo -->
+
+## Quick Start
+
+```yaml
+# secret.yaml
+provider: gcp
+resource: secret
+name: db-password
+config:
+  secret_id: db-password
+  data: "super-secret-value"
+```
+
+```bash
+pragma resources apply --pending secret.yaml
+pragma resources get gcp/secret db-password
+```
 
 ## Available Providers
 
-| Provider | Package | Resources |
-|----------|---------|-----------|
-| GCP | `pragma-gcp-provider` | Secret Manager |
+### GCP Provider
 
-## Installation
+Manage Google Cloud Platform resources.
 
 ```bash
-pip install pragma-gcp-provider
+pip install pragmatiks-gcp-provider
 ```
 
-## Usage
+| Resource | Description |
+|----------|-------------|
+| `gcp/secret` | Secret Manager secrets |
 
-Resources are typically managed through the Pragma platform. You can reference them in your own providers using `FieldReference`:
+## Using Provider Resources
+
+Reference provider resources in your configurations:
 
 ```python
 from pragma_sdk import FieldReference
 
-config = MyAppConfig(
+config = AppConfig(
     database_password=FieldReference(
         provider="gcp",
         resource="secret",
@@ -29,6 +57,76 @@ config = MyAppConfig(
         field="data"
     )
 )
+```
+
+Or via YAML with dependency references:
+
+```yaml
+provider: myapp
+resource: service
+name: api
+config:
+  db_password:
+    $ref:
+      provider: gcp
+      resource: secret
+      name: db-password
+      field: data
+```
+
+## Building Custom Providers
+
+Create your own providers with the SDK:
+
+```bash
+# Initialize a provider project
+pragma provider init mycompany
+
+# Implement your resources
+cd mycompany-provider
+# Edit src/mycompany_provider/resources/
+
+# Deploy to the platform
+pragma provider sync
+pragma provider push --deploy
+```
+
+See the [Building Providers Guide](https://docs.pragmatiks.io/building-providers/overview) for complete documentation.
+
+## Provider Architecture
+
+Each provider contains:
+
+- **Provider namespace** - Groups related resources (e.g., `gcp`)
+- **Resource types** - Individual resource definitions with Config and Outputs
+- **Lifecycle methods** - `on_create`, `on_update`, `on_delete` implementations
+
+```python
+from pragma_sdk import Provider, Resource, Config, Outputs
+
+gcp = Provider(name="gcp")
+
+class SecretConfig(Config):
+    secret_id: str
+    data: str
+
+class SecretOutputs(Outputs):
+    resource_name: str
+    version_id: str
+
+@gcp.resource("secret")
+class Secret(Resource[SecretConfig, SecretOutputs]):
+    async def on_create(self) -> SecretOutputs:
+        # Create secret in GCP Secret Manager
+        ...
+
+    async def on_update(self, previous: SecretConfig) -> SecretOutputs:
+        # Update secret version
+        ...
+
+    async def on_delete(self) -> None:
+        # Delete secret
+        ...
 ```
 
 ## Development
@@ -43,9 +141,24 @@ task test
 # Run all checks
 task check
 
-# Run GCP-specific tasks
+# Provider-specific tasks
 task gcp:test
 task gcp:check
+```
+
+## Repository Structure
+
+```
+providers/
+├── packages/
+│   └── gcp/              # GCP provider package
+│       ├── src/
+│       │   └── gcp_provider/
+│       │       └── resources/
+│       │           └── secret.py
+│       └── tests/
+├── pyproject.toml        # Workspace configuration
+└── README.md
 ```
 
 ## License
