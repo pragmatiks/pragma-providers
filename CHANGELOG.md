@@ -1,3 +1,9 @@
+## v0.4.0 (2026-01-13)
+
+### Feat
+
+- **gcp**: require credentials from pragma/secret for multi-tenant auth
+
 ## v0.3.3 (2026-01-13)
 
 ### Fix
