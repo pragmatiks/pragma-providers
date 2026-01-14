@@ -1,6 +1,7 @@
 """GCP provider for Pragmatiks.
 
-Provides GCP Secret Manager resources.
+Provides GCP Secret Manager resources for managing secrets
+in Google Cloud Platform using user-provided credentials.
 """
 
 from pragma_sdk import Provider
