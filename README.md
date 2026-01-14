@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/pragmatiks/pragmatiks/main/assets/pragmatiks_brand/wordmark/tech_readout.png" alt="Pragmatiks" width="800">
+</p>
+
 # Pragma Providers
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pragmatiks/providers)
@@ -8,8 +12,6 @@
 **[Documentation](https://docs.pragmatiks.io/providers/overview)** | **[SDK](https://github.com/pragmatiks/sdk)** | **[CLI](https://github.com/pragmatiks/cli)**
 
 First-party cloud providers for the Pragmatiks platform.
-
-<!-- TODO: Add logo -->
 
 ## Quick Start
 
