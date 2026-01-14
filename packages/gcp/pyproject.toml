@@ -13,9 +13,6 @@ authors = [
     { name = "Pragmatiks", email = "team@pragmatiks.io" },
 ]
 
-[tool.uv.sources]
-pragmatiks-sdk = { git = "https://github.com/pragmatiks/sdk.git", tag = "v0.3.1" }
-
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
