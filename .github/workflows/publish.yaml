@@ -74,7 +74,7 @@ jobs:
       - name: Bump and build changed providers
         id: bump
         run: |
-          BUILT_PACKAGES=""
+          mkdir -p dist
           VERSIONS=""
 
           for provider in ${{ needs.detect-changes.outputs.providers }}; do
@@ -87,9 +87,9 @@ jobs:
               echo "Bumped $provider to v$VERSION"
               VERSIONS="$VERSIONS $provider:$VERSION"
 
-              # Build the package
+              # Build the package and copy to central dist
               uv build
-              BUILT_PACKAGES="$BUILT_PACKAGES packages/$provider/dist/*"
+              cp dist/* ../../dist/
             else
               if grep -qE "No commits found|is not a bump" bump_output.txt; then
                 echo "No bump needed for $provider"
@@ -103,7 +103,6 @@ jobs:
             echo "::endgroup::"
           done
 
-          echo "built_packages=$BUILT_PACKAGES" >> $GITHUB_OUTPUT
           echo "versions=$VERSIONS" >> $GITHUB_OUTPUT
 
           if [ -n "$VERSIONS" ]; then
@@ -136,5 +135,5 @@ jobs:
         if: steps.bump.outputs.has_releases == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: packages/*/dist/
+          packages-dir: dist/
           skip-existing: true
