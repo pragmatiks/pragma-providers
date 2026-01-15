@@ -1,3 +1,9 @@
+## gcp-v0.4.0 (2026-01-15)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v0.6.0
+
 ## gcp-v0.3.0 (2026-01-14)
 
 ### Fix
