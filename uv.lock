@@ -548,7 +548,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "0.6.0"
+version = "0.10.0"
 source = { editable = "packages/gcp" }
 dependencies = [
     { name = "google-cloud-secret-manager" },
