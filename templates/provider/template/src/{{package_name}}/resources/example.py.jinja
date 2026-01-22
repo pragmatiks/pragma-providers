@@ -1,0 +1,47 @@
+"""Example resource for {{ name }} provider.
+
+This is a starter template - replace with your actual resource implementation.
+"""
+
+from datetime import UTC, datetime
+from typing import ClassVar
+
+from pragma_sdk import Config, Field, Outputs, Resource
+
+
+class ExampleConfig(Config):
+    """Configuration for example resource."""
+
+    name: Field[str]
+    size: Field[int] = 10
+
+
+class ExampleOutputs(Outputs):
+    """Outputs from example resource."""
+
+    url: str
+    created_at: str
+
+
+class ExampleResource(Resource[ExampleConfig, ExampleOutputs]):
+    """Example resource - replace with your implementation."""
+
+    provider: ClassVar[str] = "{{ name }}"
+    resource: ClassVar[str] = "example"
+
+    async def on_create(self) -> ExampleOutputs:
+        """Create the resource."""
+        return ExampleOutputs(
+            url=f"https://example.com/{self.config.name}",
+            created_at=datetime.now(UTC).isoformat(),
+        )
+
+    async def on_update(self, previous_config: ExampleConfig) -> ExampleOutputs:
+        """Update the resource."""
+        return ExampleOutputs(
+            url=f"https://example.com/{self.config.name}",
+            created_at=self.outputs.created_at,
+        )
+
+    async def on_delete(self) -> None:
+        """Delete the resource."""

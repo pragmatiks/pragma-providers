@@ -1,0 +1,53 @@
+# Provider template shim
+# Points to the actual template in templates/provider/template
+# This allows `copier copy gh:pragmatiks/pragma-providers` to work
+
+_min_copier_version: "9.0.0"
+_subdirectory: templates/provider/template
+_templates_suffix: .jinja
+
+# Questions
+name:
+  type: str
+  help: Provider name (e.g., 'postgres', 'mysql', 'mycompany')
+  validator: >-
+    {% if not name %}
+    Provider name is required
+    {% elif not name | regex_search('^[a-z][a-z0-9-]*$') %}
+    Provider name must be lowercase, start with a letter, and contain only letters, numbers, and hyphens
+    {% endif %}
+
+description:
+  type: str
+  help: Short description of your provider
+  default: "{{ name }} provider for Pragmatiks"
+
+author_name:
+  type: str
+  help: Author name
+  default: ""
+
+author_email:
+  type: str
+  help: Author email
+  default: ""
+
+# Computed values (not shown to user)
+package_name:
+  type: str
+  default: "{{ name | lower | replace('-', '_') | replace(' ', '_') }}_provider"
+  when: false
+
+project_name:
+  type: str
+  default: "{{ name }}-provider"
+  when: false
+
+# Template settings
+_skip_if_exists:
+  - "src/{{ package_name }}/resources/"
+_exclude:
+  - "copier.yml"
+  - "*.pyc"
+  - "__pycache__"
+  - ".git"

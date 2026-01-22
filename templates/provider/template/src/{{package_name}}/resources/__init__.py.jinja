@@ -1,0 +1,16 @@
+"""Resource definitions for {{ name }} provider.
+
+Import and export your Resource classes here for discovery by the runtime.
+"""
+
+from {{ package_name }}.resources.example import (
+    ExampleConfig,
+    ExampleOutputs,
+    ExampleResource,
+)
+
+__all__ = [
+    "ExampleConfig",
+    "ExampleOutputs",
+    "ExampleResource",
+]

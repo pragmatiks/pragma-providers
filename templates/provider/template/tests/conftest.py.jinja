@@ -1,0 +1,10 @@
+"""Pytest configuration for {{ name }} provider tests."""
+
+import pytest
+from pragma_sdk.provider import ProviderHarness
+
+
+@pytest.fixture
+def harness():
+    """Test harness for invoking lifecycle methods."""
+    return ProviderHarness()
