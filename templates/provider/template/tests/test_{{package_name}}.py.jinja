@@ -1,0 +1,62 @@
+"""Tests for {{ name }} provider resources."""
+
+from {{ package_name }} import ExampleConfig, ExampleOutputs, ExampleResource
+
+
+class TestExampleResource:
+    """Tests for ExampleResource lifecycle methods."""
+
+    async def test_create(self, harness):
+        """on_create returns valid outputs."""
+        result = await harness.invoke_create(
+            ExampleResource,
+            name="test-resource",
+            config=ExampleConfig(name="test", size=20),
+        )
+
+        assert result.success
+        assert isinstance(result.outputs, ExampleOutputs)
+        assert "test" in result.outputs.url
+        assert result.outputs.created_at is not None
+
+    async def test_update(self, harness):
+        """on_update recalculates url but preserves created_at."""
+        create_result = await harness.invoke_create(
+            ExampleResource,
+            name="test-resource",
+            config=ExampleConfig(name="test", size=10),
+        )
+
+        update_result = await harness.invoke_update(
+            ExampleResource,
+            name="test-resource",
+            config=ExampleConfig(name="updated", size=20),
+            previous_config=ExampleConfig(name="test", size=10),
+            current_outputs=create_result.outputs,
+        )
+
+        assert update_result.success
+        assert "updated" in update_result.outputs.url
+        assert update_result.outputs.created_at == create_result.outputs.created_at
+
+    async def test_delete(self, harness):
+        """on_delete completes without error."""
+        result = await harness.invoke_delete(
+            ExampleResource,
+            name="test-resource",
+            config=ExampleConfig(name="test", size=20),
+        )
+
+        assert result.success
+
+
+class TestExampleResourceIdentity:
+    """Tests for ExampleResource identity."""
+
+    def test_provider_name(self):
+        """Resource has correct provider name."""
+        assert ExampleResource.provider == "{{ name }}"
+
+    def test_resource_type(self):
+        """Resource has correct resource type."""
+        assert ExampleResource.resource == "example"

@@ -1,0 +1,36 @@
+[project]
+name = "{{ project_name }}"
+version = "0.1.0"
+description = "{{ description }}"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pragmatiks-sdk",
+]
+{% if author_name or author_email %}
+authors = [
+    { name = "{{ author_name }}"{% if author_email %}, email = "{{ author_email }}"{% endif %} },
+]
+{% endif %}
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.0.0",
+]
+
+[tool.pragma]
+# Provider metadata - used by the platform for discovery and deployment
+provider = "{{ name }}"
+package = "{{ package_name }}"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 120
+
+[build-system]
+requires = ["uv_build>=0.9.8,<0.10.0"]
+build-backend = "uv_build"
