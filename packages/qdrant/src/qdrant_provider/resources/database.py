@@ -165,9 +165,7 @@ users:
 
         return values
 
-    async def _run_command(
-        self, cmd: list[str], kubeconfig_path: str, name: str
-    ) -> subprocess.CompletedProcess:
+    async def _run_command(self, cmd: list[str], kubeconfig_path: str, name: str) -> subprocess.CompletedProcess:
         """Run a CLI command with kubeconfig.
 
         Args:
