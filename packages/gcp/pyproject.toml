@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "pragmatiks-sdk>=0.6.0",
+    "google-cloud-container>=2.50.0",
     "google-cloud-secret-manager>=2.20.0",
 ]
 

@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+from google.cloud.container_v1.types import Cluster
 from pragma_sdk.provider import ProviderHarness
 
 
@@ -61,5 +62,39 @@ def mock_secretmanager_client(mocker: "MockerFixture") -> MagicMock:
         "gcp_provider.resources.secret.service_account.Credentials.from_service_account_info",
         return_value=mock_credentials,
     )
+
+    return mock_client
+
+
+@pytest.fixture
+def mock_container_client(mocker: "MockerFixture") -> MagicMock:
+    """Mock GCP Container (GKE) async client with credentials support."""
+    mock_client = MagicMock()
+
+    # Mock cluster in RUNNING state
+    mock_cluster = MagicMock()
+    mock_cluster.name = "test-cluster"
+    mock_cluster.endpoint = "https://10.0.0.1"
+    mock_cluster.location = "europe-west4"
+    mock_cluster.status = Cluster.Status.RUNNING
+    mock_cluster.master_auth.cluster_ca_certificate = "Y2VydGlmaWNhdGU="
+
+    mock_client.create_cluster = mocker.AsyncMock(return_value=MagicMock())
+    mock_client.get_cluster = mocker.AsyncMock(return_value=mock_cluster)
+    mock_client.delete_cluster = mocker.AsyncMock(return_value=MagicMock())
+
+    mocker.patch(
+        "gcp_provider.resources.gke.ClusterManagerAsyncClient",
+        return_value=mock_client,
+    )
+
+    mock_credentials = MagicMock()
+    mocker.patch(
+        "gcp_provider.resources.gke.service_account.Credentials.from_service_account_info",
+        return_value=mock_credentials,
+    )
+
+    # Patch asyncio.sleep to avoid actual waits in tests
+    mocker.patch("gcp_provider.resources.gke.asyncio.sleep", return_value=None)
 
     return mock_client
