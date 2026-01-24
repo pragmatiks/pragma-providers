@@ -13,6 +13,9 @@ includes:
   docling:
     taskfile: ./taskfiles/docling.Taskfile.yaml
     dir: ./packages/docling
+  qdrant:
+    taskfile: ./taskfiles/qdrant.Taskfile.yaml
+    dir: ./packages/qdrant
 
 tasks:
   default: task --list-all
@@ -26,6 +29,7 @@ tasks:
       - anthropic:test
       - openai:test
       - docling:test
+      - qdrant:test
 
   format:
     desc: Format all Python code
@@ -34,6 +38,7 @@ tasks:
       - anthropic:format
       - openai:format
       - docling:format
+      - qdrant:format
 
   check:
     desc: Run all checks (ruff + type checking)
@@ -42,3 +47,4 @@ tasks:
       - anthropic:check
       - openai:check
       - docling:check
+      - qdrant:check
