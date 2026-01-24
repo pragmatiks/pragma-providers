@@ -121,7 +121,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
             TimeoutError: If cluster doesn't reach RUNNING in time.
             RuntimeError: If cluster enters ERROR state.
         """
-        for attempt in range(_MAX_POLL_ATTEMPTS):
+        for _ in range(_MAX_POLL_ATTEMPTS):
             cluster = await client.get_cluster(
                 request=GetClusterRequest(name=self._cluster_path())
             )
@@ -154,7 +154,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
         Raises:
             TimeoutError: If cluster doesn't delete in time.
         """
-        for attempt in range(_MAX_POLL_ATTEMPTS):
+        for _ in range(_MAX_POLL_ATTEMPTS):
             try:
                 await client.get_cluster(
                     request=GetClusterRequest(name=self._cluster_path())
