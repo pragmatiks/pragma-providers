@@ -367,6 +367,24 @@ users:
         msg = f"Deployment {deployment_name} did not become ready within {_MAX_POLL_ATTEMPTS * _POLL_INTERVAL_SECONDS}s"
         raise TimeoutError(msg)
 
+    def _dependency_changed(
+        self, prev: Dependency | None, curr: Dependency | None
+    ) -> bool:
+        """Check if an optional dependency changed.
+
+        Args:
+            prev: Previous dependency (may be None).
+            curr: Current dependency (may be None).
+
+        Returns:
+            True if the dependency changed (added, removed, or different ID).
+        """
+        if (prev is None) != (curr is None):
+            return True
+        if prev is not None and curr is not None and prev.id != curr.id:
+            return True
+        return False
+
     def _build_outputs(self) -> AgentOutputs:
         """Build outputs with in-cluster service URL."""
         deployment_name = self._get_deployment_name()
@@ -424,18 +442,8 @@ users:
             current_dict = self.config.model_dump(exclude={"cluster", "model", "embeddings", "vector_store"})
             deps_changed = (
                 previous_config.model.id != self.config.model.id
-                or (previous_config.embeddings is None) != (self.config.embeddings is None)
-                or (
-                    previous_config.embeddings is not None
-                    and self.config.embeddings is not None
-                    and previous_config.embeddings.id != self.config.embeddings.id
-                )
-                or (previous_config.vector_store is None) != (self.config.vector_store is None)
-                or (
-                    previous_config.vector_store is not None
-                    and self.config.vector_store is not None
-                    and previous_config.vector_store.id != self.config.vector_store.id
-                )
+                or self._dependency_changed(previous_config.embeddings, self.config.embeddings)
+                or self._dependency_changed(previous_config.vector_store, self.config.vector_store)
             )
             if previous_dict == current_dict and not deps_changed:
                 return self.outputs

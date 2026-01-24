@@ -56,7 +56,8 @@ def create_agent_with_mocked_dependencies(
         replicas=replicas,
     )
 
-    # Inject resolved resources
+    # Inject resolved resources via _resolved attribute.
+    # This is a standard pattern for testing SDK Dependency objects.
     if mock_gke_resource:
         config.cluster._resolved = mock_gke_resource
     if mock_model_resource:
