@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import base64
+import re
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Any, ClassVar
 
+import tiktoken
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -44,19 +46,17 @@ class ParserOutputs(Outputs):
 
 
 class Parser(Resource[ParserConfig, ParserOutputs]):
-    """Docling parser resource for document parsing and chunking.
+    """Document parser resource using IBM Docling.
 
-    Provides document parsing capabilities using IBM's Docling library.
-    Supports PDF, DOCX, HTML, Markdown, and other formats.
-    Includes OCR for scanned documents and table extraction.
+    Parses documents (PDF, DOCX, HTML, Markdown, etc.) into structured text
+    with OCR and table extraction support. Use parse_document() to convert
+    documents and chunk_text() for RAG chunking.
 
-    This is a stateless resource that declares parsing capabilities.
-    Use the parse action to convert documents.
+    Args:
+        config: Parser configuration specifying OCR settings and supported formats.
 
-    Lifecycle:
-        - on_create: Initialize parser, verify capabilities
-        - on_update: Reconfigure if settings changed
-        - on_delete: No-op (stateless resource)
+    Returns:
+        ParserOutputs with ready status and supported format list.
     """
 
     provider: ClassVar[str] = "docling"
@@ -263,10 +263,6 @@ def _simple_chunk_text(
     strategy: str,
 ) -> list[Chunk]:
     """Simple text chunking without docling document structure."""
-    import re
-
-    import tiktoken
-
     chunks: list[Chunk] = []
 
     if strategy == "paragraph":
@@ -375,12 +371,9 @@ def chunk_text(chunk_input: ChunkInput) -> ChunkOutput:
     """Chunk plain text into smaller pieces for RAG.
 
     Supports multiple chunking strategies:
-    - recursive: Character-based with overlap (default)
+    - recursive: Token-based chunking with overlap using tiktoken (default)
     - sentence: Split on sentence boundaries
     - paragraph: Split on paragraph boundaries
-
-    This is a standalone function that can be called from action handlers
-    or used directly for testing.
 
     Args:
         chunk_input: Text and chunking parameters.
