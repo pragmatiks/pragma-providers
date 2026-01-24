@@ -10,6 +10,9 @@ includes:
   openai:
     taskfile: ./taskfiles/openai.Taskfile.yaml
     dir: ./packages/openai
+  docling:
+    taskfile: ./taskfiles/docling.Taskfile.yaml
+    dir: ./packages/docling
   qdrant:
     taskfile: ./taskfiles/qdrant.Taskfile.yaml
     dir: ./packages/qdrant
@@ -25,6 +28,7 @@ tasks:
       - gcp:test
       - anthropic:test
       - openai:test
+      - docling:test
       - qdrant:test
 
   format:
@@ -33,6 +37,7 @@ tasks:
       - gcp:format
       - anthropic:format
       - openai:format
+      - docling:format
       - qdrant:format
 
   check:
@@ -41,4 +46,5 @@ tasks:
       - gcp:check
       - anthropic:check
       - openai:check
+      - docling:check
       - qdrant:check
