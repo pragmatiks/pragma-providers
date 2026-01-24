@@ -367,9 +367,7 @@ users:
         msg = f"Deployment {deployment_name} did not become ready within {_MAX_POLL_ATTEMPTS * _POLL_INTERVAL_SECONDS}s"
         raise TimeoutError(msg)
 
-    def _dependency_changed(
-        self, prev: Dependency | None, curr: Dependency | None
-    ) -> bool:
+    def _dependency_changed(self, prev: Dependency | None, curr: Dependency | None) -> bool:
         """Check if an optional dependency changed.
 
         Args:
