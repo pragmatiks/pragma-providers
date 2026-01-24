@@ -8,6 +8,7 @@ dependencies = [
     "pragmatiks-sdk>=0.6.0",
     "docling>=2.0.0",
     "docling-core>=2.0.0",
+    "tiktoken>=0.7.0",
 ]
 
 authors = [

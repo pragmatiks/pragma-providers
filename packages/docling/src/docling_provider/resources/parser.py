@@ -265,62 +265,39 @@ def _simple_chunk_text(
     """Simple text chunking without docling document structure."""
     import re
 
+    import tiktoken
+
     chunks: list[Chunk] = []
 
     if strategy == "paragraph":
-        # Split by double newlines (paragraphs)
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
         for i, para in enumerate(paragraphs):
             chunks.append(Chunk(text=para, metadata={"index": i, "strategy": "paragraph"}))
     elif strategy == "sentence":
-        # Simple sentence splitting
         sentences = re.split(r"(?<=[.!?])\s+", text)
         for i, sent in enumerate(sentences):
             if sent.strip():
                 chunks.append(Chunk(text=sent.strip(), metadata={"index": i, "strategy": "sentence"}))
     else:
-        # Recursive/character-based chunking
-        # This is a simplified version - in production you'd want tiktoken
-        words = text.split()
-        # Rough estimate: ~4 chars per token, so chunk_size tokens ~= chunk_size * 4 chars
-        char_limit = chunk_size * 4
-        overlap_chars = chunk_overlap * 4
+        # Token-based chunking using tiktoken
+        enc = tiktoken.get_encoding("cl100k_base")
+        tokens = enc.encode(text)
 
-        current_chunk: list[str] = []
-        current_len = 0
+        start = 0
+        while start < len(tokens):
+            end = min(start + chunk_size, len(tokens))
+            chunk_tokens = tokens[start:end]
+            chunk_text = enc.decode(chunk_tokens)
 
-        for word in words:
-            word_len = len(word) + 1  # +1 for space
-            if current_len + word_len > char_limit and current_chunk:
-                chunk_text = " ".join(current_chunk)
-                chunks.append(
-                    Chunk(
-                        text=chunk_text,
-                        metadata={"index": len(chunks), "strategy": "recursive"},
-                    )
-                )
-                # Keep overlap
-                overlap_words: list[str] = []
-                overlap_len = 0
-                for w in reversed(current_chunk):
-                    if overlap_len + len(w) + 1 <= overlap_chars:
-                        overlap_words.insert(0, w)
-                        overlap_len += len(w) + 1
-                    else:
-                        break
-                current_chunk = overlap_words
-                current_len = overlap_len
-
-            current_chunk.append(word)
-            current_len += word_len
-
-        if current_chunk:
             chunks.append(
                 Chunk(
-                    text=" ".join(current_chunk),
-                    metadata={"index": len(chunks), "strategy": "recursive"},
+                    text=chunk_text,
+                    metadata={"index": len(chunks), "strategy": "recursive", "token_count": len(chunk_tokens)},
                 )
             )
+
+            # Move start forward, accounting for overlap
+            start = end - chunk_overlap if end < len(tokens) else end
 
     return chunks
 
@@ -364,11 +341,12 @@ def parse_document(config: ParserConfig, parse_input: ParseInput) -> ParseOutput
 
     # Write to temp file for docling (it needs a file path)
     suffix = Path(parse_input.filename).suffix
-    with NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(content_bytes)
-        tmp_path = tmp.name
-
+    tmp_path: str | None = None
     try:
+        with NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(content_bytes)
+            tmp_path = tmp.name
+
         # Create converter and parse
         converter = _create_converter(config)
         result = converter.convert(tmp_path)
@@ -389,8 +367,8 @@ def parse_document(config: ParserConfig, parse_input: ParseInput) -> ParseOutput
             chunks=chunks,
         )
     finally:
-        # Clean up temp file
-        Path(tmp_path).unlink(missing_ok=True)
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 def chunk_text(chunk_input: ChunkInput) -> ChunkOutput:
