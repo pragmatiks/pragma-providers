@@ -9,6 +9,7 @@ resolution-markers = [
 [manifest]
 members = [
     "pragma-providers",
+    "pragmatiks-agno-provider",
     "pragmatiks-anthropic-provider",
     "pragmatiks-docling-provider",
     "pragmatiks-gcp-provider",
@@ -1577,6 +1578,33 @@ dev = [
     { name = "commitizen", specifier = ">=4.11.0" },
     { name = "pre-commit", specifier = ">=4.0.0" },
     { name = "ruff", specifier = ">=0.11.0" },
+]
+
+[[package]]
+name = "pragmatiks-agno-provider"
+version = "0.1.0"
+source = { editable = "packages/agno" }
+dependencies = [
+    { name = "pragmatiks-sdk" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pragmatiks-sdk", specifier = ">=0.6.0" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-asyncio", specifier = ">=1.0.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
 ]
 
 [[package]]

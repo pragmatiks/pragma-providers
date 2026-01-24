@@ -16,6 +16,9 @@ includes:
   qdrant:
     taskfile: ./taskfiles/qdrant.Taskfile.yaml
     dir: ./packages/qdrant
+  agno:
+    taskfile: ./taskfiles/agno.Taskfile.yaml
+    dir: ./packages/agno
 
 tasks:
   default: task --list-all
@@ -30,6 +33,7 @@ tasks:
       - openai:test
       - docling:test
       - qdrant:test
+      - agno:test
 
   format:
     desc: Format all Python code
@@ -39,6 +43,7 @@ tasks:
       - openai:format
       - docling:format
       - qdrant:format
+      - agno:format
 
   check:
     desc: Run all checks (ruff + type checking)
@@ -48,3 +53,4 @@ tasks:
       - openai:check
       - docling:check
       - qdrant:check
+      - agno:check
