@@ -10,6 +10,9 @@ includes:
   openai:
     taskfile: ./taskfiles/openai.Taskfile.yaml
     dir: ./packages/openai
+  qdrant:
+    taskfile: ./taskfiles/qdrant.Taskfile.yaml
+    dir: ./packages/qdrant
 
 tasks:
   default: task --list-all
@@ -22,6 +25,7 @@ tasks:
       - gcp:test
       - anthropic:test
       - openai:test
+      - qdrant:test
 
   format:
     desc: Format all Python code
@@ -29,6 +33,7 @@ tasks:
       - gcp:format
       - anthropic:format
       - openai:format
+      - qdrant:format
 
   check:
     desc: Run all checks (ruff + type checking)
@@ -36,3 +41,4 @@ tasks:
       - gcp:check
       - anthropic:check
       - openai:check
+      - qdrant:check

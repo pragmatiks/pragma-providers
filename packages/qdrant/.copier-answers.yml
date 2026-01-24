@@ -1,0 +1,7 @@
+# Changes here will be overwritten by Copier
+_commit: v0.4.1
+_src_path: gh:pragmatiks/pragma-providers
+author_email: team@pragmatiks.io
+author_name: Pragmatiks
+description: Qdrant provider for Pragmatiks
+name: qdrant
