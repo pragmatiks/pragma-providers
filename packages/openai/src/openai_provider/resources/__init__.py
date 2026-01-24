@@ -8,9 +8,21 @@ from openai_provider.resources.chat_completions import (
     ChatCompletionsConfig,
     ChatCompletionsOutputs,
 )
+from openai_provider.resources.embeddings import (
+    EmbedInput,
+    EmbedOutput,
+    Embeddings,
+    EmbeddingsConfig,
+    EmbeddingsOutputs,
+)
 
 __all__ = [
     "ChatCompletions",
     "ChatCompletionsConfig",
     "ChatCompletionsOutputs",
+    "EmbedInput",
+    "EmbedOutput",
+    "Embeddings",
+    "EmbeddingsConfig",
+    "EmbeddingsOutputs",
 ]
