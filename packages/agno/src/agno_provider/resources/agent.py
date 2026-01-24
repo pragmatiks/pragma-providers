@@ -270,7 +270,7 @@ users:
         Raises:
             RuntimeError: If command fails.
         """
-        env = {"KUBECONFIG": kubeconfig_path}
+        env = {"KUBECONFIG": kubeconfig_path, "PATH": os.environ.get("PATH", "")}
 
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
@@ -279,7 +279,7 @@ users:
                 cmd,
                 capture_output=True,
                 text=True,
-                env={**os.environ, **env},
+                env=env,
                 check=False,
             ),
         )
@@ -356,7 +356,7 @@ users:
                     ],
                     kubeconfig_path,
                 )
-                ready_replicas = int(result.stdout.strip() or "0")
+                ready_replicas = int(result.stdout.strip()) if result.stdout.strip() else 0
                 if ready_replicas >= self.config.replicas:
                     return True
             except (RuntimeError, ValueError):
