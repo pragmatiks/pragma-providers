@@ -8,10 +8,7 @@
 
 ## Architecture
 
-Providers are KEDA-scaled consumers that:
-1. Subscribe to NATS JetStream for work items
-2. Execute provider-specific logic (cloud API calls)
-3. Return results via NATS
+Providers handle resource lifecycle events (CREATE, UPDATE, DELETE) by calling cloud APIs and returning results to the platform.
 
 ## Development
 
@@ -25,18 +22,26 @@ Always use `task` commands:
 
 ## Provider Interface
 
-Each provider must implement:
-- `authenticate()` - Handle provider credentials
-- `validate_request()` - Schema validation
-- `execute()` - Provider invocation
-- `parse_response()` - Normalize response format
+Each provider implements resource classes using the SDK:
+
+```python
+from pragma_sdk import Provider, Resource, Config, Outputs
+
+gcp = Provider(name="gcp")
+
+@gcp.resource("storage")
+class Bucket(Resource[BucketConfig, BucketOutputs]):
+    async def on_create(self) -> BucketOutputs: ...
+    async def on_update(self, previous: BucketConfig) -> BucketOutputs: ...
+    async def on_delete(self) -> None: ...
+```
 
 ## Testing
 
 - Mock external cloud APIs
 - Use respx for httpx mocking
 - Test success and failure paths
-- Verify request transformation
+- Use `ProviderHarness` from SDK for lifecycle testing
 
 ## Publishing to PyPI
 
@@ -60,8 +65,3 @@ uv publish           # Publish to PyPI (requires PYPI_TOKEN)
 ```
 
 **Note**: Each provider has its own version and changelog.
-
-## Related Repositories
-
-- `../pragma-sdk/` - SDK (providers depend on it)
-- `../pragma-os/` - Runtime that dispatches to providers
