@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-docling-provider"
-version = "0.1.0"
+version = "0.2.0"
 description = "Docling provider for Pragmatiks - document parsing for RAG"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -34,7 +34,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.1.0"
+version = "0.2.0"
 version_files = ["pyproject.toml:^version"]
 tag_format = "docling-v$version"
 update_changelog_on_bump = true
