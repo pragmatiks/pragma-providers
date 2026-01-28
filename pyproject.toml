@@ -19,9 +19,10 @@ select = [
     "W",       # pycodestyle warnings
     "F",       # Pyflakes
     "I",       # isort
+    "PLC0415", # import-outside-top-level
     "UP",      # Pyupgrade
-    "D",       # pydocstyle
-    "DOC",     # docstring checks
+    "D",       # pydocstyle - docstring conventions
+    "DOC",     # Ruff's docstring checks (parameters match signature)
     "PT",      # pytest rules
 ]
 
@@ -33,11 +34,23 @@ lines-after-imports = 2
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = [
-    "D100", "D101", "D102", "D103", "D104", "D107", "DOC",
+    "D100",  # Missing docstring in public module
+    "D101",  # Missing docstring in public class
+    "D102",  # Missing docstring in public method
+    "D103",  # Missing docstring in public function
+    "D104",  # Missing docstring in public package
+    "D107",  # Missing docstring in __init__
+    "DOC",   # Docstring content rules (Returns, Raises, Yields sections)
 ]
 
 [tool.ruff.format]
 preview = true
+
+[tool.ty.environment]
+python-version = "3.13"
+
+[tool.ty.src]
+exclude = ["**/tests/**", "**/__pycache__/**"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

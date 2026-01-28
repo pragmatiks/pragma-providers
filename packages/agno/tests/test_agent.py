@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock
 
 import pytest
 from pragma_sdk import Dependency, LifecycleState
@@ -150,7 +149,7 @@ async def test_create_agent_multiple_replicas(
     """on_create handles multiple replicas."""
 
     def run_side_effect(cmd, **kwargs):
-        result = MagicMock()
+        result = mocker.MagicMock()
         result.returncode = 0
         result.stdout = ""
         result.stderr = ""
@@ -183,7 +182,7 @@ async def test_create_agent_waits_for_ready(
 
     def run_side_effect(cmd, **kwargs):
         nonlocal call_count
-        result = MagicMock()
+        result = mocker.MagicMock()
         result.returncode = 0
         result.stdout = ""
         result.stderr = ""
@@ -218,7 +217,7 @@ async def test_create_agent_kubectl_failure(
     """on_create fails when kubectl command fails."""
 
     def run_side_effect(cmd, **kwargs):
-        result = MagicMock()
+        result = mocker.MagicMock()
         if cmd[0] == "kubectl" and "apply" in cmd:
             result.returncode = 1
             result.stderr = "Error: failed to apply manifest"
@@ -284,7 +283,7 @@ async def test_update_replicas_triggers_kubectl_apply(
     """on_update runs kubectl apply when replicas change."""
 
     def run_side_effect(cmd, **kwargs):
-        result = MagicMock()
+        result = mocker.MagicMock()
         result.returncode = 0
         result.stdout = ""
         result.stderr = ""
@@ -347,7 +346,7 @@ async def test_update_model_change_triggers_apply(
     """on_update runs kubectl apply when model dependency changes."""
 
     def run_side_effect(cmd, **kwargs):
-        result = MagicMock()
+        result = mocker.MagicMock()
         result.returncode = 0
         result.stdout = ""
         result.stderr = ""
@@ -414,7 +413,7 @@ async def test_delete_idempotent(
     """on_delete succeeds when resources don't exist."""
 
     def run_side_effect(cmd, **kwargs):
-        result = MagicMock()
+        result = mocker.MagicMock()
         result.stdout = ""
         if cmd[0] == "kubectl" and "delete" in cmd:
             # --ignore-not-found makes this succeed

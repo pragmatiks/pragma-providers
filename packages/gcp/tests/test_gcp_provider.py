@@ -1,12 +1,17 @@
 """Tests for GCP Secret Manager resource."""
 
+from __future__ import annotations
+
 import json
-from unittest.mock import MagicMock
+from typing import TYPE_CHECKING
 
 from google.api_core.exceptions import AlreadyExists, NotFound
 from pragma_sdk.provider import ProviderHarness
 
 from gcp_provider import Secret, SecretConfig, SecretOutputs
+
+if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
 
 
 # Sample GCP service account credentials for testing
@@ -75,10 +80,11 @@ async def test_update_adds_new_version(
     harness: ProviderHarness,
     mock_secretmanager_client: MagicMock,
     sample_credentials: dict,
+    mocker: MockerFixture,
 ) -> None:
     """on_update creates new version when data changes."""
     # Update mock for version 2
-    mock_version = MagicMock()
+    mock_version = mocker.MagicMock()
     mock_version.name = "projects/proj/secrets/sec/versions/2"
     mock_secretmanager_client.add_secret_version.return_value = mock_version
 

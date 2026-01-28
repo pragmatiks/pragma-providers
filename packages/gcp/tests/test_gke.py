@@ -1,12 +1,17 @@
 """Tests for GCP GKE resource."""
 
-from unittest.mock import MagicMock
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.container_v1.types import Cluster
 from pragma_sdk.provider import ProviderHarness
 
 from gcp_provider import GKE, GKEConfig, GKEOutputs
+
+if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
 
 
 async def test_create_cluster_success(
@@ -112,9 +117,10 @@ async def test_create_cluster_error_state(
     harness: ProviderHarness,
     mock_container_client: MagicMock,
     sample_credentials: dict,
+    mocker: MockerFixture,
 ) -> None:
     """on_create fails when cluster enters ERROR state."""
-    error_cluster = MagicMock()
+    error_cluster = mocker.MagicMock()
     error_cluster.status = Cluster.Status.ERROR
     error_cluster.status_message = "Cluster creation failed"
     mock_container_client.get_cluster.return_value = error_cluster

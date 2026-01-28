@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock
 
 import pytest
 from pragma_sdk import Dependency, LifecycleState
@@ -21,9 +20,9 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def mock_gke_outputs() -> MagicMock:
+def mock_gke_outputs(mocker: MockerFixture) -> MagicMock:
     """Mock GKE outputs with cluster credentials."""
-    outputs = MagicMock()
+    outputs = mocker.MagicMock()
     outputs.endpoint = "10.0.0.1"
     outputs.cluster_ca_certificate = "Y2VydGlmaWNhdGU="  # base64 of "certificate"
     outputs.name = "test-cluster"
@@ -33,9 +32,9 @@ def mock_gke_outputs() -> MagicMock:
 
 
 @pytest.fixture
-def mock_gke_resource(mock_gke_outputs: MagicMock) -> MagicMock:
+def mock_gke_resource(mocker: MockerFixture, mock_gke_outputs: MagicMock) -> MagicMock:
     """Mock GKE resource with outputs."""
-    resource = MagicMock()
+    resource = mocker.MagicMock()
     resource.outputs = mock_gke_outputs
     return resource
 
@@ -83,7 +82,7 @@ def mock_subprocess(mocker: "MockerFixture") -> MagicMock:
     mock_run = mocker.patch("subprocess.run")
 
     def run_side_effect(cmd, **kwargs):
-        result = MagicMock()
+        result = mocker.MagicMock()
         result.returncode = 0
         result.stdout = ""
         result.stderr = ""
@@ -151,7 +150,7 @@ async def test_create_database_with_resources(
     """on_create includes resource limits in Helm values."""
 
     def run_side_effect(cmd, **kwargs):
-        result = MagicMock()
+        result = mocker.MagicMock()
         result.returncode = 0
         result.stdout = ""
         result.stderr = ""
@@ -231,7 +230,7 @@ async def test_create_database_waits_for_ready(
 
     def run_side_effect(cmd, **kwargs):
         nonlocal call_count
-        result = MagicMock()
+        result = mocker.MagicMock()
         result.returncode = 0
         result.stdout = ""
         result.stderr = ""
@@ -264,7 +263,7 @@ async def test_create_database_helm_failure(
     """on_create fails when helm command fails."""
 
     def run_side_effect(cmd, **kwargs):
-        result = MagicMock()
+        result = mocker.MagicMock()
         if cmd[0] == "helm" and "upgrade" in cmd:
             result.returncode = 1
             result.stderr = "Error: chart not found"
@@ -327,7 +326,7 @@ async def test_update_replicas_triggers_helm_upgrade(
     """on_update runs helm upgrade when replicas change."""
 
     def run_side_effect(cmd, **kwargs):
-        result = MagicMock()
+        result = mocker.MagicMock()
         result.returncode = 0
         result.stdout = ""
         result.stderr = ""
@@ -408,7 +407,7 @@ async def test_delete_idempotent(
     """on_delete succeeds when release doesn't exist."""
 
     def run_side_effect(cmd, **kwargs):
-        result = MagicMock()
+        result = mocker.MagicMock()
         result.stdout = ""
         if cmd[0] == "helm" and "uninstall" in cmd:
             result.returncode = 1
