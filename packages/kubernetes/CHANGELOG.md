@@ -1,3 +1,9 @@
+## kubernetes-v0.60.0 (2026-01-29)
+
+### Feat
+
+- **qdrant**: add LoadBalancer exposure and API key authentication (#11)
+
 ## kubernetes-v0.59.0 (2026-01-29)
 
 ### Feat
