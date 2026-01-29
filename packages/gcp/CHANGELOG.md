@@ -1,3 +1,9 @@
+## gcp-v0.68.0 (2026-01-29)
+
+### Feat
+
+- **qdrant**: add LoadBalancer exposure and API key authentication (#11)
+
 ## gcp-v0.67.0 (2026-01-29)
 
 ### Feat
