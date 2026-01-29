@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from collections.abc import AsyncIterator
+from datetime import datetime
 from typing import Annotated, Any, ClassVar, Literal, Self
 
 from google.api_core.exceptions import AlreadyExists, NotFound
@@ -17,9 +19,10 @@ from google.cloud.container_v1.types import (
     NodeConfig,
     NodePool,
 )
+from google.cloud.logging_v2 import Client as LoggingClient
 from google.oauth2 import service_account
 from pydantic import Field, field_validator, model_validator
-from pragma_sdk import Config, Outputs, Resource
+from pragma_sdk import Config, HealthStatus, LogEntry, Outputs, Resource
 
 _CLUSTER_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,38}[a-z0-9]$|^[a-z]$")
 
@@ -82,8 +85,10 @@ class GKEOutputs(Outputs):
         name: Cluster name.
         endpoint: Cluster API server endpoint URL.
         cluster_ca_certificate: Base64-encoded cluster CA certificate.
-        location: Cluster location (region).
+        location: Cluster location (region or zone).
         status: Cluster status (RUNNING, PROVISIONING, etc.).
+        console_url: URL to view cluster in GCP Console.
+        logs_url: URL to view cluster logs in Cloud Logging.
     """
 
     name: str
@@ -91,6 +96,8 @@ class GKEOutputs(Outputs):
     cluster_ca_certificate: str
     location: str
     status: str
+    console_url: str
+    logs_url: str
 
 
 # Polling configuration for cluster operations
@@ -149,6 +156,34 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
             Parent path (project/location).
         """
         return f"projects/{self.config.project_id}/locations/{self.config.location}"
+
+    def _build_outputs(self, cluster: Cluster) -> GKEOutputs:
+        """Build outputs from cluster object."""
+        project = self.config.project_id
+        location = self.config.location
+        name = self.config.name
+
+        console_url = (
+            f"https://console.cloud.google.com/kubernetes/clusters/details/"
+            f"{location}/{name}/details?project={project}"
+        )
+        logs_url = (
+            f"https://console.cloud.google.com/logs/query;query="
+            f"resource.type%3D%22k8s_cluster%22%0A"
+            f"resource.labels.cluster_name%3D%22{name}%22%0A"
+            f"resource.labels.location%3D%22{location}%22"
+            f"?project={project}"
+        )
+
+        return GKEOutputs(
+            name=cluster.name,
+            endpoint=cluster.endpoint,
+            cluster_ca_certificate=cluster.master_auth.cluster_ca_certificate,
+            location=cluster.location,
+            status=Cluster.Status(cluster.status).name,
+            console_url=console_url,
+            logs_url=logs_url,
+        )
 
     async def _wait_for_running(self, client: ClusterManagerAsyncClient) -> Cluster:
         """Poll cluster until it reaches RUNNING state.
@@ -257,13 +292,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
 
         cluster = await self._wait_for_running(client)
 
-        return GKEOutputs(
-            name=cluster.name,
-            endpoint=cluster.endpoint,
-            cluster_ca_certificate=cluster.master_auth.cluster_ca_certificate,
-            location=cluster.location,
-            status=Cluster.Status(cluster.status).name,
-        )
+        return self._build_outputs(cluster)
 
     async def on_update(self, previous_config: GKEConfig) -> GKEOutputs:
         """Update cluster configuration.
@@ -308,13 +337,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
         client = self._get_client()
         cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
 
-        return GKEOutputs(
-            name=cluster.name,
-            endpoint=cluster.endpoint,
-            cluster_ca_certificate=cluster.master_auth.cluster_ca_certificate,
-            location=cluster.location,
-            status=Cluster.Status(cluster.status).name,
-        )
+        return self._build_outputs(cluster)
 
     async def on_delete(self) -> None:
         """Delete cluster and wait for completion.
@@ -328,3 +351,85 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
             await self._wait_for_deletion(client)
         except NotFound:
             pass
+
+    async def health(self) -> HealthStatus:
+        """Check cluster health by querying cluster status."""
+        client = self._get_client()
+
+        try:
+            cluster = await client.get_cluster(
+                request=GetClusterRequest(name=self._cluster_path())
+            )
+        except NotFound:
+            return HealthStatus(
+                status="unhealthy",
+                message="Cluster not found",
+            )
+
+        status = Cluster.Status(cluster.status)
+
+        if status == Cluster.Status.RUNNING:
+            return HealthStatus(
+                status="healthy",
+                message="Cluster is running",
+                details={"node_count": sum(np.initial_node_count for np in cluster.node_pools)},
+            )
+
+        if status in (Cluster.Status.PROVISIONING, Cluster.Status.RECONCILING):
+            return HealthStatus(
+                status="degraded",
+                message=f"Cluster is {status.name.lower()}",
+            )
+
+        return HealthStatus(
+            status="unhealthy",
+            message=f"Cluster status: {status.name}",
+            details={"status_message": cluster.status_message} if cluster.status_message else None,
+        )
+
+    async def logs(
+        self,
+        since: datetime | None = None,
+        tail: int = 100,
+    ) -> AsyncIterator[LogEntry]:
+        """Fetch cluster logs from Cloud Logging."""
+        creds_data = self.config.credentials
+        if isinstance(creds_data, str):
+            creds_data = json.loads(creds_data)
+
+        credentials = service_account.Credentials.from_service_account_info(creds_data)
+        logging_client = LoggingClient(credentials=credentials, project=self.config.project_id)
+
+        filter_parts = [
+            'resource.type="k8s_cluster"',
+            f'resource.labels.cluster_name="{self.config.name}"',
+            f'resource.labels.location="{self.config.location}"',
+        ]
+        if since:
+            filter_parts.append(f'timestamp>="{since.isoformat()}Z"')
+
+        filter_str = " AND ".join(filter_parts)
+
+        entries = logging_client.list_entries(
+            filter_=filter_str,
+            order_by="timestamp desc",
+            max_results=tail,
+        )
+
+        for entry in entries:
+            level = "info"
+            if hasattr(entry, "severity"):
+                severity = str(entry.severity).lower()
+                if "error" in severity or "critical" in severity:
+                    level = "error"
+                elif "warn" in severity:
+                    level = "warn"
+                elif "debug" in severity:
+                    level = "debug"
+
+            yield LogEntry(
+                timestamp=entry.timestamp,
+                level=level,
+                message=str(entry.payload) if entry.payload else "",
+                metadata={"log_name": entry.log_name} if entry.log_name else None,
+            )

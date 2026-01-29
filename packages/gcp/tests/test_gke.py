@@ -167,6 +167,8 @@ async def test_update_unchanged_returns_existing(
         cluster_ca_certificate="Y2VydA==",
         location="europe-west4",
         status="RUNNING",
+        console_url="https://console.cloud.google.com/kubernetes/clusters/details/europe-west4/cluster/details?project=proj",
+        logs_url="https://console.cloud.google.com/logs/query",
     )
 
     result = await harness.invoke_update(
