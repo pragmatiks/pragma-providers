@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
 import pytest
 from pragma_sdk import Dependency, LifecycleState
@@ -19,55 +20,29 @@ if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
 
-@pytest.fixture
-def mock_gke_outputs(mocker: MockerFixture) -> MagicMock:
-    """Mock GKE outputs with cluster credentials."""
-    outputs = mocker.MagicMock()
-    outputs.endpoint = "10.0.0.1"
-    outputs.cluster_ca_certificate = "Y2VydGlmaWNhdGU="  # base64 of "certificate"
-    outputs.name = "test-cluster"
-    outputs.location = "europe-west4"
-    outputs.status = "RUNNING"
-    return outputs
-
-
-@pytest.fixture
-def mock_gke_resource(mocker: MockerFixture, mock_gke_outputs: MagicMock) -> MagicMock:
-    """Mock GKE resource with outputs."""
-    resource = mocker.MagicMock()
-    resource.outputs = mock_gke_outputs
-    return resource
-
-
 def create_database_with_mocked_dependency(
     name: str,
     replicas: int = 1,
     storage: StorageConfig | None = None,
     resources: ResourceConfig | None = None,
-    mock_gke_resource: MagicMock | None = None,
+    api_key: str | None = None,
     outputs: DatabaseOutputs | None = None,
 ) -> Database:
-    """Create a Database instance with mocked dependency resolution.
+    """Create a Database instance with mocked dependency.
 
-    This bypasses Pydantic validation which loses private attributes.
+    Note: The actual lifecycle methods (on_create, on_update) call
+    apply() and wait_ready() which require mocking the SDK context.
     """
-    # Create the dependency
     dep = Dependency(provider="gcp", resource="gke", name="test-cluster")
 
-    # Create config
     config = DatabaseConfig(
         cluster=dep,
         replicas=replicas,
         storage=storage,
         resources=resources,
+        api_key=api_key,
     )
 
-    # Now inject the resolved resource after config creation
-    # by directly setting it on the config's cluster attribute
-    if mock_gke_resource:
-        config.cluster._resolved = mock_gke_resource
-
-    # Create resource
     return Database(
         name=name,
         config=config,
@@ -77,95 +52,66 @@ def create_database_with_mocked_dependency(
 
 
 @pytest.fixture
-def mock_subprocess(mocker: "MockerFixture") -> MagicMock:
-    """Mock subprocess.run for helm and kubectl commands."""
-    mock_run = mocker.patch("subprocess.run")
-
-    def run_side_effect(cmd, **kwargs):
-        result = mocker.MagicMock()
-        result.returncode = 0
-        result.stdout = ""
-        result.stderr = ""
-
-        # Handle kubectl get statefulset (readiness check)
-        if cmd[0] == "kubectl" and "statefulset" in cmd:
-            result.stdout = "1"  # 1 ready replica
-
-        return result
-
-    mock_run.side_effect = run_side_effect
-    return mock_run
-
-
-@pytest.fixture
-def mock_asyncio_sleep(mocker: "MockerFixture") -> MagicMock:
-    """Mock asyncio.sleep to avoid actual waits."""
-    return mocker.patch("qdrant_provider.resources.database.asyncio.sleep", return_value=None)
+def mock_apply_and_wait(mocker: "MockerFixture"):
+    """Mock the apply(), wait_ready(), and _wait_for_load_balancer_ip methods."""
+    mock_apply = mocker.patch(
+        "pragma_sdk.models.base.Resource.apply",
+        new_callable=AsyncMock,
+    )
+    mock_wait = mocker.patch(
+        "pragma_sdk.models.base.Resource.wait_ready",
+        new_callable=AsyncMock,
+    )
+    mock_lb_ip = mocker.patch(
+        "qdrant_provider.resources.database.Database._wait_for_load_balancer_ip",
+        new_callable=AsyncMock,
+        return_value="34.123.45.67",
+    )
+    return mock_apply, mock_wait, mock_lb_ip
 
 
 async def test_create_database_success(
-    mock_gke_resource: MagicMock,
-    mock_subprocess: MagicMock,
-    mock_asyncio_sleep: MagicMock,
+    mock_apply_and_wait: tuple[AsyncMock, AsyncMock, AsyncMock],
 ) -> None:
-    """on_create deploys Qdrant via Helm and returns outputs."""
-    db = create_database_with_mocked_dependency(
-        name="test-db",
-        mock_gke_resource=mock_gke_resource,
-    )
+    """on_create creates child resources and returns outputs."""
+    mock_apply, mock_wait, mock_lb_ip = mock_apply_and_wait
+
+    db = create_database_with_mocked_dependency(name="test-db")
 
     result = await db.on_create()
 
-    assert result.url == "http://qdrant-test-db.default.svc.cluster.local:6333"
-    assert result.grpc_url == "http://qdrant-test-db.default.svc.cluster.local:6334"
+    assert result.url == "http://34.123.45.67:6333"
+    assert result.grpc_url == "http://34.123.45.67:6334"
+    assert result.api_key is None
     assert result.ready is True
+
+    assert mock_apply.call_count == 3
+    assert mock_wait.call_count == 3
+    mock_lb_ip.assert_called_once()
 
 
 async def test_create_database_with_storage(
-    mock_gke_resource: MagicMock,
-    mock_subprocess: MagicMock,
-    mock_asyncio_sleep: MagicMock,
+    mock_apply_and_wait: tuple[AsyncMock, AsyncMock, AsyncMock],
 ) -> None:
-    """on_create includes storage configuration in Helm values."""
+    """on_create handles storage configuration."""
     db = create_database_with_mocked_dependency(
         name="test-db",
         storage=StorageConfig(size="20Gi", class_="premium-rwo"),
-        mock_gke_resource=mock_gke_resource,
     )
 
     result = await db.on_create()
 
     assert result.ready is True
 
-    # Check that helm was called with values containing persistence config
-    helm_calls = [c for c in mock_subprocess.call_args_list if c[0][0][0] == "helm"]
-    upgrade_call = next((c for c in helm_calls if "upgrade" in c[0][0]), None)
-    assert upgrade_call is not None
-
 
 async def test_create_database_with_resources(
-    mock_gke_resource: MagicMock,
-    mocker: "MockerFixture",
+    mock_apply_and_wait: tuple[AsyncMock, AsyncMock, AsyncMock],
 ) -> None:
-    """on_create includes resource limits in Helm values."""
-
-    def run_side_effect(cmd, **kwargs):
-        result = mocker.MagicMock()
-        result.returncode = 0
-        result.stdout = ""
-        result.stderr = ""
-        if cmd[0] == "kubectl" and "statefulset" in cmd:
-            result.stdout = "3"  # 3 ready replicas
-        return result
-
-    mocker.patch("subprocess.run", side_effect=run_side_effect)
-    mocker.patch("qdrant_provider.resources.database.asyncio.sleep", return_value=None)
-
+    """on_create handles resource limits."""
     db = create_database_with_mocked_dependency(
         name="test-db",
         replicas=3,
         resources=ResourceConfig(memory="4Gi", cpu="2"),
-        mock_gke_resource=mock_gke_resource,
     )
 
     result = await db.on_create()
@@ -173,139 +119,48 @@ async def test_create_database_with_resources(
     assert result.ready is True
 
 
-async def test_create_database_helm_repo_added(
-    mock_gke_resource: MagicMock,
-    mock_subprocess: MagicMock,
-    mock_asyncio_sleep: MagicMock,
+async def test_create_database_with_api_key(
+    mock_apply_and_wait: tuple[AsyncMock, AsyncMock, AsyncMock],
 ) -> None:
-    """on_create adds Qdrant Helm repo before install."""
+    """on_create configures API key authentication."""
     db = create_database_with_mocked_dependency(
         name="test-db",
-        mock_gke_resource=mock_gke_resource,
-    )
-
-    await db.on_create()
-
-    # Verify helm repo add was called
-    helm_calls = [c for c in mock_subprocess.call_args_list if c[0][0][0] == "helm"]
-    repo_add_call = next(
-        (c for c in helm_calls if "repo" in c[0][0] and "add" in c[0][0]),
-        None,
-    )
-    assert repo_add_call is not None
-    assert "qdrant" in repo_add_call[0][0]
-    assert "https://qdrant.github.io/qdrant-helm" in repo_add_call[0][0]
-
-
-async def test_create_database_helm_upgrade_install(
-    mock_gke_resource: MagicMock,
-    mock_subprocess: MagicMock,
-    mock_asyncio_sleep: MagicMock,
-) -> None:
-    """on_create uses helm upgrade --install for idempotency."""
-    db = create_database_with_mocked_dependency(
-        name="test-db",
-        mock_gke_resource=mock_gke_resource,
-    )
-
-    await db.on_create()
-
-    # Verify helm upgrade --install was called
-    helm_calls = [c for c in mock_subprocess.call_args_list if c[0][0][0] == "helm"]
-    upgrade_call = next(
-        (c for c in helm_calls if "upgrade" in c[0][0] and "--install" in c[0][0]),
-        None,
-    )
-    assert upgrade_call is not None
-    assert "qdrant-test-db" in upgrade_call[0][0]  # release name
-    assert "qdrant/qdrant" in upgrade_call[0][0]  # chart name
-
-
-async def test_create_database_waits_for_ready(
-    mock_gke_resource: MagicMock,
-    mocker: "MockerFixture",
-) -> None:
-    """on_create polls StatefulSet until ready."""
-    call_count = 0
-
-    def run_side_effect(cmd, **kwargs):
-        nonlocal call_count
-        result = mocker.MagicMock()
-        result.returncode = 0
-        result.stdout = ""
-        result.stderr = ""
-
-        if cmd[0] == "kubectl" and "statefulset" in cmd:
-            call_count += 1
-            # First call returns 0 replicas, second returns 1
-            result.stdout = "0" if call_count == 1 else "1"
-
-        return result
-
-    mocker.patch("subprocess.run", side_effect=run_side_effect)
-    mocker.patch("qdrant_provider.resources.database.asyncio.sleep", return_value=None)
-
-    db = create_database_with_mocked_dependency(
-        name="test-db",
-        mock_gke_resource=mock_gke_resource,
+        api_key="secret-api-key",
     )
 
     result = await db.on_create()
 
+    assert result.api_key == "secret-api-key"
     assert result.ready is True
-    assert call_count >= 2  # At least two kubectl calls to check readiness
 
-
-async def test_create_database_helm_failure(
-    mock_gke_resource: MagicMock,
-    mocker: "MockerFixture",
-) -> None:
-    """on_create fails when helm command fails."""
-
-    def run_side_effect(cmd, **kwargs):
-        result = mocker.MagicMock()
-        if cmd[0] == "helm" and "upgrade" in cmd:
-            result.returncode = 1
-            result.stderr = "Error: chart not found"
-        else:
-            result.returncode = 0
-            result.stderr = ""
-        result.stdout = ""
-        return result
-
-    mocker.patch("subprocess.run", side_effect=run_side_effect)
-
-    db = create_database_with_mocked_dependency(
-        name="test-db",
-        mock_gke_resource=mock_gke_resource,
-    )
-
-    with pytest.raises(RuntimeError, match="Helm command failed"):
-        await db.on_create()
+    sts = db._build_statefulset()
+    assert sts.config.containers[0].env is not None
+    assert len(sts.config.containers[0].env) == 1
+    assert sts.config.containers[0].env[0].name == "QDRANT__SERVICE__API_KEY"
+    assert sts.config.containers[0].env[0].value == "secret-api-key"
 
 
 async def test_update_unchanged_returns_existing(
-    mock_gke_resource: MagicMock,
-    mock_subprocess: MagicMock,
-    mock_asyncio_sleep: MagicMock,
+    mock_apply_and_wait: tuple[AsyncMock, AsyncMock, AsyncMock],
 ) -> None:
     """on_update returns existing outputs when config unchanged."""
+    mock_apply, mock_wait, mock_lb_ip = mock_apply_and_wait
+    mock_apply.reset_mock()
+    mock_wait.reset_mock()
+    mock_lb_ip.reset_mock()
+
     existing_outputs = DatabaseOutputs(
-        url="http://qdrant-test-db.default.svc.cluster.local:6333",
-        grpc_url="http://qdrant-test-db.default.svc.cluster.local:6334",
+        url="http://34.123.45.67:6333",
+        grpc_url="http://34.123.45.67:6334",
+        api_key=None,
         ready=True,
     )
 
     db = create_database_with_mocked_dependency(
         name="test-db",
-        mock_gke_resource=mock_gke_resource,
         outputs=existing_outputs,
     )
 
-    # Reset mock to track calls
-    mock_subprocess.reset_mock()
-
-    # Create identical previous config
     previous_config = DatabaseConfig(
         cluster=Dependency(provider="gcp", resource="gke", name="test-cluster"),
         replicas=1,
@@ -314,41 +169,27 @@ async def test_update_unchanged_returns_existing(
     result = await db.on_update(previous_config)
 
     assert result == existing_outputs
-    # Verify no helm calls were made (short-circuited)
-    helm_upgrade_calls = [c for c in mock_subprocess.call_args_list if c[0][0][0] == "helm" and "upgrade" in c[0][0]]
-    assert len(helm_upgrade_calls) == 0
+    mock_apply.assert_not_called()
+    mock_lb_ip.assert_not_called()
 
 
-async def test_update_replicas_triggers_helm_upgrade(
-    mock_gke_resource: MagicMock,
-    mocker: "MockerFixture",
+async def test_update_replicas_applies_changes(
+    mock_apply_and_wait: tuple[AsyncMock, AsyncMock, AsyncMock],
 ) -> None:
-    """on_update runs helm upgrade when replicas change."""
-
-    def run_side_effect(cmd, **kwargs):
-        result = mocker.MagicMock()
-        result.returncode = 0
-        result.stdout = ""
-        result.stderr = ""
-        if cmd[0] == "kubectl" and "statefulset" in cmd:
-            result.stdout = "3"  # 3 ready replicas
-        return result
-
-    mocker.patch("subprocess.run", side_effect=run_side_effect)
-    mocker.patch("qdrant_provider.resources.database.asyncio.sleep", return_value=None)
+    """on_update applies changes when replicas change."""
+    mock_apply, mock_wait, mock_lb_ip = mock_apply_and_wait
 
     db = create_database_with_mocked_dependency(
         name="test-db",
         replicas=3,
-        mock_gke_resource=mock_gke_resource,
         outputs=DatabaseOutputs(
-            url="http://qdrant-test-db.default.svc.cluster.local:6333",
-            grpc_url="http://qdrant-test-db.default.svc.cluster.local:6334",
+            url="http://34.123.45.67:6333",
+            grpc_url="http://34.123.45.67:6334",
+            api_key=None,
             ready=True,
         ),
     )
 
-    # Previous config had different replicas
     previous_config = DatabaseConfig(
         cluster=Dependency(provider="gcp", resource="gke", name="test-cluster"),
         replicas=1,
@@ -357,18 +198,14 @@ async def test_update_replicas_triggers_helm_upgrade(
     result = await db.on_update(previous_config)
 
     assert result.ready is True
+    assert mock_apply.call_count == 3
+    mock_lb_ip.assert_called_once()
 
 
-async def test_update_rejects_cluster_change(
-    mock_gke_resource: MagicMock,
-) -> None:
+async def test_update_rejects_cluster_change() -> None:
     """on_update rejects cluster changes."""
-    db = create_database_with_mocked_dependency(
-        name="test-db",
-        mock_gke_resource=mock_gke_resource,
-    )
+    db = create_database_with_mocked_dependency(name="test-db")
 
-    # Previous config had different cluster
     previous_config = DatabaseConfig(
         cluster=Dependency(provider="gcp", resource="gke", name="other-cluster"),
         replicas=1,
@@ -378,53 +215,10 @@ async def test_update_rejects_cluster_change(
         await db.on_update(previous_config)
 
 
-async def test_delete_success(
-    mock_gke_resource: MagicMock,
-    mock_subprocess: MagicMock,
-) -> None:
-    """on_delete uninstalls the Helm release."""
-    db = create_database_with_mocked_dependency(
-        name="test-db",
-        mock_gke_resource=mock_gke_resource,
-    )
+async def test_delete_is_noop() -> None:
+    """on_delete is a no-op (cascading deletes handle cleanup)."""
+    db = create_database_with_mocked_dependency(name="test-db")
 
-    await db.on_delete()
-
-    # Verify helm uninstall was called
-    helm_calls = [c for c in mock_subprocess.call_args_list if c[0][0][0] == "helm"]
-    uninstall_call = next(
-        (c for c in helm_calls if "uninstall" in c[0][0]),
-        None,
-    )
-    assert uninstall_call is not None
-    assert "qdrant-test-db" in uninstall_call[0][0]
-
-
-async def test_delete_idempotent(
-    mock_gke_resource: MagicMock,
-    mocker: "MockerFixture",
-) -> None:
-    """on_delete succeeds when release doesn't exist."""
-
-    def run_side_effect(cmd, **kwargs):
-        result = mocker.MagicMock()
-        result.stdout = ""
-        if cmd[0] == "helm" and "uninstall" in cmd:
-            result.returncode = 1
-            result.stderr = "Error: release not found"
-        else:
-            result.returncode = 0
-            result.stderr = ""
-        return result
-
-    mocker.patch("subprocess.run", side_effect=run_side_effect)
-
-    db = create_database_with_mocked_dependency(
-        name="test-db",
-        mock_gke_resource=mock_gke_resource,
-    )
-
-    # Should not raise
     await db.on_delete()
 
 
@@ -443,7 +237,6 @@ def test_storage_config_alias() -> None:
     storage = StorageConfig(size="10Gi")
     assert storage.class_ == "standard-rwo"
 
-    # Can use alias in input
     storage = StorageConfig.model_validate({"size": "20Gi", "class": "premium-rwo"})
     assert storage.class_ == "premium-rwo"
 
@@ -455,36 +248,154 @@ def test_resource_config_defaults() -> None:
     assert resources.cpu == "1"
 
 
-def test_build_helm_values() -> None:
-    """_build_helm_values correctly structures values for Helm."""
+async def test_build_outputs(mocker: "MockerFixture") -> None:
+    """_build_outputs creates correct external URLs."""
+    mocker.patch(
+        "qdrant_provider.resources.database.Database._wait_for_load_balancer_ip",
+        new_callable=AsyncMock,
+        return_value="34.123.45.67",
+    )
+
+    db = create_database_with_mocked_dependency(name="my-qdrant")
+
+    outputs = await db._build_outputs()
+
+    assert outputs.url == "http://34.123.45.67:6333"
+    assert outputs.grpc_url == "http://34.123.45.67:6334"
+    assert outputs.api_key is None
+    assert outputs.ready is True
+
+
+async def test_build_outputs_with_api_key(mocker: "MockerFixture") -> None:
+    """_build_outputs includes api_key when configured."""
+    mocker.patch(
+        "qdrant_provider.resources.database.Database._wait_for_load_balancer_ip",
+        new_callable=AsyncMock,
+        return_value="34.123.45.67",
+    )
+
+    db = create_database_with_mocked_dependency(name="my-qdrant", api_key="my-secret")
+
+    outputs = await db._build_outputs()
+
+    assert outputs.api_key == "my-secret"
+
+
+def test_service_names() -> None:
+    """Service names follow naming convention."""
+    db = create_database_with_mocked_dependency(name="test-db")
+
+    assert db._headless_service_name() == "qdrant-test-db-headless"
+    assert db._client_service_name() == "qdrant-test-db"
+    assert db._statefulset_name() == "qdrant-test-db"
+
+
+def test_build_headless_service() -> None:
+    """_build_headless_service creates correct Service config."""
+    db = create_database_with_mocked_dependency(name="test-db")
+
+    svc = db._build_headless_service()
+
+    assert svc.name == "qdrant-test-db-headless"
+    assert svc.config.type == "Headless"
+    assert len(svc.config.ports) == 2
+
+
+def test_build_client_service() -> None:
+    """_build_client_service creates LoadBalancer Service."""
+    db = create_database_with_mocked_dependency(name="test-db")
+
+    svc = db._build_client_service()
+
+    assert svc.name == "qdrant-test-db"
+    assert svc.config.type == "LoadBalancer"
+    assert len(svc.config.ports) == 2
+
+
+def test_build_statefulset() -> None:
+    """_build_statefulset creates correct StatefulSet config."""
     db = create_database_with_mocked_dependency(
         name="test-db",
         replicas=3,
         storage=StorageConfig(size="20Gi", class_="premium-rwo"),
-        resources=ResourceConfig(memory="4Gi", cpu="2"),
     )
 
-    values = db._build_helm_values()
+    sts = db._build_statefulset()
 
-    assert values["replicaCount"] == 3
-    assert values["persistence"]["size"] == "20Gi"
-    assert values["persistence"]["storageClassName"] == "premium-rwo"
-    assert values["resources"]["limits"]["memory"] == "4Gi"
-    assert values["resources"]["limits"]["cpu"] == "2"
-
-
-def test_build_outputs() -> None:
-    """_build_outputs creates correct in-cluster URLs."""
-    db = create_database_with_mocked_dependency(name="my-qdrant")
-
-    outputs = db._build_outputs()
-
-    assert outputs.url == "http://qdrant-my-qdrant.default.svc.cluster.local:6333"
-    assert outputs.grpc_url == "http://qdrant-my-qdrant.default.svc.cluster.local:6334"
-    assert outputs.ready is True
+    assert sts.name == "qdrant-test-db"
+    assert sts.config.replicas == 3
+    assert sts.config.service_name == "qdrant-test-db-headless"
+    assert len(sts.config.containers) == 1
+    assert sts.config.containers[0].name == "qdrant"
+    assert sts.config.containers[0].env is None
+    assert len(sts.config.volume_claim_templates) == 1
+    assert sts.config.volume_claim_templates[0].storage == "20Gi"
+    assert sts.config.volume_claim_templates[0].storage_class == "premium-rwo"
 
 
-def test_release_name() -> None:
-    """_get_release_name prefixes with qdrant-."""
+def test_build_statefulset_with_api_key() -> None:
+    """_build_statefulset configures API key environment variable."""
+    db = create_database_with_mocked_dependency(
+        name="test-db",
+        api_key="test-secret-key",
+    )
+
+    sts = db._build_statefulset()
+
+    assert sts.config.containers[0].env is not None
+    assert len(sts.config.containers[0].env) == 1
+    assert sts.config.containers[0].env[0].name == "QDRANT__SERVICE__API_KEY"
+    assert sts.config.containers[0].env[0].value == "test-secret-key"
+
+
+async def test_health_delegates_to_statefulset(
+    mock_apply_and_wait: tuple[AsyncMock, AsyncMock, AsyncMock],
+    mocker: "MockerFixture",
+) -> None:
+    """health() delegates to underlying StatefulSet."""
+    from pragma_sdk import HealthStatus
+
+    mock_sts_health = mocker.patch(
+        "kubernetes_provider.StatefulSet.health",
+        new_callable=AsyncMock,
+        return_value=HealthStatus(status="healthy", message="All replicas ready"),
+    )
+
     db = create_database_with_mocked_dependency(name="test-db")
-    assert db._get_release_name() == "qdrant-test-db"
+
+    result = await db.health()
+
+    assert result.status == "healthy"
+    mock_sts_health.assert_called_once()
+
+
+async def test_logs_delegates_to_statefulset(
+    mock_apply_and_wait: tuple[AsyncMock, AsyncMock, AsyncMock],
+    mocker: "MockerFixture",
+) -> None:
+    """logs() delegates to underlying StatefulSet."""
+    from datetime import datetime, timezone
+
+    from pragma_sdk import LogEntry
+
+    async def mock_logs(*args, **kwargs):
+        yield LogEntry(
+            timestamp=datetime.now(timezone.utc),
+            level="info",
+            message="test log",
+            metadata={"pod": "qdrant-test-db-0"},
+        )
+
+    mocker.patch(
+        "kubernetes_provider.StatefulSet.logs",
+        side_effect=mock_logs,
+    )
+
+    db = create_database_with_mocked_dependency(name="test-db")
+
+    entries = []
+    async for entry in db.logs():
+        entries.append(entry)
+
+    assert len(entries) == 1
+    assert entries[0].message == "test log"

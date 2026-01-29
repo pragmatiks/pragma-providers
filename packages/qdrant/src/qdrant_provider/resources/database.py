@@ -1,20 +1,39 @@
-"""Qdrant Database resource - deploys Qdrant to GKE via Helm."""
+"""Qdrant Database resource - deploys Qdrant to GKE using Kubernetes resources."""
 
 from __future__ import annotations
 
 import asyncio
-import json
-import os
-import subprocess
-import tempfile
-from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+import secrets
+from collections.abc import AsyncIterator
+from datetime import datetime
+from typing import ClassVar
 
+from lightkube.resources.core_v1 import Service as K8sService
 from pydantic import BaseModel, Field as PydanticField
-from pragma_sdk import Config, Dependency, Outputs, Resource
+from pragma_sdk import Config, Dependency, HealthStatus, LogEntry, Outputs, Resource
 
-if TYPE_CHECKING:
-    from gcp_provider import GKE
+from gcp_provider import GKE
+from kubernetes_provider import (
+    Service,
+    ServiceConfig,
+    StatefulSet,
+    StatefulSetConfig,
+)
+from kubernetes_provider.client import create_client_from_gke
+from kubernetes_provider.resources.service import PortConfig
+from kubernetes_provider.resources.statefulset import (
+    ContainerConfig,
+    ContainerPortConfig,
+    EnvVarConfig,
+    ProbeConfig,
+    ResourcesConfig,
+    VolumeClaimTemplateConfig,
+    VolumeMountConfig,
+)
+
+
+_LB_POLL_INTERVAL_SECONDS = 5
+_LB_MAX_POLL_ATTEMPTS = 60
 
 
 class StorageConfig(BaseModel):
@@ -51,358 +70,373 @@ class DatabaseConfig(Config):
         replicas: Number of Qdrant replicas (StatefulSet pods).
         storage: Persistent storage configuration.
         resources: CPU and memory limits.
+        api_key: API key for Qdrant authentication. If provided, used directly.
+        generate_api_key: If True and api_key is None, generates a secure 32-char key.
     """
 
-    cluster: Dependency["GKE"]
+    cluster: Dependency[GKE]
     replicas: int = 1
     storage: StorageConfig | None = None
     resources: ResourceConfig | None = None
+    api_key: str | None = None
+    generate_api_key: bool = False
 
 
 class DatabaseOutputs(Outputs):
     """Outputs from Qdrant database deployment.
 
     Attributes:
-        url: HTTP endpoint for Qdrant REST API (in-cluster URL).
-        grpc_url: gRPC endpoint for Qdrant (in-cluster URL).
+        url: HTTP endpoint for Qdrant REST API (external LoadBalancer URL).
+        grpc_url: gRPC endpoint for Qdrant (external LoadBalancer URL).
+        api_key: The API key for authentication (if configured).
         ready: Whether the StatefulSet is ready.
     """
 
     url: str
     grpc_url: str
+    api_key: str | None
     ready: bool
 
 
-# Polling configuration for StatefulSet readiness
-_POLL_INTERVAL_SECONDS = 5
-_MAX_POLL_ATTEMPTS = 60  # 60 * 5s = 5 minutes max wait
-
-
 class Database(Resource[DatabaseConfig, DatabaseOutputs]):
-    """Qdrant database deployed to GKE via Helm.
+    """Qdrant database deployed to GKE using Kubernetes resources.
 
-    Deploys the official Qdrant Helm chart to a GKE cluster and waits
-    for the StatefulSet to become ready. Uses cluster credentials from
-    the GKE dependency to authenticate with the Kubernetes API.
+    Creates child resources:
+    - Headless Service for pod DNS
+    - StatefulSet with persistent storage
+    - Client Service for cluster access
 
     Lifecycle:
-        - on_create: Install Helm chart, wait for ready
-        - on_update: Upgrade Helm release with new values
-        - on_delete: Uninstall Helm release
+        - on_create: Create child resources, wait for ready
+        - on_update: Update child resources
+        - on_delete: Child resources cascade deleted via owner_references
     """
 
     provider: ClassVar[str] = "qdrant"
     resource: ClassVar[str] = "database"
 
-    def _get_release_name(self) -> str:
-        """Get Helm release name based on resource name."""
+    _resolved_api_key: str | None = None
+
+    def _resolve_api_key(self) -> str | None:
+        """Resolve the API key from config.
+
+        Returns:
+            - The provided api_key if set
+            - A generated 32-char hex key if generate_api_key is True
+            - None otherwise
+        """
+        if self._resolved_api_key is not None:
+            return self._resolved_api_key
+
+        if self.config.api_key is not None:
+            self._resolved_api_key = self.config.api_key
+            return self._resolved_api_key
+
+        if self.config.generate_api_key:
+            self._resolved_api_key = secrets.token_hex(16)
+            return self._resolved_api_key
+
+        return None
+
+    def _headless_service_name(self) -> str:
+        """Get headless service name for pod DNS."""
+        return f"qdrant-{self.name}-headless"
+
+    def _client_service_name(self) -> str:
+        """Get client service name for cluster access."""
         return f"qdrant-{self.name}"
 
-    def _get_namespace(self) -> str:
+    def _statefulset_name(self) -> str:
+        """Get StatefulSet name."""
+        return f"qdrant-{self.name}"
+
+    def _namespace(self) -> str:
         """Get Kubernetes namespace."""
         return "default"
 
-    async def _get_kubeconfig(self) -> str:
-        """Build kubeconfig from GKE cluster credentials.
+    def _labels(self) -> dict[str, str]:
+        """Get labels for Kubernetes resources."""
+        return {
+            "app": "qdrant",
+            "app.kubernetes.io/name": "qdrant",
+            "app.kubernetes.io/instance": self.name,
+        }
 
-        Returns:
-            Path to temporary kubeconfig file.
-        """
+    async def _get_client(self):
+        """Get lightkube client from GKE cluster credentials."""
         cluster = await self.config.cluster.resolve()
         outputs = cluster.outputs
+
         if outputs is None:
             msg = "GKE cluster outputs not available"
             raise RuntimeError(msg)
 
-        kubeconfig = f"""
-apiVersion: v1
-kind: Config
-clusters:
-- name: gke-cluster
-  cluster:
-    server: https://{outputs.endpoint}
-    certificate-authority-data: {outputs.cluster_ca_certificate}
-contexts:
-- name: gke-context
-  context:
-    cluster: gke-cluster
-    user: gke-user
-current-context: gke-context
-users:
-- name: gke-user
-  user:
-    exec:
-      apiVersion: client.authentication.k8s.io/v1beta1
-      command: gke-gcloud-auth-plugin
-      installHint: Install gke-gcloud-auth-plugin for kubectl auth
-      provideClusterInfo: true
-"""
-        return kubeconfig
+        creds = cluster.config.credentials
 
-    def _build_helm_values(self) -> dict:
-        """Build Helm values from config."""
-        values: dict = {
-            "replicaCount": self.config.replicas,
-        }
+        return create_client_from_gke(outputs, creds)
 
-        if self.config.storage:
-            values["persistence"] = {
-                "size": self.config.storage.size,
-                "storageClassName": self.config.storage.class_,
-            }
-
-        if self.config.resources:
-            values["resources"] = {
-                "limits": {
-                    "memory": self.config.resources.memory,
-                    "cpu": self.config.resources.cpu,
-                },
-                "requests": {
-                    "memory": self.config.resources.memory,
-                    "cpu": self.config.resources.cpu,
-                },
-            }
-
-        return values
-
-    async def _run_command(self, cmd: list[str], kubeconfig_path: str, name: str) -> subprocess.CompletedProcess:
-        """Run a CLI command with kubeconfig.
+    async def _wait_for_load_balancer_ip(self, timeout: float = 300.0) -> str:
+        """Wait for LoadBalancer external IP to be assigned.
 
         Args:
-            cmd: Full command with arguments.
-            kubeconfig_path: Path to kubeconfig file.
-            name: Command name for error messages.
+            timeout: Maximum time to wait in seconds.
 
         Returns:
-            Completed process result.
+            External IP address.
 
         Raises:
-            RuntimeError: If command fails.
+            TimeoutError: If IP not assigned within timeout.
         """
-        env = {"KUBECONFIG": kubeconfig_path}
+        client = await self._get_client()
+        namespace = self._namespace()
+        service_name = self._client_service_name()
+        max_attempts = int(timeout / _LB_POLL_INTERVAL_SECONDS)
 
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            lambda: subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                env={**os.environ, **env},
-                check=False,
-            ),
-        )
+        for _ in range(max_attempts):
+            svc = await client.get(K8sService, name=service_name, namespace=namespace)
 
-        if result.returncode != 0:
-            msg = f"{name} command failed: {result.stderr}"
-            raise RuntimeError(msg)
+            if svc.status and svc.status.loadBalancer and svc.status.loadBalancer.ingress:
+                ingress = svc.status.loadBalancer.ingress[0]
 
-        return result
+                if ingress.ip:
+                    return ingress.ip
 
-    async def _run_helm(self, args: list[str], kubeconfig_path: str) -> subprocess.CompletedProcess:
-        """Run helm command with kubeconfig."""
-        return await self._run_command(["helm", *args], kubeconfig_path, "Helm")
+                if ingress.hostname:
+                    return ingress.hostname
 
-    async def _wait_for_ready(self, kubeconfig_path: str) -> bool:
-        """Wait for StatefulSet to be ready.
+            await asyncio.sleep(_LB_POLL_INTERVAL_SECONDS)
 
-        Args:
-            kubeconfig_path: Path to kubeconfig file.
-
-        Returns:
-            True when StatefulSet is ready.
-
-        Raises:
-            TimeoutError: If StatefulSet doesn't become ready in time.
-        """
-        namespace = self._get_namespace()
-        release_name = self._get_release_name()
-
-        for _ in range(_MAX_POLL_ATTEMPTS):
-            try:
-                result = await self._run_kubectl(
-                    [
-                        "get",
-                        "statefulset",
-                        release_name,
-                        "-n",
-                        namespace,
-                        "-o",
-                        "jsonpath={.status.readyReplicas}",
-                    ],
-                    kubeconfig_path,
-                )
-                ready_replicas = int(result.stdout.strip() or "0")
-                if ready_replicas >= self.config.replicas:
-                    return True
-            except (RuntimeError, ValueError):
-                pass  # StatefulSet may not exist yet or parsing failed
-
-            await asyncio.sleep(_POLL_INTERVAL_SECONDS)
-
-        msg = f"StatefulSet {release_name} did not become ready within {_MAX_POLL_ATTEMPTS * _POLL_INTERVAL_SECONDS}s"
+        msg = f"LoadBalancer {service_name} did not receive external IP within {timeout}s"
         raise TimeoutError(msg)
 
-    async def _run_kubectl(self, args: list[str], kubeconfig_path: str) -> subprocess.CompletedProcess:
-        """Run kubectl command with kubeconfig."""
-        return await self._run_command(["kubectl", *args], kubeconfig_path, "kubectl")
-
-    async def _helm_install(self, kubeconfig_path: str, values_path: str) -> None:
-        """Install or upgrade Qdrant Helm chart.
-
-        Args:
-            kubeconfig_path: Path to kubeconfig file.
-            values_path: Path to Helm values file.
-        """
-        release_name = self._get_release_name()
-        namespace = self._get_namespace()
-
-        await self._run_helm(
-            [
-                "upgrade",
-                "--install",
-                release_name,
-                "qdrant/qdrant",
-                "--namespace",
-                namespace,
-                "--create-namespace",
-                "--values",
-                values_path,
-                "--wait",
-                "--timeout",
-                "5m",
+    def _build_headless_service(self) -> Service:
+        """Build headless service for pod DNS."""
+        config = ServiceConfig(
+            cluster=self.config.cluster,
+            namespace=self._namespace(),
+            type="Headless",
+            selector=self._labels(),
+            ports=[
+                PortConfig(name="rest", port=6333, target_port=6333),
+                PortConfig(name="grpc", port=6334, target_port=6334),
             ],
-            kubeconfig_path,
         )
 
-    async def _helm_uninstall(self, kubeconfig_path: str) -> None:
-        """Uninstall Qdrant Helm chart.
+        return Service(
+            name=self._headless_service_name(),
+            config=config,
+        )
 
-        Args:
-            kubeconfig_path: Path to kubeconfig file.
-        """
-        release_name = self._get_release_name()
-        namespace = self._get_namespace()
+    def _build_client_service(self) -> Service:
+        """Build client service with LoadBalancer for external access."""
+        config = ServiceConfig(
+            cluster=self.config.cluster,
+            namespace=self._namespace(),
+            type="LoadBalancer",
+            selector=self._labels(),
+            ports=[
+                PortConfig(name="rest", port=6333, target_port=6333),
+                PortConfig(name="grpc", port=6334, target_port=6334),
+            ],
+        )
 
-        try:
-            await self._run_helm(
-                [
-                    "uninstall",
-                    release_name,
-                    "--namespace",
-                    namespace,
-                ],
-                kubeconfig_path,
+        return Service(
+            name=self._client_service_name(),
+            config=config,
+        )
+
+    def _build_statefulset(self) -> StatefulSet:
+        """Build StatefulSet for Qdrant pods."""
+        labels = self._labels()
+
+        resources_config = None
+        if self.config.resources:
+            resources_config = ResourcesConfig(
+                requests={
+                    "memory": self.config.resources.memory,
+                    "cpu": self.config.resources.cpu,
+                },
+                limits={
+                    "memory": self.config.resources.memory,
+                    "cpu": self.config.resources.cpu,
+                },
             )
-        except RuntimeError as e:
-            # Ignore if release doesn't exist
-            if "not found" not in str(e).lower():
-                raise
 
-    async def _ensure_helm_repo(self, kubeconfig_path: str) -> None:
-        """Ensure Qdrant Helm repo is added.
+        volume_mounts = [
+            VolumeMountConfig(name="qdrant-storage", mount_path="/qdrant/storage"),
+        ]
 
-        Args:
-            kubeconfig_path: Path to kubeconfig file.
-        """
-        try:
-            await self._run_helm(
-                ["repo", "add", "qdrant", "https://qdrant.github.io/qdrant-helm"],
-                kubeconfig_path,
-            )
-        except RuntimeError:
-            pass  # Repo may already exist
+        env_vars = None
+        api_key = self._resolve_api_key()
+        if api_key:
+            env_vars = [
+                EnvVarConfig(name="QDRANT__SERVICE__API_KEY", value=api_key),
+            ]
 
-        await self._run_helm(["repo", "update"], kubeconfig_path)
+        container = ContainerConfig(
+            name="qdrant",
+            image="qdrant/qdrant:latest",
+            ports=[
+                ContainerPortConfig(name="rest", container_port=6333),
+                ContainerPortConfig(name="grpc", container_port=6334),
+            ],
+            env=env_vars,
+            volume_mounts=volume_mounts,
+            resources=resources_config,
+            readiness_probe=ProbeConfig(tcp_socket_port=6333),
+            liveness_probe=ProbeConfig(tcp_socket_port=6333, initial_delay_seconds=30),
+        )
 
-    def _build_outputs(self) -> DatabaseOutputs:
-        """Build outputs with in-cluster URLs."""
-        release_name = self._get_release_name()
-        namespace = self._get_namespace()
+        storage_class = None
+        storage_size = "10Gi"
 
-        # Qdrant service follows release name convention
-        service_name = release_name
-        url = f"http://{service_name}.{namespace}.svc.cluster.local:6333"
-        grpc_url = f"http://{service_name}.{namespace}.svc.cluster.local:6334"
+        if self.config.storage:
+            storage_class = self.config.storage.class_
+            storage_size = self.config.storage.size
+
+        pvc_template = VolumeClaimTemplateConfig(
+            name="qdrant-storage",
+            storage_class=storage_class,
+            storage=storage_size,
+        )
+
+        config = StatefulSetConfig(
+            cluster=self.config.cluster,
+            namespace=self._namespace(),
+            replicas=self.config.replicas,
+            service_name=self._headless_service_name(),
+            selector=labels,
+            containers=[container],
+            volume_claim_templates=[pvc_template],
+        )
+
+        return StatefulSet(
+            name=self._statefulset_name(),
+            config=config,
+        )
+
+    async def _build_outputs(self) -> DatabaseOutputs:
+        """Build outputs with external LoadBalancer URLs."""
+        external_ip = await self._wait_for_load_balancer_ip()
+
+        url = f"http://{external_ip}:6333"
+        grpc_url = f"http://{external_ip}:6334"
 
         return DatabaseOutputs(
             url=url,
             grpc_url=grpc_url,
+            api_key=self._resolve_api_key(),
             ready=True,
         )
 
     async def on_create(self) -> DatabaseOutputs:
-        """Deploy Qdrant to GKE via Helm.
+        """Deploy Qdrant to GKE using child Kubernetes resources.
 
-        Idempotent: Uses helm upgrade --install which handles both
-        initial install and upgrades.
+        Creates headless service (for pod DNS), StatefulSet, and client service.
+        Waits for all resources to be ready and LoadBalancer IP to be assigned.
 
         Returns:
-            DatabaseOutputs with in-cluster URLs.
+            DatabaseOutputs with external LoadBalancer URLs.
         """
-        kubeconfig = await self._get_kubeconfig()
-        values = self._build_helm_values()
+        headless_svc = self._build_headless_service()
+        headless_svc.set_owner(self)
+        await headless_svc.apply()
+        await headless_svc.wait_ready(timeout=60.0)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            kubeconfig_path = Path(tmpdir) / "kubeconfig"
-            values_path = Path(tmpdir) / "values.json"
+        statefulset = self._build_statefulset()
+        statefulset.set_owner(self)
+        await statefulset.apply()
+        await statefulset.wait_ready(timeout=300.0)
 
-            kubeconfig_path.write_text(kubeconfig)
-            values_path.write_text(json.dumps(values))
+        client_svc = self._build_client_service()
+        client_svc.set_owner(self)
+        await client_svc.apply()
+        await client_svc.wait_ready(timeout=60.0)
 
-            await self._ensure_helm_repo(str(kubeconfig_path))
-            await self._helm_install(str(kubeconfig_path), str(values_path))
-            await self._wait_for_ready(str(kubeconfig_path))
-
-        return self._build_outputs()
+        return await self._build_outputs()
 
     async def on_update(self, previous_config: DatabaseConfig) -> DatabaseOutputs:
-        """Update Qdrant deployment via Helm upgrade.
+        """Update Qdrant deployment.
 
         Args:
             previous_config: The previous configuration before update.
 
         Returns:
-            DatabaseOutputs with in-cluster URLs.
+            DatabaseOutputs with external LoadBalancer URLs.
+
+        Raises:
+            ValueError: If cluster changed (requires delete + create).
         """
-        # Check for immutable field changes
-        # Cluster change would require migration which we don't support
         if previous_config.cluster.id != self.config.cluster.id:
             msg = "Cannot change cluster; delete and recreate resource"
             raise ValueError(msg)
 
-        # If nothing changed, return existing outputs
         if self.outputs is not None:
             previous_dict = previous_config.model_dump(exclude={"cluster"})
             current_dict = self.config.model_dump(exclude={"cluster"})
+
             if previous_dict == current_dict:
                 return self.outputs
 
-        kubeconfig = await self._get_kubeconfig()
-        values = self._build_helm_values()
+        headless_svc = self._build_headless_service()
+        headless_svc.set_owner(self)
+        await headless_svc.apply()
+        await headless_svc.wait_ready(timeout=60.0)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            kubeconfig_path = Path(tmpdir) / "kubeconfig"
-            values_path = Path(tmpdir) / "values.json"
+        statefulset = self._build_statefulset()
+        statefulset.set_owner(self)
+        await statefulset.apply()
+        await statefulset.wait_ready(timeout=300.0)
 
-            kubeconfig_path.write_text(kubeconfig)
-            values_path.write_text(json.dumps(values))
+        client_svc = self._build_client_service()
+        client_svc.set_owner(self)
+        await client_svc.apply()
+        await client_svc.wait_ready(timeout=60.0)
 
-            await self._ensure_helm_repo(str(kubeconfig_path))
-            await self._helm_install(str(kubeconfig_path), str(values_path))
-            await self._wait_for_ready(str(kubeconfig_path))
-
-        return self._build_outputs()
+        return await self._build_outputs()
 
     async def on_delete(self) -> None:
-        """Uninstall Qdrant Helm release.
+        """Delete Qdrant deployment.
 
-        Idempotent: Succeeds if release doesn't exist.
+        Explicitly deletes child Kubernetes resources. Once PRA-137 is implemented,
+        this will be handled automatically via owner_references cascading deletes.
         """
-        kubeconfig = await self._get_kubeconfig()
+        client_svc = self._build_client_service()
+        await client_svc.on_delete()
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            kubeconfig_path = Path(tmpdir) / "kubeconfig"
-            kubeconfig_path.write_text(kubeconfig)
+        statefulset = self._build_statefulset()
+        await statefulset.on_delete()
 
-            await self._helm_uninstall(str(kubeconfig_path))
+        headless_svc = self._build_headless_service()
+        await headless_svc.on_delete()
+
+    async def health(self) -> HealthStatus:
+        """Check Qdrant database health via StatefulSet status.
+
+        Returns:
+            HealthStatus indicating healthy/degraded/unhealthy.
+        """
+        statefulset = self._build_statefulset()
+
+        return await statefulset.health()
+
+    async def logs(
+        self,
+        since: datetime | None = None,
+        tail: int = 100,
+    ) -> AsyncIterator[LogEntry]:
+        """Fetch logs from Qdrant pods.
+
+        Delegates to the underlying StatefulSet.
+
+        Args:
+            since: Only return logs after this timestamp.
+            tail: Maximum number of log lines per pod.
+
+        Yields:
+            LogEntry for each log line from Qdrant pods.
+        """
+        statefulset = self._build_statefulset()
+
+        async for entry in statefulset.logs(since=since, tail=tail):
+            yield entry

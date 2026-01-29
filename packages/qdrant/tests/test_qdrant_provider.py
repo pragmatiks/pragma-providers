@@ -29,7 +29,7 @@ async def test_create_collection_success(
     assert result.success
     assert result.outputs is not None
     assert result.outputs.name == "test-collection"
-    assert result.outputs.vectors_count == 100
+    assert result.outputs.indexed_vectors_count == 100
     assert result.outputs.points_count == 100
     assert result.outputs.status == "green"
 
@@ -63,13 +63,14 @@ async def test_create_with_api_key(
     """on_create passes api_key to client."""
     mock_client = mocker.MagicMock()
     mock_info = mocker.MagicMock()
-    mock_info.vectors_count = 0
+    mock_info.indexed_vectors_count = 0
     mock_info.points_count = 0
     mock_info.status = models.CollectionStatus.GREEN
 
     mock_client.collection_exists = mocker.AsyncMock(return_value=False)
     mock_client.create_collection = mocker.AsyncMock(return_value=True)
     mock_client.get_collection = mocker.AsyncMock(return_value=mock_info)
+    mock_client.close = mocker.AsyncMock(return_value=None)
     mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = mocker.AsyncMock(return_value=None)
 
@@ -144,7 +145,7 @@ async def test_update_no_change(
     )
     existing_outputs = CollectionOutputs(
         name="test-collection",
-        vectors_count=50,
+        indexed_vectors_count=50,
         points_count=50,
         status="green",
     )
@@ -187,7 +188,7 @@ async def test_update_recreates_on_vector_size_change(
         previous_config=previous,
         current_outputs=CollectionOutputs(
             name="test-collection",
-            vectors_count=100,
+            indexed_vectors_count=100,
             points_count=100,
             status="green",
         ),
@@ -223,7 +224,7 @@ async def test_update_recreates_on_distance_change(
         previous_config=previous,
         current_outputs=CollectionOutputs(
             name="test-collection",
-            vectors_count=100,
+            indexed_vectors_count=100,
             points_count=100,
             status="green",
         ),
@@ -258,7 +259,7 @@ async def test_update_rejects_name_change(
         previous_config=previous,
         current_outputs=CollectionOutputs(
             name="old-collection",
-            vectors_count=100,
+            indexed_vectors_count=100,
             points_count=100,
             status="green",
         ),

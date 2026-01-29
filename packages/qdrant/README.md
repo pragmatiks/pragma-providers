@@ -46,7 +46,7 @@ spec:
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | `str` | Collection name |
-| `vectors_count` | `int` | Number of indexed vectors |
+| `indexed_vectors_count` | `int` | Number of indexed vectors |
 | `points_count` | `int` | Number of points in collection |
 | `status` | `str` | Collection status (`green`, `yellow`, `red`) |
 

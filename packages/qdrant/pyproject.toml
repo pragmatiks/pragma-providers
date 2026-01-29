@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "pragmatiks-sdk>=0.6.0",
+    "pragmatiks-kubernetes-provider>=0.2.0",
     "qdrant-client>=1.12.0",
 ]
 
