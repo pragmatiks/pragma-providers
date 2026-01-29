@@ -1,3 +1,13 @@
+## agno-v0.3.0 (2026-01-29)
+
+### Feat
+
+- **qdrant**: add LoadBalancer exposure and API key authentication (#11)
+- **kubernetes**: add kubernetes provider with lightkube
+- **gcp**: add logs() and health() methods to GKE resource
+- **gcp**: rename region to location for zonal cluster support
+- **gcp**: add standard cluster support to GKE resource
+
 ## agno-v0.2.0 (2026-01-25)
 
 ### Feat
