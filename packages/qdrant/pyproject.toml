@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-qdrant-provider"
-version = "0.2.0"
+version = "0.3.0"
 description = "Qdrant provider for Pragmatiks"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -33,7 +33,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.2.0"
+version = "0.3.0"
 version_files = ["pyproject.toml:^version"]
 tag_format = "qdrant-v$version"
 update_changelog_on_bump = true
