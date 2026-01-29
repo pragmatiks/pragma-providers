@@ -1,4 +1,4 @@
-"""GCP GKE Autopilot cluster resource."""
+"""GCP GKE cluster resource supporting both Autopilot and Standard modes."""
 
 from __future__ import annotations
 
@@ -8,13 +8,20 @@ from typing import Any, ClassVar, Literal
 
 from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.container_v1 import ClusterManagerAsyncClient
-from google.cloud.container_v1.types import Cluster, CreateClusterRequest, DeleteClusterRequest, GetClusterRequest
+from google.cloud.container_v1.types import (
+    Cluster,
+    CreateClusterRequest,
+    DeleteClusterRequest,
+    GetClusterRequest,
+    NodeConfig,
+    NodePool,
+)
 from google.oauth2 import service_account
 from pragma_sdk import Config, Outputs, Resource
 
 
 class GKEConfig(Config):
-    """Configuration for a GKE Autopilot cluster.
+    """Configuration for a GKE cluster.
 
     Attributes:
         project_id: GCP project ID where the cluster will be created.
@@ -25,6 +32,9 @@ class GKEConfig(Config):
         network: VPC network name. Defaults to "default".
         subnetwork: VPC subnetwork name. If not specified, uses network default.
         release_channel: Release channel for cluster updates.
+        initial_node_count: Number of nodes in default pool (standard clusters only).
+        machine_type: Machine type for nodes (standard clusters only).
+        disk_size_gb: Boot disk size in GB (standard clusters only).
     """
 
     project_id: str
@@ -35,6 +45,9 @@ class GKEConfig(Config):
     network: str = "default"
     subnetwork: str | None = None
     release_channel: Literal["RAPID", "REGULAR", "STABLE"] = "REGULAR"
+    initial_node_count: int = 1
+    machine_type: str = "e2-medium"
+    disk_size_gb: int = 100
 
 
 class GKEOutputs(Outputs):
@@ -61,10 +74,14 @@ _MAX_POLL_ATTEMPTS = 40  # 40 * 30s = 20 minutes max wait
 
 
 class GKE(Resource[GKEConfig, GKEOutputs]):
-    """GCP GKE Autopilot cluster resource.
+    """GCP GKE cluster resource supporting Autopilot and Standard modes.
 
-    Creates and manages GKE Autopilot clusters using user-provided
-    service account credentials (multi-tenant SaaS pattern).
+    Creates and manages GKE clusters using user-provided service account
+    credentials (multi-tenant SaaS pattern).
+
+    Modes:
+        - Autopilot (default): Fully managed, no node configuration needed
+        - Standard: Manual node pool with configurable machine type and count
 
     Lifecycle:
         - on_create: Creates cluster, waits for RUNNING state
@@ -179,6 +196,17 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
 
         if self.config.autopilot:
             cluster.autopilot = {"enabled": True}
+        else:
+            cluster.node_pools = [
+                NodePool(
+                    name="default-pool",
+                    initial_node_count=self.config.initial_node_count,
+                    config=NodeConfig(
+                        machine_type=self.config.machine_type,
+                        disk_size_gb=self.config.disk_size_gb,
+                    ),
+                )
+            ]
 
         return cluster
 

@@ -1675,7 +1675,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "0.11.0"
+version = "0.12.0"
 source = { editable = "packages/gcp" }
 dependencies = [
     { name = "google-cloud-container" },
