@@ -1,3 +1,28 @@
+## gcp-v0.29.0 (2026-01-29)
+
+### Feat
+
+- **gcp**: add standard cluster support to GKE resource
+- **agno**: add agent resource for deploying AI agents to GKE (#9)
+- **qdrant**: add database resource that deploys to GKE via Helm (#8)
+- **gcp**: add GKE Autopilot cluster resource (#7)
+- **docling**: add docling provider for document parsing (#6)
+- **qdrant**: add qdrant provider with collection resource (#5)
+- **openai**: add embeddings resource for text embedding generation (#4)
+- add provider template for pragma providers init (#3)
+- **openai**: add openai provider with chat_completions resource
+- **anthropic**: add anthropic provider with messages resource (#1)
+
+### Fix
+
+- **ci**: use GitHub App token for push to bypass branch protection
+
+## gcp-v0.10.0 (2026-01-18)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v0.6.0
+
 ## gcp-v0.28.0 (2026-01-29)
 
 ### Feat
