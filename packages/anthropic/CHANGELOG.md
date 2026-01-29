@@ -1,3 +1,24 @@
+## anthropic-v0.53.0 (2026-01-29)
+
+### Feat
+
+- **qdrant**: add LoadBalancer exposure and API key authentication (#11)
+- **kubernetes**: add kubernetes provider with lightkube
+- **gcp**: add logs() and health() methods to GKE resource
+- **gcp**: rename region to location for zonal cluster support
+- **gcp**: add standard cluster support to GKE resource
+- **agno**: add agent resource for deploying AI agents to GKE (#9)
+- **qdrant**: add database resource that deploys to GKE via Helm (#8)
+- **gcp**: add GKE Autopilot cluster resource (#7)
+- **docling**: add docling provider for document parsing (#6)
+- **qdrant**: add qdrant provider with collection resource (#5)
+- **openai**: add embeddings resource for text embedding generation (#4)
+- add provider template for pragma providers init (#3)
+
+### Fix
+
+- **ci**: use GitHub App token for push to bypass branch protection
+
 ## anthropic-v0.52.0 (2026-01-29)
 
 ### Feat
