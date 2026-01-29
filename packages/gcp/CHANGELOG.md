@@ -1,3 +1,9 @@
+## gcp-v0.38.0 (2026-01-29)
+
+### Feat
+
+- **gcp**: rename region to location for zonal cluster support
+
 ## gcp-v0.37.0 (2026-01-29)
 
 ### Feat
