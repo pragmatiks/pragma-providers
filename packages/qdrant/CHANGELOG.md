@@ -10,6 +10,16 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v0.5.0 (2026-01-29)
+
+### Feat
+
+- **qdrant**: add LoadBalancer exposure and API key authentication (#11)
+- **kubernetes**: add kubernetes provider with lightkube
+- **gcp**: add logs() and health() methods to GKE resource
+- **gcp**: rename region to location for zonal cluster support
+- **gcp**: add standard cluster support to GKE resource
+
 ## qdrant-v0.4.0 (2026-01-29)
 
 ### Feat
