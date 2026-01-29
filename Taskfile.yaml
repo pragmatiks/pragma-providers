@@ -4,6 +4,9 @@ includes:
   gcp:
     taskfile: ./taskfiles/gcp.Taskfile.yaml
     dir: ./packages/gcp
+  kubernetes:
+    taskfile: ./taskfiles/kubernetes.Taskfile.yaml
+    dir: ./packages/kubernetes
   anthropic:
     taskfile: ./taskfiles/anthropic.Taskfile.yaml
     dir: ./packages/anthropic
@@ -29,6 +32,7 @@ tasks:
     desc: Run all tests across all packages
     deps:
       - gcp:test
+      - kubernetes:test
       - anthropic:test
       - openai:test
       - docling:test
@@ -39,6 +43,7 @@ tasks:
     desc: Format all Python code
     deps:
       - gcp:format
+      - kubernetes:format
       - anthropic:format
       - openai:format
       - docling:format
@@ -49,6 +54,7 @@ tasks:
     desc: Run all checks (ruff + type checking)
     deps:
       - gcp:check
+      - kubernetes:check
       - anthropic:check
       - openai:check
       - docling:check
