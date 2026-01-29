@@ -1,3 +1,27 @@
+## gcp-v0.74.0 (2026-01-29)
+
+### Feat
+
+- **qdrant**: add LoadBalancer exposure and API key authentication (#11)
+
+## gcp-v0.66.0 (2026-01-29)
+
+### Feat
+
+- **kubernetes**: add kubernetes provider with lightkube
+
+## gcp-v0.55.0 (2026-01-29)
+
+### Feat
+
+- **gcp**: add logs() and health() methods to GKE resource
+
+## gcp-v0.44.0 (2026-01-29)
+
+### Feat
+
+- **gcp**: rename region to location for zonal cluster support
+
 ## gcp-v0.73.0 (2026-01-29)
 
 ### Feat
