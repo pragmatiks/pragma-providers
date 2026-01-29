@@ -1,3 +1,9 @@
+## gcp-v0.66.0 (2026-01-29)
+
+### Feat
+
+- **kubernetes**: add kubernetes provider with lightkube
+
 ## gcp-v0.65.0 (2026-01-29)
 
 ### Feat
