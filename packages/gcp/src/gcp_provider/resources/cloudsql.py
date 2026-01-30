@@ -159,8 +159,16 @@ class CloudSQL(Resource[CloudSQLConfig, CloudSQLOutputs]):
             elif ip_addr.get("type") == "PRIVATE":
                 private_ip = ip_addr.get("ipAddress")
 
-        db_type = "postgresql" if self.config.database_version.startswith("POSTGRES") else "mysql"
-        port = "5432" if db_type == "postgresql" else "3306"
+        match self.config.database_version.split("_")[0]:
+            case "POSTGRES":
+                db_type, port = "postgresql", "5432"
+            case "MYSQL":
+                db_type, port = "mysql", "3306"
+            case "SQLSERVER":
+                db_type, port = "sqlserver", "1433"
+            case _:
+                db_type, port = "postgresql", "5432"
+
         host = public_ip or private_ip or self._connection_name()
         url = f"{db_type}://USER:PASSWORD@{host}:{port}/{database_name}"
 
@@ -404,13 +412,7 @@ class CloudSQL(Resource[CloudSQLConfig, CloudSQLOutputs]):
         tail: int = 100,
     ) -> AsyncIterator[LogEntry]:
         """Fetch instance logs from Cloud Logging."""
-        creds_data = self.config.credentials
-
-        if isinstance(creds_data, str):
-            creds_data = json.loads(creds_data)
-
-        credentials = service_account.Credentials.from_service_account_info(creds_data)
-        logging_client = LoggingClient(credentials=credentials, project=self.config.project_id)
+        logging_client = LoggingClient(credentials=self._get_credentials(), project=self.config.project_id)
 
         filter_parts = [
             'resource.type="cloudsql_database"',
