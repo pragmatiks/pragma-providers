@@ -44,43 +44,24 @@ pip install pragmatiks-gcp-provider
 |----------|-------------|
 | `gcp/secret` | Secret Manager secrets |
 | `gcp/gke` | GKE Autopilot clusters |
+| `gcp/cloudsql/database_instance` | Cloud SQL instances |
+| `gcp/cloudsql/database` | Cloud SQL databases |
+| `gcp/cloudsql/user` | Cloud SQL users |
 
-### Anthropic Provider
+### Kubernetes Provider
 
-Claude AI model integration.
+Manage Kubernetes resources.
 
 ```bash
-pip install pragmatiks-anthropic-provider
+pip install pragmatiks-kubernetes-provider
 ```
 
 | Resource | Description |
 |----------|-------------|
-| `anthropic/messages` | Claude Messages API for completions |
-
-### OpenAI Provider
-
-OpenAI model integration.
-
-```bash
-pip install pragmatiks-openai-provider
-```
-
-| Resource | Description |
-|----------|-------------|
-| `openai/chat_completions` | Chat Completions API |
-| `openai/embeddings` | Text embeddings API |
-
-### Docling Provider
-
-Document parsing for RAG pipelines.
-
-```bash
-pip install pragmatiks-docling-provider
-```
-
-| Resource | Description |
-|----------|-------------|
-| `docling/parser` | Parse PDF, DOCX, HTML, Markdown with OCR support |
+| `kubernetes/configmap` | ConfigMaps |
+| `kubernetes/secret` | Secrets |
+| `kubernetes/service` | Services |
+| `kubernetes/statefulset` | StatefulSets |
 
 ### Qdrant Provider
 
@@ -217,10 +198,8 @@ task gcp:check
 ```
 pragma-providers/
 ├── packages/
-│   ├── gcp/              # GCP provider (secret, gke)
-│   ├── anthropic/        # Anthropic provider (messages)
-│   ├── openai/           # OpenAI provider (chat_completions, embeddings)
-│   ├── docling/          # Docling provider (parser)
+│   ├── gcp/              # GCP provider (secret, gke, cloudsql)
+│   ├── kubernetes/       # Kubernetes provider
 │   ├── qdrant/           # Qdrant provider (database, collection)
 │   └── agno/             # Agno provider (agent)
 ├── pyproject.toml        # Workspace configuration

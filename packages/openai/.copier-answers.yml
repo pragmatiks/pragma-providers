@@ -1,9 +1,0 @@
-# Changes here will be overwritten by Copier
-_commit: v0.1.0
-_src_path: /Users/thomas/Workspace/pragmatiks/pragma-os/templates/provider
-name: openai
-description: OpenAI provider for Pragmatiks
-author_name: Pragmatiks
-author_email: team@pragmatiks.io
-package_name: openai_provider
-project_name: openai-provider

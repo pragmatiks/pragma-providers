@@ -1,6 +1,0 @@
-# Changes here will be overwritten by Copier
-_src_path: /Users/thomas/Workspace/pragmatiks/pragma-os/templates/provider
-author_email: team@pragmatiks.io
-author_name: Pragmatiks
-description: Anthropic provider for Pragmatiks
-name: anthropic

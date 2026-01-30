@@ -7,15 +7,6 @@ includes:
   kubernetes:
     taskfile: ./taskfiles/kubernetes.Taskfile.yaml
     dir: ./packages/kubernetes
-  anthropic:
-    taskfile: ./taskfiles/anthropic.Taskfile.yaml
-    dir: ./packages/anthropic
-  openai:
-    taskfile: ./taskfiles/openai.Taskfile.yaml
-    dir: ./packages/openai
-  docling:
-    taskfile: ./taskfiles/docling.Taskfile.yaml
-    dir: ./packages/docling
   qdrant:
     taskfile: ./taskfiles/qdrant.Taskfile.yaml
     dir: ./packages/qdrant
@@ -33,9 +24,6 @@ tasks:
     deps:
       - gcp:test
       - kubernetes:test
-      - anthropic:test
-      - openai:test
-      - docling:test
       - qdrant:test
       - agno:test
 
@@ -44,9 +32,6 @@ tasks:
     deps:
       - gcp:format
       - kubernetes:format
-      - anthropic:format
-      - openai:format
-      - docling:format
       - qdrant:format
       - agno:format
 
@@ -55,8 +40,5 @@ tasks:
     deps:
       - gcp:check
       - kubernetes:check
-      - anthropic:check
-      - openai:check
-      - docling:check
       - qdrant:check
       - agno:check

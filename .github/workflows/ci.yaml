@@ -34,10 +34,14 @@ jobs:
         working-directory: packages/gcp
         run: uv run pytest tests/ --cov=gcp_provider --cov-report=term-missing
 
-      - name: Test Anthropic provider
-        working-directory: packages/anthropic
-        run: uv run pytest tests/ --cov=anthropic_provider --cov-report=term-missing
+      - name: Test Kubernetes provider
+        working-directory: packages/kubernetes
+        run: uv run pytest tests/ --cov=kubernetes_provider --cov-report=term-missing
 
-      - name: Test OpenAI provider
-        working-directory: packages/openai
-        run: uv run pytest tests/ --cov=openai_provider --cov-report=term-missing
+      - name: Test Qdrant provider
+        working-directory: packages/qdrant
+        run: uv run pytest tests/ --cov=qdrant_provider --cov-report=term-missing
+
+      - name: Test Agno provider
+        working-directory: packages/agno
+        run: uv run pytest tests/ --cov=agno_provider --cov-report=term-missing
