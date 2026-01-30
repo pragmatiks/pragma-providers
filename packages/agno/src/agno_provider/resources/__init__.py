@@ -8,9 +8,17 @@ from agno_provider.resources.agent import (
     AgentConfig,
     AgentOutputs,
 )
+from agno_provider.resources.models import (
+    AnthropicModel,
+    AnthropicModelConfig,
+    AnthropicModelOutputs,
+)
 
 __all__ = [
     "Agent",
     "AgentConfig",
     "AgentOutputs",
+    "AnthropicModel",
+    "AnthropicModelConfig",
+    "AnthropicModelOutputs",
 ]

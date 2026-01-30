@@ -10,16 +10,23 @@ from agno_provider.resources import (
     Agent,
     AgentConfig,
     AgentOutputs,
+    AnthropicModel,
+    AnthropicModelConfig,
+    AnthropicModelOutputs,
 )
 
 agno = Provider(name="agno")
 
 # Register resources
 agno.resource("agent")(Agent)
+agno.resource("models/anthropic")(AnthropicModel)
 
 __all__ = [
     "agno",
     "Agent",
     "AgentConfig",
     "AgentOutputs",
+    "AnthropicModel",
+    "AnthropicModelConfig",
+    "AnthropicModelOutputs",
 ]
