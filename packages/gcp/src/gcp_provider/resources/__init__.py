@@ -3,6 +3,11 @@
 Import and export your Resource classes here for discovery by the runtime.
 """
 
+from gcp_provider.resources.cloudsql import (
+    CloudSQL,
+    CloudSQLConfig,
+    CloudSQLOutputs,
+)
 from gcp_provider.resources.gke import (
     GKE,
     GKEConfig,
@@ -15,6 +20,9 @@ from gcp_provider.resources.secret import (
 )
 
 __all__ = [
+    "CloudSQL",
+    "CloudSQLConfig",
+    "CloudSQLOutputs",
     "GKE",
     "GKEConfig",
     "GKEOutputs",

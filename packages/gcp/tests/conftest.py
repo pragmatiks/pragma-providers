@@ -72,7 +72,6 @@ def mock_container_client(mocker: "MockerFixture") -> MagicMock:
     """Mock GCP Container (GKE) async client with credentials support."""
     mock_client = mocker.MagicMock()
 
-    # Mock cluster in RUNNING state
     mock_cluster = mocker.MagicMock()
     mock_cluster.name = "test-cluster"
     mock_cluster.endpoint = "https://10.0.0.1"
@@ -95,7 +94,39 @@ def mock_container_client(mocker: "MockerFixture") -> MagicMock:
         return_value=mock_credentials,
     )
 
-    # Patch asyncio.sleep to avoid actual waits in tests
     mocker.patch("gcp_provider.resources.gke.asyncio.sleep", return_value=None)
 
     return mock_client
+
+
+@pytest.fixture
+def mock_sqladmin_service(mocker: "MockerFixture") -> MagicMock:
+    """Mock GCP Cloud SQL Admin API service (discovery-based)."""
+    mock_service = mocker.MagicMock()
+
+    mock_instance = {
+        "name": "test-db",
+        "state": "RUNNABLE",
+        "settings": {"tier": "db-f1-micro"},
+        "ipAddresses": [{"type": "PRIMARY", "ipAddress": "10.0.0.5"}],
+    }
+
+    mock_service.instances().get().execute.return_value = mock_instance
+    mock_service.instances().insert().execute.return_value = {"name": "operation-123"}
+    mock_service.instances().delete().execute.return_value = {"name": "operation-456"}
+    mock_service.databases().insert().execute.return_value = {"name": "operation-789"}
+
+    mocker.patch(
+        "gcp_provider.resources.cloudsql.discovery.build",
+        return_value=mock_service,
+    )
+
+    mock_credentials = mocker.MagicMock()
+    mocker.patch(
+        "gcp_provider.resources.cloudsql.service_account.Credentials.from_service_account_info",
+        return_value=mock_credentials,
+    )
+
+    mocker.patch("gcp_provider.resources.cloudsql.asyncio.sleep", return_value=None)
+
+    return mock_service

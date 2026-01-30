@@ -9,6 +9,8 @@ dependencies = [
     "google-cloud-container>=2.50.0",
     "google-cloud-logging>=3.10.0",
     "google-cloud-secret-manager>=2.20.0",
+    "google-api-python-client>=2.150.0",
+    "google-auth>=2.35.0",
 ]
 
 authors = [
