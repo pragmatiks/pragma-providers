@@ -90,10 +90,7 @@ class OpenAIModel(Resource[OpenAIModelConfig, OpenAIModelOutputs]):
         Called by dependent resources (e.g., agno/agent) that need
         the actual SDK object.
         """
-        kwargs = self.config.model_dump(exclude_none=True)
-        kwargs["api_key"] = str(self.config.api_key)
-
-        return OpenAIChat(**kwargs)
+        return OpenAIChat(**self.config.model_dump(exclude_none=True))
 
     async def on_create(self) -> OpenAIModelOutputs:
         """Create returns serializable metadata only.
