@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import secrets
 import string
 from collections.abc import AsyncIterator
@@ -11,11 +10,20 @@ from datetime import datetime
 from typing import Any, ClassVar, Literal
 
 from google.cloud.logging_v2 import Client as LoggingClient
-from google.oauth2 import service_account
-from googleapiclient import discovery
-from googleapiclient.errors import HttpError
 from pydantic import Field, field_validator
 from pragma_sdk import Config, HealthStatus, LogEntry, Outputs, Resource
+
+from gcp_provider.resources.cloudsql.helpers import (
+    execute,
+    extract_ips,
+    get_credentials,
+    get_sqladmin_service,
+    run_in_executor,
+)
+
+
+_POLL_INTERVAL_SECONDS = 30
+_MAX_POLL_ATTEMPTS = 30
 
 
 class DatabaseInstanceConfig(Config):
@@ -35,17 +43,34 @@ class DatabaseInstanceConfig(Config):
         enable_public_ip: Whether to assign a public IP address.
     """
 
-    project_id: str
+    project_id: str = Field(json_schema_extra={"immutable": True})
     credentials: dict[str, Any] | str
-    region: str
-    instance_name: str
-    database_version: str = "POSTGRES_15"
+    region: str = Field(json_schema_extra={"immutable": True})
+    instance_name: str = Field(json_schema_extra={"immutable": True})
+    database_version: str = Field(default="POSTGRES_15", json_schema_extra={"immutable": True})
     tier: str = "db-f1-micro"
     availability_type: Literal["ZONAL", "REGIONAL"] = "ZONAL"
     backup_enabled: bool = True
     deletion_protection: bool = False
     authorized_networks: list[str] = Field(default_factory=list)
     enable_public_ip: bool = True
+
+    def validate_update(self, previous: DatabaseInstanceConfig) -> None:
+        """Validate that immutable fields have not changed.
+
+        Raises:
+            ValueError: If any immutable field differs from previous config.
+        """
+        for name, field_info in self.__class__.model_fields.items():
+            extra = field_info.json_schema_extra
+
+            if isinstance(extra, dict) and extra.get("immutable"):
+                current_value = getattr(self, name)
+                previous_value = getattr(previous, name)
+
+                if current_value != previous_value:
+                    msg = f"Cannot change {name}; delete and recreate resource"
+                    raise ValueError(msg)
 
     @field_validator("instance_name")
     @classmethod
@@ -98,16 +123,6 @@ class DatabaseInstanceOutputs(Outputs):
     logs_url: str
 
 
-_POLL_INTERVAL_SECONDS = 30
-_MAX_POLL_ATTEMPTS = 30
-
-
-def _generate_root_password() -> str:
-    """Generate a secure random password for the root user."""
-    alphabet = string.ascii_letters + string.digits
-    return "".join(secrets.choice(alphabet) for _ in range(24))
-
-
 class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]):
     """GCP Cloud SQL database instance resource.
 
@@ -123,47 +138,178 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
     provider: ClassVar[str] = "gcp"
     resource: ClassVar[str] = "cloudsql/database_instance"
 
-    def _get_credentials(self) -> service_account.Credentials:
-        """Get credentials from config."""
-        creds_data = self.config.credentials
+    async def on_create(self) -> DatabaseInstanceOutputs:
+        """Create Cloud SQL instance and wait for RUNNABLE state.
 
-        if isinstance(creds_data, str):
-            creds_data = json.loads(creds_data)
+        Idempotent: If instance already exists, returns its current state.
 
-        return service_account.Credentials.from_service_account_info(creds_data)
+        Returns:
+            DatabaseInstanceOutputs with instance details.
+        """
+        service = get_sqladmin_service(get_credentials(self.config.credentials))
 
-    def _get_service(self) -> Any:
-        """Get Cloud SQL Admin API service."""
-        return discovery.build("sqladmin", "v1", credentials=self._get_credentials())
+        existing = await execute(
+            service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
+            ignore_404=True,
+        )
 
-    def _connection_name(self) -> str:
-        """Build Cloud SQL connection name."""
-        return f"{self.config.project_id}:{self.config.region}:{self.config.instance_name}"
+        if existing is None:
+            await execute(service.instances().insert(project=self.config.project_id, body=self._build_instance_body()))
+
+        instance = await self._wait_for_runnable(service)
+
+        return self._build_outputs(instance)
+
+    async def on_update(self, previous_config: DatabaseInstanceConfig) -> DatabaseInstanceOutputs:
+        """Update instance configuration.
+
+        Updates mutable settings (tier, availability, backups, network config).
+        Immutable fields (project, region, name, database version) cannot be changed.
+
+        Args:
+            previous_config: The previous configuration before update.
+
+        Returns:
+            DatabaseInstanceOutputs with updated instance state.
+
+        Raises:
+            ValueError: If immutable fields changed (requires delete + create).
+        """
+        self.config.validate_update(previous_config)
+
+        service = get_sqladmin_service(get_credentials(self.config.credentials))
+
+        await execute(
+            service.instances().patch(
+                project=self.config.project_id,
+                instance=self.config.instance_name,
+                body=self._build_patch_body(),
+            )
+        )
+
+        instance = await self._wait_for_runnable(service)
+
+        return self._build_outputs(instance)
+
+    async def on_delete(self) -> None:
+        """Delete instance.
+
+        Idempotent: Succeeds if instance doesn't exist.
+
+        Note: Respects deletion_protection setting on the instance.
+        """
+        service = get_sqladmin_service(get_credentials(self.config.credentials))
+
+        result = await execute(
+            service.instances().delete(project=self.config.project_id, instance=self.config.instance_name),
+            ignore_404=True,
+        )
+
+        if result is not None:
+            await self._wait_for_deletion(service)
+
+    async def health(self) -> HealthStatus:
+        """Check instance health by querying instance status."""
+        service = get_sqladmin_service(get_credentials(self.config.credentials))
+
+        instance = await execute(
+            service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
+            ignore_404=True,
+        )
+
+        if instance is None:
+            return HealthStatus(status="unhealthy", message="Instance not found")
+
+        state = instance.get("state")
+        status_map = {
+            "RUNNABLE": ("healthy", "Instance is running"),
+            "PENDING_CREATE": ("degraded", "Instance is pending create"),
+            "MAINTENANCE": ("degraded", "Instance is in maintenance"),
+        }
+        status, message = status_map.get(state, ("unhealthy", f"Instance state: {state}"))
+
+        return HealthStatus(
+            status=status,
+            message=message,
+            details={"tier": instance.get("settings", {}).get("tier")} if status == "healthy" else None,
+        )
+
+    async def logs(
+        self,
+        since: datetime | None = None,
+        tail: int = 100,
+    ) -> AsyncIterator[LogEntry]:
+        """Fetch instance logs from Cloud Logging."""
+        credentials = get_credentials(self.config.credentials)
+        project = self.config.project_id
+
+        filter_parts = [
+            'resource.type="cloudsql_database"',
+            f'resource.labels.database_id="{self.config.project_id}:{self.config.instance_name}"',
+        ]
+
+        if since:
+            filter_parts.append(f'timestamp>="{since.isoformat()}Z"')
+
+        filter_str = " AND ".join(filter_parts)
+
+        def fetch_logs() -> list:
+            logging_client = LoggingClient(credentials=credentials, project=project)
+            return list(
+                logging_client.list_entries(
+                    filter_=filter_str,
+                    order_by="timestamp desc",
+                    max_results=tail,
+                )
+            )
+
+        entries = await run_in_executor(fetch_logs)
+
+        for entry in entries:
+            yield LogEntry(
+                timestamp=entry.timestamp,
+                level=self._severity_to_level(entry),
+                message=str(entry.payload) if entry.payload else "",
+                metadata={"log_name": entry.log_name} if entry.log_name else None,
+            )
+
+    @staticmethod
+    def _severity_to_level(entry: Any) -> str:
+        """Convert Cloud Logging severity to log level."""
+        if not hasattr(entry, "severity"):
+            return "info"
+
+        severity = str(entry.severity).lower()
+
+        if "error" in severity or "critical" in severity:
+            return "error"
+        if "warn" in severity:
+            return "warn"
+        if "debug" in severity:
+            return "debug"
+
+        return "info"
+
+    @staticmethod
+    def _generate_root_password() -> str:
+        """Generate a secure random password for the root user."""
+        alphabet = string.ascii_letters + string.digits
+        return "".join(secrets.choice(alphabet) for _ in range(24))
 
     def _build_outputs(self, instance: dict) -> DatabaseInstanceOutputs:
         """Build outputs from instance dict."""
-        project = self.config.project_id
-        name = self.config.instance_name
+        public_ip, private_ip = extract_ips(instance)
 
-        public_ip = None
-        private_ip = None
-        for ip_addr in instance.get("ipAddresses", []):
-            match ip_addr.get("type"):
-                case "PRIMARY":
-                    public_ip = ip_addr.get("ipAddress")
-                case "PRIVATE":
-                    private_ip = ip_addr.get("ipAddress")
-
-        console_url = f"https://console.cloud.google.com/sql/instances/{name}/overview?project={project}"
+        console_url = f"https://console.cloud.google.com/sql/instances/{self.config.instance_name}/overview?project={self.config.project_id}"
         logs_url = (
             f"https://console.cloud.google.com/logs/query;"
             f"query=resource.type%3D%22cloudsql_database%22%0A"
-            f"resource.labels.database_id%3D%22{project}%3A{name}%22"
-            f"?project={project}"
+            f"resource.labels.database_id%3D%22{self.config.project_id}%3A{self.config.instance_name}%22"
+            f"?project={self.config.project_id}"
         )
 
         return DatabaseInstanceOutputs(
-            connection_name=self._connection_name(),
+            connection_name=f"{self.config.project_id}:{self.config.region}:{self.config.instance_name}",
             public_ip=public_ip,
             private_ip=private_ip,
             ready=instance.get("state") == "RUNNABLE",
@@ -171,48 +317,38 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             logs_url=logs_url,
         )
 
-    async def _run_in_executor(self, func: Any) -> Any:
-        """Run a blocking function in the default executor."""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, func)
-
-    async def _get_instance(self, service: Any) -> dict | None:
-        """Get instance if it exists, None otherwise."""
-        try:
-            request = service.instances().get(project=self.config.project_id, instance=self.config.instance_name)
-            return await self._run_in_executor(request.execute)
-        except HttpError as e:
-            if e.resp.status == 404:
-                return None
-            raise
-
     async def _wait_for_runnable(self, service: Any) -> dict:
         """Poll instance until it reaches RUNNABLE state."""
         for _ in range(_MAX_POLL_ATTEMPTS):
-            instance = await self._get_instance(service)
+            instance = await execute(
+                service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
+                ignore_404=True,
+            )
 
             if instance is None:
-                msg = "Instance not found during polling"
-                raise RuntimeError(msg)
+                raise RuntimeError("Instance not found during polling")
 
             state = instance.get("state")
 
-            match state:
-                case "RUNNABLE":
-                    return instance
-                case "FAILED" | "SUSPENDED":
-                    msg = f"Instance entered {state} state"
-                    raise RuntimeError(msg)
+            if state == "RUNNABLE":
+                return instance
+
+            if state in ("FAILED", "SUSPENDED"):
+                raise RuntimeError(f"Instance entered {state} state")
 
             await asyncio.sleep(_POLL_INTERVAL_SECONDS)
 
-        msg = f"Instance did not reach RUNNABLE state within {_MAX_POLL_ATTEMPTS * _POLL_INTERVAL_SECONDS} seconds"
-        raise TimeoutError(msg)
+        raise TimeoutError(
+            f"Instance did not reach RUNNABLE state within {_MAX_POLL_ATTEMPTS * _POLL_INTERVAL_SECONDS} seconds"
+        )
 
     async def _wait_for_deletion(self, service: Any) -> None:
         """Poll until instance is deleted."""
         for _ in range(_MAX_POLL_ATTEMPTS):
-            instance = await self._get_instance(service)
+            instance = await execute(
+                service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
+                ignore_404=True,
+            )
 
             if instance is None:
                 return
@@ -250,169 +386,28 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             "region": self.config.region,
             "databaseVersion": self.config.database_version,
             "settings": settings,
-            "rootPassword": _generate_root_password(),
+            "rootPassword": self._generate_root_password(),
         }
 
-    async def on_create(self) -> DatabaseInstanceOutputs:
-        """Create Cloud SQL instance and wait for RUNNABLE state.
-
-        Idempotent: If instance already exists, returns its current state.
-
-        Returns:
-            DatabaseInstanceOutputs with instance details.
-        """
-        service = self._get_service()
-
-        existing = await self._get_instance(service)
-
-        if existing is None:
-            request = service.instances().insert(project=self.config.project_id, body=self._build_instance_body())
-            await self._run_in_executor(request.execute)
-
-        instance = await self._wait_for_runnable(service)
-
-        return self._build_outputs(instance)
-
-    async def on_update(self, previous_config: DatabaseInstanceConfig) -> DatabaseInstanceOutputs:
-        """Update instance configuration.
-
-        Most Cloud SQL instance properties require recreation. This method validates
-        that immutable fields haven't changed and returns current state.
-
-        Args:
-            previous_config: The previous configuration before update.
-
-        Returns:
-            DatabaseInstanceOutputs with current instance state.
-
-        Raises:
-            ValueError: If immutable fields changed (requires delete + create).
-        """
-        if previous_config.project_id != self.config.project_id:
-            msg = "Cannot change project_id; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.region != self.config.region:
-            msg = "Cannot change region; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.instance_name != self.config.instance_name:
-            msg = "Cannot change instance_name; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.database_version != self.config.database_version:
-            msg = "Cannot change database_version; delete and recreate resource"
-            raise ValueError(msg)
-
-        if self.outputs is not None:
-            return self.outputs
-
-        service = self._get_service()
-        instance = await self._get_instance(service)
-
-        if instance is None:
-            msg = "Instance not found"
-            raise RuntimeError(msg)
-
-        return self._build_outputs(instance)
-
-    async def on_delete(self) -> None:
-        """Delete instance.
-
-        Idempotent: Succeeds if instance doesn't exist.
-
-        Note: Respects deletion_protection setting on the instance.
-        """
-        service = self._get_service()
-
-        try:
-            request = service.instances().delete(project=self.config.project_id, instance=self.config.instance_name)
-            await self._run_in_executor(request.execute)
-            await self._wait_for_deletion(service)
-        except HttpError as e:
-            if e.resp.status != 404:
-                raise
-
-    async def health(self) -> HealthStatus:
-        """Check instance health by querying instance status."""
-        service = self._get_service()
-
-        instance = await self._get_instance(service)
-
-        if instance is None:
-            return HealthStatus(
-                status="unhealthy",
-                message="Instance not found",
-            )
-
-        state = instance.get("state")
-
-        match state:
-            case "RUNNABLE":
-                return HealthStatus(
-                    status="healthy",
-                    message="Instance is running",
-                    details={"tier": instance.get("settings", {}).get("tier")},
-                )
-            case "PENDING_CREATE" | "MAINTENANCE":
-                return HealthStatus(
-                    status="degraded",
-                    message=f"Instance is {state.lower().replace('_', ' ')}",
-                )
-            case _:
-                return HealthStatus(
-                    status="unhealthy",
-                    message=f"Instance state: {state}",
-                )
-
-    async def logs(
-        self,
-        since: datetime | None = None,
-        tail: int = 100,
-    ) -> AsyncIterator[LogEntry]:
-        """Fetch instance logs from Cloud Logging."""
-        credentials = self._get_credentials()
-        project = self.config.project_id
-
-        filter_parts = [
-            'resource.type="cloudsql_database"',
-            f'resource.labels.database_id="{self.config.project_id}:{self.config.instance_name}"',
+    def _build_patch_body(self) -> dict:
+        """Build patch body for update request (mutable settings only)."""
+        authorized_networks = [
+            {"name": f"network-{i}", "value": network} for i, network in enumerate(self.config.authorized_networks)
         ]
 
-        if since:
-            filter_parts.append(f'timestamp>="{since.isoformat()}Z"')
+        ip_configuration: dict[str, Any] = {
+            "ipv4Enabled": self.config.enable_public_ip,
+        }
 
-        filter_str = " AND ".join(filter_parts)
+        if authorized_networks:
+            ip_configuration["authorizedNetworks"] = authorized_networks
 
-        def fetch_logs() -> list:
-            logging_client = LoggingClient(credentials=credentials, project=project)
-            return list(
-                logging_client.list_entries(
-                    filter_=filter_str,
-                    order_by="timestamp desc",
-                    max_results=tail,
-                )
-            )
+        settings: dict[str, Any] = {
+            "tier": self.config.tier,
+            "availabilityType": self.config.availability_type,
+            "ipConfiguration": ip_configuration,
+            "deletionProtectionEnabled": self.config.deletion_protection,
+            "backupConfiguration": {"enabled": self.config.backup_enabled, "startTime": "03:00"},
+        }
 
-        entries = await self._run_in_executor(fetch_logs)
-
-        for entry in entries:
-            level = "info"
-
-            if hasattr(entry, "severity"):
-                severity = str(entry.severity).lower()
-
-                match severity:
-                    case s if "error" in s or "critical" in s:
-                        level = "error"
-                    case s if "warn" in s:
-                        level = "warn"
-                    case s if "debug" in s:
-                        level = "debug"
-
-            yield LogEntry(
-                timestamp=entry.timestamp,
-                level=level,
-                message=str(entry.payload) if entry.payload else "",
-                metadata={"log_name": entry.log_name} if entry.log_name else None,
-            )
+        return {"settings": settings}

@@ -115,6 +115,7 @@ def mock_sqladmin_service(mocker: "MockerFixture") -> MagicMock:
 
     mock_service.instances().get().execute.return_value = mock_instance
     mock_service.instances().insert().execute.return_value = {"name": "operation-123"}
+    mock_service.instances().patch().execute.return_value = {"name": "operation-patch"}
     mock_service.instances().delete().execute.return_value = {"name": "operation-456"}
 
     mock_service.databases().get().execute.return_value = None
@@ -127,29 +128,13 @@ def mock_sqladmin_service(mocker: "MockerFixture") -> MagicMock:
     mock_service.users().delete().execute.return_value = {"name": "operation-jkl"}
 
     mocker.patch(
-        "gcp_provider.resources.cloudsql.database_instance.discovery.build",
-        return_value=mock_service,
-    )
-    mocker.patch(
-        "gcp_provider.resources.cloudsql.database.discovery.build",
-        return_value=mock_service,
-    )
-    mocker.patch(
-        "gcp_provider.resources.cloudsql.user.discovery.build",
+        "gcp_provider.resources.cloudsql.helpers.discovery.build",
         return_value=mock_service,
     )
 
     mock_credentials = mocker.MagicMock()
     mocker.patch(
-        "gcp_provider.resources.cloudsql.database_instance.service_account.Credentials.from_service_account_info",
-        return_value=mock_credentials,
-    )
-    mocker.patch(
-        "gcp_provider.resources.cloudsql.database.service_account.Credentials.from_service_account_info",
-        return_value=mock_credentials,
-    )
-    mocker.patch(
-        "gcp_provider.resources.cloudsql.user.service_account.Credentials.from_service_account_info",
+        "gcp_provider.resources.cloudsql.helpers.service_account.Credentials.from_service_account_info",
         return_value=mock_credentials,
     )
 

@@ -2,36 +2,27 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 from typing import Any, ClassVar
 
-from google.oauth2 import service_account
-from googleapiclient import discovery
-from googleapiclient.errors import HttpError
+from pydantic import Field as PydanticField
 from pragma_sdk import Config, Dependency, Field, Outputs, Resource
 
 from gcp_provider.resources.cloudsql.database_instance import DatabaseInstance
+from gcp_provider.resources.cloudsql.helpers import execute, get_credentials, get_sqladmin_service
 
 
 class UserConfig(Config):
     """Configuration for a Cloud SQL user.
 
     Attributes:
-        project_id: GCP project ID where the user will be created.
-        credentials: GCP service account credentials JSON object or string.
-        instance_name: Name of the Cloud SQL instance that hosts this user.
+        instance: The Cloud SQL instance that hosts this user.
         username: Username for the database user.
         password: Password for the database user. Use Field[str] for secret injection.
-        instance: Optional dependency on the database instance resource.
     """
 
-    project_id: str
-    credentials: dict[str, Any] | str
-    instance_name: str
-    username: str
+    instance: Dependency[DatabaseInstance]
+    username: str = PydanticField(json_schema_extra={"immutable": True})
     password: Field[str]
-    instance: Dependency[DatabaseInstance] | None = None
 
 
 class UserOutputs(Outputs):
@@ -39,174 +30,130 @@ class UserOutputs(Outputs):
 
     Attributes:
         username: Username of the created user.
+        instance_name: Name of the hosting instance.
         host: Host pattern for the user (% for all hosts).
     """
 
     username: str
+    instance_name: str
     host: str
 
 
 class User(Resource[UserConfig, UserOutputs]):
     """GCP Cloud SQL user resource.
 
-    Creates and manages database users within a Cloud SQL instance
-    using user-provided service account credentials (multi-tenant SaaS pattern).
-
-    Lifecycle:
-        - on_create: Creates user in the instance
-        - on_update: Updates user password if changed
-        - on_delete: Deletes user
+    Creates and manages database users within a Cloud SQL instance.
+    Password is mutable. Changing the instance triggers replacement.
     """
 
     provider: ClassVar[str] = "gcp"
     resource: ClassVar[str] = "cloudsql/user"
 
-    def _get_credentials(self) -> service_account.Credentials:
-        """Get credentials from config."""
-        creds_data = self.config.credentials
-
-        if isinstance(creds_data, str):
-            creds_data = json.loads(creds_data)
-
-        return service_account.Credentials.from_service_account_info(creds_data)
-
-    def _get_service(self) -> Any:
-        """Get Cloud SQL Admin API service."""
-        return discovery.build("sqladmin", "v1", credentials=self._get_credentials())
-
-    async def _run_in_executor(self, func: Any) -> Any:
-        """Run a blocking function in the default executor."""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, func)
-
-    async def _get_user(self, service: Any) -> dict | None:
-        """Get user if it exists, None otherwise."""
-        try:
-            request = service.users().list(
-                project=self.config.project_id,
-                instance=self.config.instance_name,
-            )
-            result = await self._run_in_executor(request.execute)
-
-            for user in result.get("items", []):
-                if user.get("name") == self.config.username:
-                    return user
-
-            return None
-        except HttpError as e:
-            if e.resp.status == 404:
-                return None
-            raise
-
-    def _build_outputs(self, user: dict) -> UserOutputs:
-        """Build outputs from user dict."""
-        return UserOutputs(
-            username=user.get("name", self.config.username),
-            host=user.get("host", "%"),
-        )
-
     async def on_create(self) -> UserOutputs:
         """Create user in the Cloud SQL instance.
 
-        Idempotent: If user already exists, updates the password.
-
-        Returns:
-            UserOutputs with user details.
+        Idempotent: If user already exists, returns its current state.
         """
-        service = self._get_service()
+        inst = self.config.instance.config
+        service = get_sqladmin_service(get_credentials(inst.credentials))
 
-        existing = await self._get_user(service)
+        await execute(
+            service.users().insert(
+                project=inst.project_id,
+                instance=inst.instance_name,
+                body={
+                    "name": self.config.username,
+                    "password": self.config.password,
+                    "project": inst.project_id,
+                    "instance": inst.instance_name,
+                },
+            ),
+            ignore_exists=True,
+        )
 
-        if existing is None:
-            user_body = {
-                "name": self.config.username,
-                "password": self.config.password,
-                "project": self.config.project_id,
-                "instance": self.config.instance_name,
-            }
+        user = await self._find_user(inst, service)
 
-            try:
-                request = service.users().insert(
-                    project=self.config.project_id,
-                    instance=self.config.instance_name,
-                    body=user_body,
-                )
-                await self._run_in_executor(request.execute)
-            except HttpError as e:
-                if "already exists" not in str(e).lower():
-                    raise
-
-            existing = await self._get_user(service)
-
-            if existing is None:
-                existing = {"name": self.config.username, "host": "%"}
-
-        return self._build_outputs(existing)
+        return UserOutputs(
+            username=user.get("name", self.config.username) if user else self.config.username,
+            instance_name=inst.instance_name,
+            host=user.get("host", "%") if user else "%",
+        )
 
     async def on_update(self, previous_config: UserConfig) -> UserOutputs:
-        """Update user configuration.
+        """Handle user updates.
 
-        Username cannot be changed. Password changes are applied.
-
-        Args:
-            previous_config: The previous configuration before update.
-
-        Returns:
-            UserOutputs with current user state.
-
-        Raises:
-            ValueError: If immutable fields changed (requires delete + create).
+        If instance changed, delete from old instance and create in new one.
+        Password changes are applied in place. Username cannot be changed.
         """
-        if previous_config.project_id != self.config.project_id:
-            msg = "Cannot change project_id; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.instance_name != self.config.instance_name:
-            msg = "Cannot change instance_name; delete and recreate resource"
-            raise ValueError(msg)
-
         if previous_config.username != self.config.username:
             msg = "Cannot change username; delete and recreate resource"
             raise ValueError(msg)
 
-        service = self._get_service()
+        if previous_config.instance != self.config.instance:
+            await self._delete(previous_config)
+            return await self.on_create()
+
+        inst = self.config.instance.config
+        service = get_sqladmin_service(get_credentials(inst.credentials))
 
         if previous_config.password != self.config.password:
-            user_body = {
-                "name": self.config.username,
-                "password": self.config.password,
-            }
-
-            request = service.users().update(
-                project=self.config.project_id,
-                instance=self.config.instance_name,
-                name=self.config.username,
-                body=user_body,
+            await execute(
+                service.users().update(
+                    project=inst.project_id,
+                    instance=inst.instance_name,
+                    name=self.config.username,
+                    body={
+                        "name": self.config.username,
+                        "password": self.config.password,
+                    },
+                )
             )
-            await self._run_in_executor(request.execute)
 
-        user = await self._get_user(service)
+        user = await self._find_user(inst, service)
 
         if user is None:
             msg = f"User '{self.config.username}' not found"
             raise RuntimeError(msg)
 
-        return self._build_outputs(user)
+        return UserOutputs(
+            username=user.get("name", self.config.username),
+            instance_name=inst.instance_name,
+            host=user.get("host", "%"),
+        )
 
     async def on_delete(self) -> None:
-        """Delete user.
+        """Delete user. Idempotent: succeeds if user doesn't exist."""
+        await self._delete(self.config)
 
-        Idempotent: Succeeds if user doesn't exist.
-        """
-        service = self._get_service()
+    async def _delete(self, config: UserConfig) -> None:
+        """Delete user from instance. Idempotent: succeeds if not found."""
+        inst = config.instance.config
+        service = get_sqladmin_service(get_credentials(inst.credentials))
 
-        try:
-            request = service.users().delete(
-                project=self.config.project_id,
-                instance=self.config.instance_name,
-                name=self.config.username,
-            )
-            await self._run_in_executor(request.execute)
-        except HttpError as e:
-            if e.resp.status != 404:
-                raise
+        await execute(
+            service.users().delete(
+                project=inst.project_id,
+                instance=inst.instance_name,
+                name=config.username,
+            ),
+            ignore_404=True,
+        )
+
+    async def _find_user(self, inst: Any, service: Any) -> dict | None:
+        """Find user in instance by username."""
+        result = await execute(
+            service.users().list(
+                project=inst.project_id,
+                instance=inst.instance_name,
+            ),
+            ignore_404=True,
+        )
+
+        if result is None:
+            return None
+
+        for user in result.get("items", []):
+            if user.get("name") == self.config.username:
+                return user
+
+        return None

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from googleapiclient.errors import HttpError
@@ -13,14 +13,64 @@ from gcp_provider import (
     DatabaseConfig,
     DatabaseInstance,
     DatabaseInstanceConfig,
-    DatabaseInstanceOutputs,
-    DatabaseOutputs,
     User,
     UserConfig,
 )
 
 if TYPE_CHECKING:
-    from pytest_mock import MagicMock, MockerFixture
+    from pytest_mock import MockerFixture
+
+
+def make_database_config(
+    mocker: MockerFixture,
+    project_id: str = "test-project",
+    credentials: dict | None = None,
+    instance_name: str = "test-db",
+    database_name: str = "myapp",
+) -> DatabaseConfig:
+    """Create a DatabaseConfig with mocked instance dependency for testing."""
+    if credentials is None:
+        credentials = {"type": "service_account"}
+
+    mock_instance = mocker.MagicMock()
+    mock_instance.config = DatabaseInstanceConfig(
+        project_id=project_id,
+        credentials=credentials,
+        region="europe-west4",
+        instance_name=instance_name,
+    )
+
+    return DatabaseConfig.model_construct(
+        instance=mock_instance,
+        database_name=database_name,
+    )
+
+
+def make_user_config(
+    mocker: MockerFixture,
+    project_id: str = "test-project",
+    credentials: dict | None = None,
+    instance_name: str = "test-db",
+    username: str = "appuser",
+    password: str = "secret123",
+) -> UserConfig:
+    """Create a UserConfig with mocked instance dependency for testing."""
+    if credentials is None:
+        credentials = {"type": "service_account"}
+
+    mock_instance = mocker.MagicMock()
+    mock_instance.config = DatabaseInstanceConfig(
+        project_id=project_id,
+        credentials=credentials,
+        region="europe-west4",
+        instance_name=instance_name,
+    )
+
+    return UserConfig.model_construct(
+        instance=mock_instance,
+        username=username,
+        password=password,
+    )
 
 
 class TestDatabaseInstance:
@@ -29,7 +79,7 @@ class TestDatabaseInstance:
     async def test_create_instance_success(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
     ) -> None:
         """on_create creates instance and waits for RUNNABLE state."""
@@ -56,7 +106,7 @@ class TestDatabaseInstance:
     async def test_create_instance_idempotent(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
     ) -> None:
         """on_create handles existing instance (idempotent retry)."""
@@ -76,7 +126,7 @@ class TestDatabaseInstance:
     async def test_create_instance_with_authorized_networks(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
     ) -> None:
         """on_create includes authorized networks when specified."""
@@ -101,7 +151,7 @@ class TestDatabaseInstance:
     async def test_create_instance_regional_availability(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
     ) -> None:
         """on_create supports REGIONAL availability type."""
@@ -125,7 +175,7 @@ class TestDatabaseInstance:
     async def test_create_instance_failed_state(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
     ) -> None:
         """on_create fails when instance enters FAILED state."""
@@ -149,19 +199,20 @@ class TestDatabaseInstance:
         assert result.error is not None
         assert "FAILED state" in str(result.error)
 
-    async def test_update_unchanged_returns_existing(
+    async def test_update_applies_mutable_changes(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
     ) -> None:
-        """on_update returns existing outputs when config unchanged."""
+        """on_update applies mutable config changes via patch API."""
         previous = DatabaseInstanceConfig(
             project_id="proj",
             credentials=sample_credentials,
             region="europe-west4",
             instance_name="db",
             database_version="POSTGRES_15",
+            tier="db-f1-micro",
         )
         current = DatabaseInstanceConfig(
             project_id="proj",
@@ -169,14 +220,7 @@ class TestDatabaseInstance:
             region="europe-west4",
             instance_name="db",
             database_version="POSTGRES_15",
-        )
-        existing_outputs = DatabaseInstanceOutputs(
-            connection_name="proj:europe-west4:db",
-            public_ip="10.0.0.5",
-            private_ip=None,
-            ready=True,
-            console_url="https://console.cloud.google.com/sql/instances/db/overview?project=proj",
-            logs_url="https://console.cloud.google.com/logs/query",
+            tier="db-custom-1-3840",
         )
 
         result = await harness.invoke_update(
@@ -184,16 +228,17 @@ class TestDatabaseInstance:
             name="db",
             config=current,
             previous_config=previous,
-            current_outputs=existing_outputs,
         )
 
         assert result.success
-        assert result.outputs == existing_outputs
+        assert result.outputs is not None
+        assert result.outputs.ready is True
+        mock_sqladmin_service.instances().patch.assert_called()
 
     async def test_update_rejects_project_change(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
     ) -> None:
         """on_update rejects project_id changes."""
@@ -223,7 +268,7 @@ class TestDatabaseInstance:
     async def test_update_rejects_region_change(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
     ) -> None:
         """on_update rejects region changes."""
@@ -253,7 +298,7 @@ class TestDatabaseInstance:
     async def test_update_rejects_instance_name_change(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
     ) -> None:
         """on_update rejects instance_name changes."""
@@ -283,7 +328,7 @@ class TestDatabaseInstance:
     async def test_update_rejects_database_version_change(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
     ) -> None:
         """on_update rejects database_version changes."""
@@ -315,7 +360,7 @@ class TestDatabaseInstance:
     async def test_delete_success(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
         mocker: MockerFixture,
     ) -> None:
@@ -339,7 +384,7 @@ class TestDatabaseInstance:
     async def test_delete_idempotent(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
         mocker: MockerFixture,
     ) -> None:
@@ -362,7 +407,7 @@ class TestDatabaseInstance:
 
     async def test_health_healthy(
         self,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
     ) -> None:
         """health returns healthy when instance is RUNNABLE."""
@@ -381,7 +426,7 @@ class TestDatabaseInstance:
 
     async def test_health_unhealthy_not_found(
         self,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
         mocker: MockerFixture,
     ) -> None:
@@ -431,11 +476,13 @@ class TestDatabase:
     async def test_create_database_success(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
+        mocker: MockerFixture,
     ) -> None:
         """on_create creates database in instance."""
-        config = DatabaseConfig(
+        config = make_database_config(
+            mocker,
             project_id="test-project",
             credentials=sample_credentials,
             instance_name="test-db",
@@ -447,6 +494,7 @@ class TestDatabase:
         assert result.success
         assert result.outputs is not None
         assert result.outputs.database_name == "myapp"
+        assert result.outputs.instance_name == "test-db"
         assert "myapp" in result.outputs.url
 
         mock_sqladmin_service.databases().insert.assert_called()
@@ -454,7 +502,7 @@ class TestDatabase:
     async def test_create_database_idempotent(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
         mocker: MockerFixture,
     ) -> None:
@@ -464,7 +512,8 @@ class TestDatabase:
             "instance": "test-db",
         }
 
-        config = DatabaseConfig(
+        config = make_database_config(
+            mocker,
             project_id="test-project",
             credentials=sample_credentials,
             instance_name="test-db",
@@ -480,8 +529,9 @@ class TestDatabase:
     async def test_create_database_mysql_url(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
+        mocker: MockerFixture,
     ) -> None:
         """MySQL databases have correct URL format."""
         mock_sqladmin_service.instances().get().execute.return_value = {
@@ -493,7 +543,8 @@ class TestDatabase:
             "ipAddresses": [{"type": "PRIMARY", "ipAddress": "10.0.0.5"}],
         }
 
-        config = DatabaseConfig(
+        config = make_database_config(
+            mocker,
             project_id="test-project",
             credentials=sample_credentials,
             instance_name="mysql-db",
@@ -507,28 +558,27 @@ class TestDatabase:
         assert "mysql://" in result.outputs.url
         assert ":3306/" in result.outputs.url
 
-    async def test_update_unchanged_returns_existing(
+    async def test_update_instance_change_triggers_replacement(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
+        mocker: MockerFixture,
     ) -> None:
-        """on_update returns existing outputs when config unchanged."""
-        previous = DatabaseConfig(
+        """on_update replaces database when instance changes (delete + create)."""
+        previous = make_database_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
-            instance_name="db",
+            instance_name="old-instance",
             database_name="myapp",
         )
-        current = DatabaseConfig(
+        current = make_database_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
-            instance_name="db",
+            instance_name="new-instance",
             database_name="myapp",
-        )
-        existing_outputs = DatabaseOutputs(
-            database_name="myapp",
-            url="postgresql://USER:PASSWORD@10.0.0.5:5432/myapp",
         )
 
         result = await harness.invoke_update(
@@ -536,86 +586,29 @@ class TestDatabase:
             name="myapp-db",
             config=current,
             previous_config=previous,
-            current_outputs=existing_outputs,
         )
 
         assert result.success
-        assert result.outputs == existing_outputs
-
-    async def test_update_rejects_project_change(
-        self,
-        harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
-        sample_credentials: dict,
-    ) -> None:
-        """on_update rejects project_id changes."""
-        previous = DatabaseConfig(
-            project_id="proj-a",
-            credentials=sample_credentials,
-            instance_name="db",
-            database_name="myapp",
-        )
-        current = DatabaseConfig(
-            project_id="proj-b",
-            credentials=sample_credentials,
-            instance_name="db",
-            database_name="myapp",
-        )
-
-        result = await harness.invoke_update(
-            Database,
-            name="myapp-db",
-            config=current,
-            previous_config=previous,
-        )
-
-        assert result.failed
-        assert "project_id" in str(result.error)
-
-    async def test_update_rejects_instance_name_change(
-        self,
-        harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
-        sample_credentials: dict,
-    ) -> None:
-        """on_update rejects instance_name changes."""
-        previous = DatabaseConfig(
-            project_id="proj",
-            credentials=sample_credentials,
-            instance_name="db-a",
-            database_name="myapp",
-        )
-        current = DatabaseConfig(
-            project_id="proj",
-            credentials=sample_credentials,
-            instance_name="db-b",
-            database_name="myapp",
-        )
-
-        result = await harness.invoke_update(
-            Database,
-            name="myapp-db",
-            config=current,
-            previous_config=previous,
-        )
-
-        assert result.failed
-        assert "instance_name" in str(result.error)
+        mock_sqladmin_service.databases().delete.assert_called()
+        mock_sqladmin_service.databases().insert.assert_called()
 
     async def test_update_rejects_database_name_change(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
+        mocker: MockerFixture,
     ) -> None:
         """on_update rejects database_name changes."""
-        previous = DatabaseConfig(
+        previous = make_database_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
             instance_name="db",
             database_name="myapp-a",
         )
-        current = DatabaseConfig(
+        current = make_database_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
             instance_name="db",
@@ -635,11 +628,13 @@ class TestDatabase:
     async def test_delete_success(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
+        mocker: MockerFixture,
     ) -> None:
         """on_delete removes database."""
-        config = DatabaseConfig(
+        config = make_database_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
             instance_name="db",
@@ -654,7 +649,7 @@ class TestDatabase:
     async def test_delete_idempotent(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
         mocker: MockerFixture,
     ) -> None:
@@ -663,7 +658,8 @@ class TestDatabase:
         mock_resp.status = 404
         mock_sqladmin_service.databases().delete().execute.side_effect = HttpError(mock_resp, b"not found")
 
-        config = DatabaseConfig(
+        config = make_database_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
             instance_name="db",
@@ -681,14 +677,16 @@ class TestUser:
     async def test_create_user_success(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
+        mocker: MockerFixture,
     ) -> None:
         """on_create creates user in instance."""
         mock_sqladmin_service.users().list().execute.return_value = {"items": []}
         mock_sqladmin_service.users().insert().execute.return_value = {"name": "operation-123"}
 
-        config = UserConfig(
+        config = make_user_config(
+            mocker,
             project_id="test-project",
             credentials=sample_credentials,
             instance_name="test-db",
@@ -701,6 +699,7 @@ class TestUser:
         assert result.success
         assert result.outputs is not None
         assert result.outputs.username == "appuser"
+        assert result.outputs.instance_name == "test-db"
         assert result.outputs.host == "%"
 
         mock_sqladmin_service.users().insert.assert_called()
@@ -708,13 +707,15 @@ class TestUser:
     async def test_create_user_idempotent(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
+        mocker: MockerFixture,
     ) -> None:
         """on_create handles existing user (idempotent retry)."""
         mock_sqladmin_service.users().list().execute.return_value = {"items": [{"name": "appuser", "host": "%"}]}
 
-        config = UserConfig(
+        config = make_user_config(
+            mocker,
             project_id="test-project",
             credentials=sample_credentials,
             instance_name="test-db",
@@ -731,21 +732,24 @@ class TestUser:
     async def test_update_password_change(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
+        mocker: MockerFixture,
     ) -> None:
         """on_update updates password when changed."""
         mock_sqladmin_service.users().list().execute.return_value = {"items": [{"name": "appuser", "host": "%"}]}
         mock_sqladmin_service.users().update().execute.return_value = {"name": "operation-123"}
 
-        previous = UserConfig(
+        previous = make_user_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
             instance_name="db",
             username="appuser",
             password="old-password",
         )
-        current = UserConfig(
+        current = make_user_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
             instance_name="db",
@@ -763,24 +767,29 @@ class TestUser:
         assert result.success
         mock_sqladmin_service.users().update.assert_called()
 
-    async def test_update_rejects_project_change(
+    async def test_update_instance_change_triggers_replacement(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
+        mocker: MockerFixture,
     ) -> None:
-        """on_update rejects project_id changes."""
-        previous = UserConfig(
-            project_id="proj-a",
+        """on_update replaces user when instance changes (delete + create)."""
+        mock_sqladmin_service.users().list().execute.return_value = {"items": []}
+
+        previous = make_user_config(
+            mocker,
+            project_id="proj",
             credentials=sample_credentials,
-            instance_name="db",
+            instance_name="old-instance",
             username="appuser",
             password="secret123",
         )
-        current = UserConfig(
-            project_id="proj-b",
+        current = make_user_config(
+            mocker,
+            project_id="proj",
             credentials=sample_credentials,
-            instance_name="db",
+            instance_name="new-instance",
             username="appuser",
             password="secret123",
         )
@@ -792,56 +801,28 @@ class TestUser:
             previous_config=previous,
         )
 
-        assert result.failed
-        assert "project_id" in str(result.error)
-
-    async def test_update_rejects_instance_name_change(
-        self,
-        harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
-        sample_credentials: dict,
-    ) -> None:
-        """on_update rejects instance_name changes."""
-        previous = UserConfig(
-            project_id="proj",
-            credentials=sample_credentials,
-            instance_name="db-a",
-            username="appuser",
-            password="secret123",
-        )
-        current = UserConfig(
-            project_id="proj",
-            credentials=sample_credentials,
-            instance_name="db-b",
-            username="appuser",
-            password="secret123",
-        )
-
-        result = await harness.invoke_update(
-            User,
-            name="appuser",
-            config=current,
-            previous_config=previous,
-        )
-
-        assert result.failed
-        assert "instance_name" in str(result.error)
+        assert result.success
+        mock_sqladmin_service.users().delete.assert_called()
+        mock_sqladmin_service.users().insert.assert_called()
 
     async def test_update_rejects_username_change(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
+        mocker: MockerFixture,
     ) -> None:
         """on_update rejects username changes."""
-        previous = UserConfig(
+        previous = make_user_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
             instance_name="db",
             username="user-a",
             password="secret123",
         )
-        current = UserConfig(
+        current = make_user_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
             instance_name="db",
@@ -862,11 +843,13 @@ class TestUser:
     async def test_delete_success(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
+        mocker: MockerFixture,
     ) -> None:
         """on_delete removes user."""
-        config = UserConfig(
+        config = make_user_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
             instance_name="db",
@@ -882,7 +865,7 @@ class TestUser:
     async def test_delete_idempotent(
         self,
         harness: ProviderHarness,
-        mock_sqladmin_service: MagicMock,
+        mock_sqladmin_service: Any,
         sample_credentials: dict,
         mocker: MockerFixture,
     ) -> None:
@@ -891,7 +874,8 @@ class TestUser:
         mock_resp.status = 404
         mock_sqladmin_service.users().delete().execute.side_effect = HttpError(mock_resp, b"not found")
 
-        config = UserConfig(
+        config = make_user_config(
+            mocker,
             project_id="proj",
             credentials=sample_credentials,
             instance_name="db",
