@@ -54,7 +54,8 @@ class User(Resource[UserConfig, UserOutputs]):
 
         Idempotent: If user already exists, returns its current state.
         """
-        inst = self.config.instance.config
+        instance_resource = await self.config.instance.resolve()
+        inst = instance_resource.config
         service = get_sqladmin_service(get_credentials(inst.credentials))
 
         await execute(
@@ -93,7 +94,8 @@ class User(Resource[UserConfig, UserOutputs]):
             await self._delete(previous_config)
             return await self.on_create()
 
-        inst = self.config.instance.config
+        instance_resource = await self.config.instance.resolve()
+        inst = instance_resource.config
         service = get_sqladmin_service(get_credentials(inst.credentials))
 
         if previous_config.password != self.config.password:
@@ -127,7 +129,8 @@ class User(Resource[UserConfig, UserOutputs]):
 
     async def _delete(self, config: UserConfig) -> None:
         """Delete user from instance. Idempotent: succeeds if not found."""
-        inst = config.instance.config
+        instance_resource = await config.instance.resolve()
+        inst = instance_resource.config
         service = get_sqladmin_service(get_credentials(inst.credentials))
 
         await execute(

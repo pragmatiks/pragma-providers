@@ -58,7 +58,8 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
         Idempotent: If database already exists, returns its current state.
         """
-        inst = self.config.instance.config
+        instance_resource = await self.config.instance.resolve()
+        inst = instance_resource.config
         service = get_sqladmin_service(get_credentials(inst.credentials))
 
         await execute(
@@ -90,7 +91,8 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             await self._delete(previous_config)
             return await self.on_create()
 
-        inst = self.config.instance.config
+        instance_resource = await self.config.instance.resolve()
+        inst = instance_resource.config
         service = get_sqladmin_service(get_credentials(inst.credentials))
 
         return await self._build_outputs(inst, service)
@@ -101,7 +103,8 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
     async def _delete(self, config: DatabaseConfig) -> None:
         """Delete database from instance. Idempotent: succeeds if not found."""
-        inst = config.instance.config
+        instance_resource = await config.instance.resolve()
+        inst = instance_resource.config
         service = get_sqladmin_service(get_credentials(inst.credentials))
 
         await execute(
