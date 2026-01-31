@@ -116,8 +116,8 @@ class DatabaseInstanceOutputs(Outputs):
     """
 
     connection_name: str
-    public_ip: str | None
-    private_ip: str | None
+    public_ip: str | None = None
+    private_ip: str | None = None
     ready: bool
     console_url: str
     logs_url: str
