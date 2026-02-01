@@ -90,6 +90,7 @@ def test_vectordb_method_returns_qdrant_instance() -> None:
     config = VectordbQdrantConfig(
         url="http://localhost:6333",
         collection="test-collection",
+        search_type="vector",
     )
 
     resource = VectordbQdrant(name="test-qdrant", config=config)
@@ -105,6 +106,7 @@ def test_vectordb_method_with_api_key() -> None:
         url="https://qdrant-cloud.example.com:6333",
         collection="cloud-collection",
         api_key="qdrant-api-key-123",
+        search_type="vector",
     )
 
     resource = VectordbQdrant(name="test-qdrant", config=config)
