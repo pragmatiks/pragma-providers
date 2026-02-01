@@ -103,3 +103,19 @@ def mock_subprocess(mocker: MockerFixture) -> Any:
 @pytest.fixture
 def mock_asyncio_sleep(mocker: MockerFixture) -> Any:
     return mocker.patch("agno_provider.resources.agent.asyncio.sleep", return_value=None)
+
+
+@pytest.fixture
+def mock_mcp_tools(mocker: MockerFixture) -> Any:
+    """Mock MCPTools class for testing without real MCP servers."""
+    mock_class = mocker.patch("agno_provider.resources.tools.mcp.MCPTools")
+    mock_instance = mocker.MagicMock()
+    mock_instance.connect = mocker.AsyncMock()
+    mock_instance.close = mocker.AsyncMock()
+    mock_instance.get_functions.return_value = {
+        "create_issue": mocker.MagicMock(),
+        "list_repos": mocker.MagicMock(),
+        "search_code": mocker.MagicMock(),
+    }
+    mock_class.return_value = mock_instance
+    return mock_class

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from pragma_sdk.provider import ProviderHarness
 from pydantic import ValidationError
-from pytest_mock import MockerFixture
 
 from agno_provider import (
     ToolsMCP,
@@ -16,26 +15,8 @@ from agno_provider import (
 )
 
 
-@pytest.fixture
-def mocker_ref(mocker: MockerFixture) -> MockerFixture:
-    """Expose mocker fixture for tests that need both mock_mcp_tools and mocker."""
-    return mocker
-
-
-@pytest.fixture
-def mock_mcp_tools(mocker: MockerFixture) -> Any:
-    """Mock MCPTools class for testing without real MCP servers."""
-    mock_class = mocker.patch("agno_provider.resources.tools.mcp.MCPTools")
-    mock_instance = mocker.MagicMock()
-    mock_instance.connect = mocker.AsyncMock()
-    mock_instance.close = mocker.AsyncMock()
-    mock_instance.get_functions.return_value = {
-        "create_issue": mocker.MagicMock(),
-        "list_repos": mocker.MagicMock(),
-        "search_code": mocker.MagicMock(),
-    }
-    mock_class.return_value = mock_instance
-    return mock_class
+if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
 
 
 async def test_create_with_command(harness: ProviderHarness, mock_mcp_tools: Any) -> None:
@@ -141,12 +122,10 @@ async def test_toolkit_with_env(harness: ProviderHarness, mock_mcp_tools: Any) -
     assert call_kwargs["env"] == {"GITHUB_TOKEN": "test-token-123"}
 
 
-async def test_update_rediscovers_tools(
-    harness: ProviderHarness, mock_mcp_tools: Any, mocker_ref: MockerFixture
-) -> None:
+async def test_update_rediscovers_tools(harness: ProviderHarness, mock_mcp_tools: Any, mocker: MockerFixture) -> None:
     """on_update reconnects and refreshes tool list."""
     mock_mcp_tools.return_value.get_functions.return_value = {
-        "new_tool": mocker_ref.MagicMock(),
+        "new_tool": mocker.MagicMock(),
     }
     previous = ToolsMCPConfig(command="npx old-server")
     current = ToolsMCPConfig(command="npx new-server")
@@ -288,7 +267,7 @@ def test_static_headers_passed_to_mcp_tools(mock_mcp_tools: Any) -> None:
     assert headers["Authorization"] == "Bearer secret-token"
 
 
-def test_run_context_headers_when_enabled(mock_mcp_tools: Any, mocker_ref: MockerFixture) -> None:
+def test_run_context_headers_when_enabled(mock_mcp_tools: Any, mocker: MockerFixture) -> None:
     """RunContext headers are included when include_run_context_headers is True."""
     config = ToolsMCPConfig(
         url="https://mcp.example.com/api",
@@ -302,7 +281,7 @@ def test_run_context_headers_when_enabled(mock_mcp_tools: Any, mocker_ref: Mocke
     assert "header_provider" in call_kwargs
     header_fn = call_kwargs["header_provider"]
 
-    mock_run_context = mocker_ref.MagicMock()
+    mock_run_context = mocker.MagicMock()
     mock_run_context.user_id = "user-123"
     mock_run_context.session_id = "session-456"
     mock_run_context.run_id = "run-789"
@@ -313,7 +292,7 @@ def test_run_context_headers_when_enabled(mock_mcp_tools: Any, mocker_ref: Mocke
     assert headers["X-Run-ID"] == "run-789"
 
 
-def test_combined_static_and_run_context_headers(mock_mcp_tools: Any, mocker_ref: MockerFixture) -> None:
+def test_combined_static_and_run_context_headers(mock_mcp_tools: Any, mocker: MockerFixture) -> None:
     """Static headers and RunContext headers can be combined."""
     config = ToolsMCPConfig(
         url="https://mcp.example.com/api",
@@ -327,7 +306,7 @@ def test_combined_static_and_run_context_headers(mock_mcp_tools: Any, mocker_ref
     call_kwargs = mock_mcp_tools.call_args.kwargs
     header_fn = call_kwargs["header_provider"]
 
-    mock_run_context = mocker_ref.MagicMock()
+    mock_run_context = mocker.MagicMock()
     mock_run_context.user_id = "user-123"
     mock_run_context.session_id = None
     mock_run_context.run_id = "run-789"
@@ -350,7 +329,7 @@ def test_no_header_provider_when_not_configured(mock_mcp_tools: Any) -> None:
     assert "header_provider" not in call_kwargs
 
 
-def test_agent_and_team_names_in_headers(mock_mcp_tools: Any, mocker_ref: MockerFixture) -> None:
+def test_agent_and_team_names_in_headers(mock_mcp_tools: Any, mocker: MockerFixture) -> None:
     """Agent and team names included in headers when provided."""
     config = ToolsMCPConfig(
         url="https://mcp.example.com/api",
@@ -363,9 +342,9 @@ def test_agent_and_team_names_in_headers(mock_mcp_tools: Any, mocker_ref: Mocker
     call_kwargs = mock_mcp_tools.call_args.kwargs
     header_fn = call_kwargs["header_provider"]
 
-    mock_agent = mocker_ref.MagicMock()
+    mock_agent = mocker.MagicMock()
     mock_agent.name = "ResearchAgent"
-    mock_team = mocker_ref.MagicMock()
+    mock_team = mocker.MagicMock()
     mock_team.name = "ContentTeam"
 
     headers = header_fn(agent=mock_agent, team=mock_team)
