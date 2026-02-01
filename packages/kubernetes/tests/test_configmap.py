@@ -125,8 +125,8 @@ async def test_delete_configmap_idempotent(
     mocker: MockerFixture,
 ) -> None:
     """on_delete succeeds when configmap doesn't exist."""
-    error = ApiError(response=mocker.Any())
-    error.status = mocker.Any(code=404)
+    error = ApiError(response=mocker.MagicMock())
+    error.status = mocker.MagicMock(code=404)
     mock_lightkube_client.delete.side_effect = error
 
     cm = create_configmap_with_mocked_dependency(
@@ -153,7 +153,7 @@ async def test_health_exists(
     mocker: MockerFixture,
 ) -> None:
     """health() returns healthy when configmap exists."""
-    mock_cm = mocker.Any()
+    mock_cm = mocker.MagicMock()
     mock_cm.data = {"key1": "value1", "key2": "value2"}
     mock_lightkube_client.get.return_value = mock_cm
 
@@ -174,8 +174,8 @@ async def test_health_not_found(
     mocker: MockerFixture,
 ) -> None:
     """health() returns unhealthy when configmap not found."""
-    error = ApiError(response=mocker.Any())
-    error.status = mocker.Any(code=404)
+    error = ApiError(response=mocker.MagicMock())
+    error.status = mocker.MagicMock(code=404)
     mock_lightkube_client.get.side_effect = error
 
     cm = create_configmap_with_mocked_dependency(

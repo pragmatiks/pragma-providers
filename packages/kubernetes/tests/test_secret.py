@@ -146,8 +146,8 @@ async def test_delete_secret_idempotent(
     mocker: MockerFixture,
 ) -> None:
     """on_delete succeeds when secret doesn't exist."""
-    error = ApiError(response=mocker.Any())
-    error.status = mocker.Any(code=404)
+    error = ApiError(response=mocker.MagicMock())
+    error.status = mocker.MagicMock(code=404)
     mock_lightkube_client.delete.side_effect = error
 
     secret = create_secret_with_mocked_dependency(
@@ -174,7 +174,7 @@ async def test_health_exists(
     mocker: MockerFixture,
 ) -> None:
     """health() returns healthy when secret exists."""
-    mock_secret = mocker.Any()
+    mock_secret = mocker.MagicMock()
     mock_secret.data = {"username": "dXNlcg==", "password": "cGFzcw=="}
     mock_secret.type = "Opaque"
     mock_lightkube_client.get.return_value = mock_secret
@@ -197,8 +197,8 @@ async def test_health_not_found(
     mocker: MockerFixture,
 ) -> None:
     """health() returns unhealthy when secret not found."""
-    error = ApiError(response=mocker.Any())
-    error.status = mocker.Any(code=404)
+    error = ApiError(response=mocker.MagicMock())
+    error.status = mocker.MagicMock(code=404)
     mock_lightkube_client.get.side_effect = error
 
     secret = create_secret_with_mocked_dependency(
