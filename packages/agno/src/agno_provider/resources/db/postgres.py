@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import ClassVar
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import quote, urlparse, urlunparse
 
 from agno.db.postgres import AsyncPostgresDb
 from pragma_sdk import Config, Field, Outputs, Resource
@@ -116,14 +116,19 @@ class DbPostgres(Resource[DbPostgresConfig, DbPostgresOutputs]):
 
             return url.replace("postgresql://", "postgresql+psycopg_async://")
 
+        encoded_user = quote(str(self.config.username), safe="")
+        encoded_pass = quote(str(self.config.password), safe="")
+
         return (
             f"postgresql+psycopg_async://"
-            f"{self.config.username}:{self.config.password}"
+            f"{encoded_user}:{encoded_pass}"
             f"@{self.config.host}:{self.config.port}/{self.config.database}"
         )
 
     def _inject_credentials(self, url: str, username: str, password: str) -> str:
         """Inject credentials into URL if not already present.
+
+        Credentials are URL-encoded to handle special characters like @, :, /, %.
 
         Args:
             url: The connection URL (must be postgresql:// scheme).
@@ -131,14 +136,17 @@ class DbPostgres(Resource[DbPostgresConfig, DbPostgresOutputs]):
             password: Password to inject.
 
         Returns:
-            URL with credentials injected.
+            URL with credentials injected and encoded.
         """
         parsed = urlparse(url)
 
         if parsed.username:
             return url
 
-        netloc = f"{username}:{password}@{parsed.hostname}"
+        encoded_user = quote(username, safe="")
+        encoded_pass = quote(password, safe="")
+        netloc = f"{encoded_user}:{encoded_pass}@{parsed.hostname}"
+
         if parsed.port:
             netloc += f":{parsed.port}"
 

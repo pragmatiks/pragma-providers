@@ -266,6 +266,37 @@ async def test_lifecycle_delete_success(harness: ProviderHarness) -> None:
     assert result.success
 
 
+def test_url_building_encodes_special_characters_in_password(harness: ProviderHarness) -> None:
+    """Special characters in password are URL-encoded."""
+    config = DbPostgresConfig(
+        host="localhost",
+        database="test",
+        username="user",
+        password="p@ss:word/with%special",
+    )
+
+    resource = DbPostgres(name="test-db", config=config)
+
+    url = resource._build_url()
+
+    assert url == "postgresql+psycopg_async://user:p%40ss%3Aword%2Fwith%25special@localhost:5432/test"
+
+
+def test_url_building_injects_encoded_credentials(harness: ProviderHarness) -> None:
+    """Injected credentials are URL-encoded."""
+    config = DbPostgresConfig(
+        connection_url="postgresql://localhost:5432/db",
+        username="user@domain",
+        password="pass:word",
+    )
+
+    resource = DbPostgres(name="test-db", config=config)
+
+    url = resource._build_url()
+
+    assert url == "postgresql+psycopg_async://user%40domain:pass%3Aword@localhost:5432/db"
+
+
 def test_resource_metadata_provider_name() -> None:
     """Resource has correct provider name."""
     assert DbPostgres.provider == "agno"
