@@ -34,12 +34,14 @@ class VectordbQdrantOutputs(Outputs):
         url: Qdrant server URL.
         collection: Collection name.
         search_type: Configured search type.
+        pip_dependencies: Python packages required for this configuration.
         ready: Whether the vector store is ready for use.
     """
 
     url: str
     collection: str
     search_type: str
+    pip_dependencies: list[str]
     ready: bool
 
 
@@ -92,6 +94,17 @@ class VectordbQdrant(Resource[VectordbQdrantConfig, VectordbQdrantOutputs]):
         }
         return search_type_map[self.config.search_type]
 
+    def _get_pip_dependencies(self) -> list[str]:
+        """Get pip dependencies based on search type.
+
+        Returns:
+            List of pip packages required for this configuration.
+        """
+        if self.config.search_type in ("hybrid", "keyword"):
+            return ["fastembed>=0.6.0"]
+
+        return []
+
     def vectordb(self) -> Qdrant:
         """Return configured Agno Qdrant instance.
 
@@ -122,6 +135,7 @@ class VectordbQdrant(Resource[VectordbQdrantConfig, VectordbQdrantOutputs]):
             url=str(self.config.url),
             collection=str(self.config.collection),
             search_type=self.config.search_type,
+            pip_dependencies=self._get_pip_dependencies(),
             ready=True,
         )
 
@@ -135,6 +149,7 @@ class VectordbQdrant(Resource[VectordbQdrantConfig, VectordbQdrantOutputs]):
             url=str(self.config.url),
             collection=str(self.config.collection),
             search_type=self.config.search_type,
+            pip_dependencies=self._get_pip_dependencies(),
             ready=True,
         )
 

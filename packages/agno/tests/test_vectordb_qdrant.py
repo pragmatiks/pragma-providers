@@ -64,18 +64,21 @@ def test_outputs_are_serializable() -> None:
         url="http://localhost:6333",
         collection="test-collection",
         search_type="vector",
+        pip_dependencies=[],
         ready=True,
     )
 
     assert outputs.url == "http://localhost:6333"
     assert outputs.collection == "test-collection"
     assert outputs.search_type == "vector"
+    assert outputs.pip_dependencies == []
     assert outputs.ready is True
 
     serialized = outputs.model_dump_json()
     assert "url" in serialized
     assert "collection" in serialized
     assert "search_type" in serialized
+    assert "pip_dependencies" in serialized
     assert "ready" in serialized
 
 
@@ -172,6 +175,45 @@ def test_get_search_type_hybrid() -> None:
     assert resource._get_search_type() == SearchType.hybrid
 
 
+def test_pip_dependencies_vector_is_empty() -> None:
+    """Vector search requires no additional dependencies."""
+    config = VectordbQdrantConfig(
+        url="http://localhost:6333",
+        collection="test-collection",
+        search_type="vector",
+    )
+
+    resource = VectordbQdrant(name="test-qdrant", config=config)
+
+    assert resource._get_pip_dependencies() == []
+
+
+def test_pip_dependencies_hybrid_requires_fastembed() -> None:
+    """Hybrid search requires fastembed."""
+    config = VectordbQdrantConfig(
+        url="http://localhost:6333",
+        collection="test-collection",
+        search_type="hybrid",
+    )
+
+    resource = VectordbQdrant(name="test-qdrant", config=config)
+
+    assert resource._get_pip_dependencies() == ["fastembed>=0.6.0"]
+
+
+def test_pip_dependencies_keyword_requires_fastembed() -> None:
+    """Keyword search requires fastembed."""
+    config = VectordbQdrantConfig(
+        url="http://localhost:6333",
+        collection="test-collection",
+        search_type="keyword",
+    )
+
+    resource = VectordbQdrant(name="test-qdrant", config=config)
+
+    assert resource._get_pip_dependencies() == ["fastembed>=0.6.0"]
+
+
 async def test_lifecycle_create_returns_outputs(harness: ProviderHarness) -> None:
     """on_create returns outputs with config values."""
     config = VectordbQdrantConfig(
@@ -187,6 +229,7 @@ async def test_lifecycle_create_returns_outputs(harness: ProviderHarness) -> Non
     assert result.outputs.url == "http://localhost:6333"
     assert result.outputs.collection == "test-collection"
     assert result.outputs.search_type == "hybrid"
+    assert result.outputs.pip_dependencies == ["fastembed>=0.6.0"]
     assert result.outputs.ready is True
 
 
@@ -206,6 +249,7 @@ async def test_lifecycle_update_returns_outputs(harness: ProviderHarness) -> Non
         url="http://localhost:6333",
         collection="old-collection",
         search_type="vector",
+        pip_dependencies=[],
         ready=True,
     )
 
@@ -221,6 +265,7 @@ async def test_lifecycle_update_returns_outputs(harness: ProviderHarness) -> Non
     assert result.outputs is not None
     assert result.outputs.collection == "new-collection"
     assert result.outputs.search_type == "hybrid"
+    assert result.outputs.pip_dependencies == ["fastembed>=0.6.0"]
 
 
 async def test_lifecycle_delete_success(harness: ProviderHarness) -> None:
