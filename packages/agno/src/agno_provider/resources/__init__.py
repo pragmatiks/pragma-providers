@@ -18,6 +18,11 @@ from agno_provider.resources.models import (
     OpenAIModelConfig,
     OpenAIModelOutputs,
 )
+from agno_provider.resources.prompt import (
+    Prompt,
+    PromptConfig,
+    PromptOutputs,
+)
 
 
 __all__ = [
@@ -33,4 +38,7 @@ __all__ = [
     "OpenAIModel",
     "OpenAIModelConfig",
     "OpenAIModelOutputs",
+    "Prompt",
+    "PromptConfig",
+    "PromptOutputs",
 ]
