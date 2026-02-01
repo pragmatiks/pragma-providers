@@ -6,10 +6,17 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from agno.models.openai import OpenAIChat
+from pragma_sdk.provider import ProviderHarness
 
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
+
+
+@pytest.fixture
+def harness() -> ProviderHarness:
+    """Test harness for invoking lifecycle methods."""
+    return ProviderHarness()
 
 
 @pytest.fixture
