@@ -13,12 +13,6 @@ from agno_provider import (
 )
 
 
-@pytest.fixture
-def harness() -> ProviderHarness:
-    """Test harness for invoking lifecycle methods."""
-    return ProviderHarness()
-
-
 def test_resource_metadata_provider_name() -> None:
     """Resource has correct provider name."""
     assert VectordbQdrant.provider == "agno"
