@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 from pragma_sdk.provider import ProviderHarness
@@ -16,10 +16,11 @@ from agno_provider import (
 
 
 if TYPE_CHECKING:
-    from pytest_mock import MockerFixture
+    from pytest_mock import MockerFixture, MockType
 
 
-async def test_create_with_command(harness: ProviderHarness, mock_mcp_tools: Any) -> None:
+@pytest.mark.usefixtures("mock_mcp_tools")
+async def test_create_with_command(harness: ProviderHarness) -> None:
     """on_create with stdio command discovers tools from MCP server."""
     config = ToolsMCPConfig(command="npx -y @modelcontextprotocol/server-github")
 
@@ -32,7 +33,8 @@ async def test_create_with_command(harness: ProviderHarness, mock_mcp_tools: Any
     assert "github" in result.outputs.name
 
 
-async def test_create_with_url(harness: ProviderHarness, mock_mcp_tools: Any) -> None:
+@pytest.mark.usefixtures("mock_mcp_tools")
+async def test_create_with_url(harness: ProviderHarness) -> None:
     """on_create with SSE/HTTP URL discovers tools from MCP server."""
     config = ToolsMCPConfig(url="https://mcp.example.com/api", transport="sse")
 
@@ -44,7 +46,7 @@ async def test_create_with_url(harness: ProviderHarness, mock_mcp_tools: Any) ->
     assert len(result.outputs.tools) == 3
 
 
-async def test_create_connection_failure(harness: ProviderHarness, mock_mcp_tools: Any) -> None:
+async def test_create_connection_failure(harness: ProviderHarness, mock_mcp_tools: MockType) -> None:
     """on_create returns ready=False when MCP server connection fails."""
     mock_mcp_tools.return_value.connect.side_effect = ConnectionError("Server unreachable")
     config = ToolsMCPConfig(command="npx -y @modelcontextprotocol/server-github")
@@ -57,7 +59,7 @@ async def test_create_connection_failure(harness: ProviderHarness, mock_mcp_tool
     assert result.outputs.tools == []
 
 
-async def test_toolkit_returns_mcp_tools(harness: ProviderHarness, mock_mcp_tools: Any) -> None:
+async def test_toolkit_returns_mcp_tools(harness: ProviderHarness, mock_mcp_tools: MockType) -> None:
     """toolkit() method returns configured MCPTools instance."""
     config = ToolsMCPConfig(command="npx -y @modelcontextprotocol/server-github")
 
@@ -75,7 +77,7 @@ async def test_toolkit_returns_mcp_tools(harness: ProviderHarness, mock_mcp_tool
     assert call_kwargs["command"] == "npx -y @modelcontextprotocol/server-github"
 
 
-async def test_toolkit_with_all_options(harness: ProviderHarness, mock_mcp_tools: Any) -> None:
+async def test_toolkit_with_all_options(harness: ProviderHarness, mock_mcp_tools: MockType) -> None:
     """toolkit() passes all configuration options."""
     config = ToolsMCPConfig(
         command="uvx mcp-server-git",
@@ -102,7 +104,7 @@ async def test_toolkit_with_all_options(harness: ProviderHarness, mock_mcp_tools
     assert call_kwargs["tool_name_prefix"] == "git"
 
 
-async def test_toolkit_with_env(harness: ProviderHarness, mock_mcp_tools: Any) -> None:
+async def test_toolkit_with_env(harness: ProviderHarness, mock_mcp_tools: MockType) -> None:
     """toolkit() passes environment variables."""
     config = ToolsMCPConfig(
         command="npx -y @modelcontextprotocol/server-github",
@@ -122,7 +124,9 @@ async def test_toolkit_with_env(harness: ProviderHarness, mock_mcp_tools: Any) -
     assert call_kwargs["env"] == {"GITHUB_TOKEN": "test-token-123"}
 
 
-async def test_update_rediscovers_tools(harness: ProviderHarness, mock_mcp_tools: Any, mocker: MockerFixture) -> None:
+async def test_update_rediscovers_tools(
+    harness: ProviderHarness, mock_mcp_tools: MockType, mocker: MockerFixture
+) -> None:
     """on_update reconnects and refreshes tool list."""
     mock_mcp_tools.return_value.get_functions.return_value = {
         "new_tool": mocker.MagicMock(),
@@ -144,7 +148,8 @@ async def test_update_rediscovers_tools(harness: ProviderHarness, mock_mcp_tools
     assert result.outputs.tools == ["new_tool"]
 
 
-async def test_delete_success(harness: ProviderHarness, mock_mcp_tools: Any) -> None:
+@pytest.mark.usefixtures("mock_mcp_tools")
+async def test_delete_success(harness: ProviderHarness) -> None:
     """on_delete completes without error (stateless resource)."""
     config = ToolsMCPConfig(command="npx -y @modelcontextprotocol/server-github")
 
@@ -250,7 +255,7 @@ def test_server_name_from_url() -> None:
     assert resource._server_name() == "mcp.example.com"
 
 
-def test_static_headers_passed_to_mcp_tools(mock_mcp_tools: Any) -> None:
+def test_static_headers_passed_to_mcp_tools(mock_mcp_tools: MockType) -> None:
     """Static headers are included in header_provider."""
     config = ToolsMCPConfig(
         url="https://mcp.example.com/api",
@@ -267,7 +272,7 @@ def test_static_headers_passed_to_mcp_tools(mock_mcp_tools: Any) -> None:
     assert headers["Authorization"] == "Bearer secret-token"
 
 
-def test_run_context_headers_when_enabled(mock_mcp_tools: Any, mocker: MockerFixture) -> None:
+def test_run_context_headers_when_enabled(mock_mcp_tools: MockType, mocker: MockerFixture) -> None:
     """RunContext headers are included when include_run_context_headers is True."""
     config = ToolsMCPConfig(
         url="https://mcp.example.com/api",
@@ -292,7 +297,7 @@ def test_run_context_headers_when_enabled(mock_mcp_tools: Any, mocker: MockerFix
     assert headers["X-Run-ID"] == "run-789"
 
 
-def test_combined_static_and_run_context_headers(mock_mcp_tools: Any, mocker: MockerFixture) -> None:
+def test_combined_static_and_run_context_headers(mock_mcp_tools: MockType, mocker: MockerFixture) -> None:
     """Static headers and RunContext headers can be combined."""
     config = ToolsMCPConfig(
         url="https://mcp.example.com/api",
@@ -318,7 +323,7 @@ def test_combined_static_and_run_context_headers(mock_mcp_tools: Any, mocker: Mo
     assert "X-Session-ID" not in headers
 
 
-def test_no_header_provider_when_not_configured(mock_mcp_tools: Any) -> None:
+def test_no_header_provider_when_not_configured(mock_mcp_tools: MockType) -> None:
     """No header_provider passed when headers not configured."""
     config = ToolsMCPConfig(command="npx server")
     resource = ToolsMCP(name="test", config=config, outputs=None)
@@ -329,7 +334,7 @@ def test_no_header_provider_when_not_configured(mock_mcp_tools: Any) -> None:
     assert "header_provider" not in call_kwargs
 
 
-def test_agent_and_team_names_in_headers(mock_mcp_tools: Any, mocker: MockerFixture) -> None:
+def test_agent_and_team_names_in_headers(mock_mcp_tools: MockType, mocker: MockerFixture) -> None:
     """Agent and team names included in headers when provided."""
     config = ToolsMCPConfig(
         url="https://mcp.example.com/api",

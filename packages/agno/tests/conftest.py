@@ -10,7 +10,7 @@ from pragma_sdk.provider import ProviderHarness
 
 
 if TYPE_CHECKING:
-    from pytest_mock import MockerFixture
+    from pytest_mock import MockerFixture, MockType
 
 
 @pytest.fixture
@@ -106,7 +106,7 @@ def mock_asyncio_sleep(mocker: MockerFixture) -> Any:
 
 
 @pytest.fixture
-def mock_mcp_tools(mocker: MockerFixture) -> Any:
+def mock_mcp_tools(mocker: MockerFixture) -> MockType:
     """Mock MCPTools class for testing without real MCP servers."""
     mock_class = mocker.patch("agno_provider.resources.tools.mcp.MCPTools")
     mock_instance = mocker.MagicMock()
