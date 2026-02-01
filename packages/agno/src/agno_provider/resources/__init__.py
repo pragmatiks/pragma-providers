@@ -10,6 +10,11 @@ from agno_provider.resources.db import (
     DbPostgresConfig,
     DbPostgresOutputs,
 )
+from agno_provider.resources.knowledge import (
+    EmbedderOpenAI,
+    EmbedderOpenAIConfig,
+    EmbedderOpenAIOutputs,
+)
 from agno_provider.resources.models import (
     AnthropicModel,
     AnthropicModelConfig,
@@ -48,6 +53,9 @@ __all__ = [
     "DbPostgres",
     "DbPostgresConfig",
     "DbPostgresOutputs",
+    "EmbedderOpenAI",
+    "EmbedderOpenAIConfig",
+    "EmbedderOpenAIOutputs",
     "OpenAIModel",
     "OpenAIModelConfig",
     "OpenAIModelOutputs",

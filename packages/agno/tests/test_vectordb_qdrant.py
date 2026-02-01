@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 from agno.vectordb.qdrant import Qdrant, SearchType
+from pragma_sdk import Dependency
 from pragma_sdk.provider import ProviderHarness
 
 from agno_provider import (
+    EmbedderOpenAI,
     VectordbQdrant,
     VectordbQdrantConfig,
     VectordbQdrantOutputs,
 )
+
+
+if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
 
 
 def test_resource_metadata_provider_name() -> None:
@@ -34,6 +42,34 @@ def test_config_required_fields() -> None:
     assert config.collection == "test-collection"
     assert config.api_key is None
     assert config.search_type == "hybrid"
+    assert config.embedder is None
+
+
+def test_config_embedder_default_is_none() -> None:
+    """Config embedder field defaults to None."""
+    config = VectordbQdrantConfig(
+        url="http://localhost:6333",
+        collection="test-collection",
+    )
+
+    assert config.embedder is None
+
+
+def test_config_with_embedder_dependency() -> None:
+    """Config accepts embedder dependency."""
+    embedder_dep = Dependency[EmbedderOpenAI](
+        provider="agno",
+        resource="knowledge/embedder/openai",
+        name="my-embedder",
+    )
+    config = VectordbQdrantConfig(
+        url="http://localhost:6333",
+        collection="test-collection",
+        embedder=embedder_dep,
+    )
+
+    assert config.embedder is not None
+    assert config.embedder.name == "my-embedder"
 
 
 def test_config_with_api_key() -> None:
@@ -279,3 +315,82 @@ async def test_lifecycle_delete_success(harness: ProviderHarness) -> None:
     result = await harness.invoke_delete(VectordbQdrant, name="test-qdrant", config=config)
 
     assert result.success
+
+
+def test_vectordb_without_embedder(mocker: MockerFixture) -> None:
+    """vectordb() works when embedder is None (default behavior)."""
+    config = VectordbQdrantConfig(
+        url="http://localhost:6333",
+        collection="test-collection",
+        search_type="vector",
+    )
+
+    resource = VectordbQdrant(name="test-qdrant", config=config)
+
+    mock_init = mocker.patch("agno.vectordb.qdrant.Qdrant.__init__", return_value=None)
+    resource.vectordb()
+
+    mock_init.assert_called_once()
+    call_kwargs = mock_init.call_args.kwargs
+    assert "embedder" not in call_kwargs
+    assert call_kwargs["collection"] == "test-collection"
+    assert call_kwargs["url"] == "http://localhost:6333"
+
+
+def test_vectordb_with_embedder_dependency(mocker: MockerFixture) -> None:
+    """vectordb() passes embedder to Qdrant when dependency is resolved."""
+    mock_embedder = mocker.MagicMock(spec=["get_embedding"])
+    mock_embedder_resource = mocker.MagicMock()
+    mock_embedder_resource.embedder.return_value = mock_embedder
+
+    embedder_dep = Dependency[EmbedderOpenAI](
+        provider="agno",
+        resource="knowledge/embedder/openai",
+        name="my-embedder",
+    )
+    embedder_dep._resolved = mock_embedder_resource
+
+    config = VectordbQdrantConfig(
+        url="http://localhost:6333",
+        collection="test-collection",
+        search_type="vector",
+        embedder=embedder_dep,
+    )
+
+    resource = VectordbQdrant(name="test-qdrant", config=config)
+
+    mock_init = mocker.patch("agno.vectordb.qdrant.Qdrant.__init__", return_value=None)
+    resource.vectordb()
+
+    mock_init.assert_called_once()
+    call_kwargs = mock_init.call_args.kwargs
+    assert call_kwargs["embedder"] is mock_embedder
+    assert call_kwargs["collection"] == "test-collection"
+    assert call_kwargs["url"] == "http://localhost:6333"
+
+    mock_embedder_resource.embedder.assert_called_once()
+
+
+def test_vectordb_with_unresolved_embedder_dependency(mocker: MockerFixture) -> None:
+    """vectordb() does not pass embedder when dependency is not resolved."""
+    embedder_dep = Dependency[EmbedderOpenAI](
+        provider="agno",
+        resource="knowledge/embedder/openai",
+        name="my-embedder",
+    )
+
+    config = VectordbQdrantConfig(
+        url="http://localhost:6333",
+        collection="test-collection",
+        search_type="vector",
+        embedder=embedder_dep,
+    )
+
+    resource = VectordbQdrant(name="test-qdrant", config=config)
+
+    mock_init = mocker.patch("agno.vectordb.qdrant.Qdrant.__init__", return_value=None)
+    resource.vectordb()
+
+    mock_init.assert_called_once()
+    call_kwargs = mock_init.call_args.kwargs
+    assert "embedder" not in call_kwargs

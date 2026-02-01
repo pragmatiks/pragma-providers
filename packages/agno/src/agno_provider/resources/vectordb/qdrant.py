@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
 from agno.vectordb.qdrant import Qdrant, SearchType
-from pragma_sdk import Config, Field, Outputs, Resource
+from pragma_sdk import Config, Dependency, Field, Outputs, Resource
+
+from agno_provider.resources.knowledge.embedder.openai import EmbedderOpenAI
 
 
 class VectordbQdrantConfig(Config):
@@ -19,12 +21,14 @@ class VectordbQdrantConfig(Config):
         collection: Collection name. Can reference qdrant/collection outputs.
         api_key: Optional API key for authentication.
         search_type: Search type - vector, keyword, or hybrid.
+        embedder: Optional embedder resource for automatic vector generation.
     """
 
     url: Field[str]
     collection: Field[str]
     api_key: Field[str] | None = None
     search_type: Literal["vector", "keyword", "hybrid"] = "hybrid"
+    embedder: Dependency[EmbedderOpenAI] | None = None
 
 
 class VectordbQdrantOutputs(Outputs):
@@ -114,7 +118,7 @@ class VectordbQdrant(Resource[VectordbQdrantConfig, VectordbQdrantOutputs]):
         Returns:
             Configured Agno Qdrant instance ready for use.
         """
-        kwargs: dict[str, str | SearchType] = {
+        kwargs: dict[str, Any] = {
             "collection": str(self.config.collection),
             "url": str(self.config.url),
             "search_type": self._get_search_type(),
@@ -122,6 +126,9 @@ class VectordbQdrant(Resource[VectordbQdrantConfig, VectordbQdrantOutputs]):
 
         if self.config.api_key is not None:
             kwargs["api_key"] = str(self.config.api_key)
+
+        if self.config.embedder is not None and self.config.embedder._resolved is not None:
+            kwargs["embedder"] = self.config.embedder._resolved.embedder()
 
         return Qdrant(**kwargs)
 

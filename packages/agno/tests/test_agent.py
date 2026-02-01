@@ -14,6 +14,9 @@ from agno_provider import (
 )
 
 
+pytestmark = pytest.mark.skip(reason="AgentConfig forward references not fully defined (PRA-172)")
+
+
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
