@@ -5,6 +5,11 @@ from agno_provider.resources.agent import (
     AgentConfig,
     AgentOutputs,
 )
+from agno_provider.resources.db import (
+    DbPostgres,
+    DbPostgresConfig,
+    DbPostgresOutputs,
+)
 from agno_provider.resources.models import (
     AnthropicModel,
     AnthropicModelConfig,
@@ -22,6 +27,9 @@ __all__ = [
     "AnthropicModel",
     "AnthropicModelConfig",
     "AnthropicModelOutputs",
+    "DbPostgres",
+    "DbPostgresConfig",
+    "DbPostgresOutputs",
     "OpenAIModel",
     "OpenAIModelConfig",
     "OpenAIModelOutputs",

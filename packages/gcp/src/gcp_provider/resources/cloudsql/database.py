@@ -35,11 +35,15 @@ class DatabaseOutputs(Outputs):
     Attributes:
         database_name: Name of the created database.
         instance_name: Name of the hosting instance.
+        host: Database host (IP address or connection name).
+        port: Database port (5432 for postgres, 3306 for mysql).
         url: Connection URL format (without credentials).
     """
 
     database_name: str
     instance_name: str
+    host: str
+    port: int
     url: str
 
 
@@ -139,11 +143,13 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         )
 
         public_ip, private_ip = extract_ips(instance)
-        db_type, port = connection_info(instance.get("databaseVersion", "POSTGRES_15"))
+        db_type, db_port = connection_info(instance.get("databaseVersion", "POSTGRES_15"))
         host = public_ip or private_ip or f"{inst.project_id}:{instance.get('region')}:{inst.instance_name}"
 
         return DatabaseOutputs(
             database_name=self.config.database_name,
             instance_name=inst.instance_name,
-            url=f"{db_type}://USER:PASSWORD@{host}:{port}/{self.config.database_name}",
+            host=host,
+            port=db_port,
+            url=f"{db_type}://{host}:{db_port}/{self.config.database_name}",
         )

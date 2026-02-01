@@ -13,6 +13,9 @@ from agno_provider.resources import (
     AnthropicModel,
     AnthropicModelConfig,
     AnthropicModelOutputs,
+    DbPostgres,
+    DbPostgresConfig,
+    DbPostgresOutputs,
     OpenAIModel,
     OpenAIModelConfig,
     OpenAIModelOutputs,
@@ -22,6 +25,7 @@ from agno_provider.resources import (
 agno = Provider(name="agno")
 
 agno.resource("agent")(Agent)
+agno.resource("db/postgres")(DbPostgres)
 agno.resource("models/anthropic")(AnthropicModel)
 agno.resource("models/openai")(OpenAIModel)
 
@@ -33,6 +37,9 @@ __all__ = [
     "AnthropicModel",
     "AnthropicModelConfig",
     "AnthropicModelOutputs",
+    "DbPostgres",
+    "DbPostgresConfig",
+    "DbPostgresOutputs",
     "OpenAIModel",
     "OpenAIModelConfig",
     "OpenAIModelOutputs",
