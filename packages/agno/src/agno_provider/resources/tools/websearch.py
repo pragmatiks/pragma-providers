@@ -1,15 +1,14 @@
-"""Agno tools/websearch resource wrapping DuckDuckGoTools."""
+"""Agno tools/websearch resource wrapping WebSearchTools."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar, Literal
 
-from agno.tools.duckduckgo import DuckDuckGoTools
+from agno.tools.websearch import WebSearchTools
 from pragma_sdk import Config, Outputs, Resource
 
 
-if TYPE_CHECKING:
-    from agno.tools.toolkit import Toolkit
+BackendType = Literal["auto", "duckduckgo", "google", "bing", "brave", "yandex", "yahoo"]
 
 
 class ToolsWebSearchConfig(Config):
@@ -18,6 +17,7 @@ class ToolsWebSearchConfig(Config):
     Attributes:
         enable_search: Enable web search functionality.
         enable_news: Enable news search functionality.
+        backend: Search backend (auto, duckduckgo, google, bing, brave, yandex, yahoo).
         modifier: Text prepended to all queries (e.g., "site:example.com").
         fixed_max_results: Override default max results limit.
         proxy: Proxy URL for requests.
@@ -27,6 +27,7 @@ class ToolsWebSearchConfig(Config):
 
     enable_search: bool = True
     enable_news: bool = True
+    backend: BackendType = "auto"
     modifier: str | None = None
     fixed_max_results: int | None = None
     proxy: str | None = None
@@ -47,9 +48,9 @@ class ToolsWebSearchOutputs(Outputs):
 
 
 class ToolsWebSearch(Resource[ToolsWebSearchConfig, ToolsWebSearchOutputs]):
-    """Web search toolkit resource wrapping Agno's DuckDuckGoTools.
+    """Web search toolkit resource wrapping Agno's WebSearchTools.
 
-    Stateless resource that wraps DuckDuckGoTools configuration. Dependent
+    Stateless resource that wraps WebSearchTools configuration. Dependent
     resources (e.g., agno/agent) can call toolkit() to get the configured
     toolkit instance.
 
@@ -86,18 +87,19 @@ class ToolsWebSearch(Resource[ToolsWebSearchConfig, ToolsWebSearchOutputs]):
         """
         return ToolsWebSearchOutputs(
             tools=self._enabled_tools(),
-            pip_dependencies=["ddgs"],
+            pip_dependencies=["ddgs>=8.0.0"],
         )
 
-    def toolkit(self) -> Toolkit:
-        """Returns the configured DuckDuckGoTools instance.
+    def toolkit(self) -> WebSearchTools:
+        """Returns the configured WebSearchTools instance.
 
         Called by dependent resources (e.g., agno/agent) that need
         the actual toolkit object for their tools list.
         """
-        return DuckDuckGoTools(
+        return WebSearchTools(
             enable_search=self.config.enable_search,
             enable_news=self.config.enable_news,
+            backend=self.config.backend,
             modifier=self.config.modifier,
             fixed_max_results=self.config.fixed_max_results,
             proxy=self.config.proxy,
