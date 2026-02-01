@@ -50,6 +50,7 @@ def mock_model_outputs(mocker: MockerFixture) -> Any:
 def mock_model_resource(mocker: MockerFixture, mock_model_outputs: Any) -> Any:
     resource = mocker.MagicMock()
     resource.outputs = mock_model_outputs
+    resource.model = mocker.Mock(return_value=mocker.MagicMock())
     return resource
 
 

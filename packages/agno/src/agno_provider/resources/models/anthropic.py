@@ -5,16 +5,17 @@ from __future__ import annotations
 from typing import ClassVar
 
 from agno.models.anthropic import Claude
-from pragma_sdk import Config, Field, Outputs, Resource
+from pragma_sdk import Field
+
+from agno_provider.resources.models.base import Model, ModelConfig
 
 
-class AnthropicModelConfig(Config):
+class AnthropicModelConfig(ModelConfig):
     """Configuration for Agno Anthropic Claude model.
 
     Maps to Agno's Claude class from agno.models.anthropic.
 
     Attributes:
-        id: Claude model identifier (e.g., "claude-sonnet-4-20250514").
         api_key: Anthropic API key. Use a FieldReference to inject from pragma/secret.
         max_tokens: Maximum tokens in responses. Defaults to 8192 (Agno default).
         temperature: Sampling temperature (0.0-1.0). Optional.
@@ -23,7 +24,6 @@ class AnthropicModelConfig(Config):
         stop_sequences: Stop sequences to end generation. Optional.
     """
 
-    id: str
     api_key: Field[str]
     max_tokens: int = 8192
     temperature: float | None = None
@@ -32,17 +32,7 @@ class AnthropicModelConfig(Config):
     stop_sequences: list[str] | None = None
 
 
-class AnthropicModelOutputs(Outputs):
-    """Serializable outputs from Agno Anthropic model resource.
-
-    Attributes:
-        model_id: Configured model identifier.
-    """
-
-    model_id: str
-
-
-class AnthropicModel(Resource[AnthropicModelConfig, AnthropicModelOutputs]):
+class AnthropicModel(Model[AnthropicModelConfig, Claude]):
     """Agno Anthropic Claude model resource.
 
     Creates and returns an Agno Claude instance configured with the provided
@@ -59,14 +49,8 @@ class AnthropicModel(Resource[AnthropicModelConfig, AnthropicModelOutputs]):
         async def on_create(self):
             claude = self.model_resource.model()  # Get Claude instance
             agent = AgnoAgent(model=claude, ...)
-
-    Lifecycle:
-        - on_create: Return serializable metadata
-        - on_update: Return serializable metadata
-        - on_delete: No-op (stateless)
     """
 
-    provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "models/anthropic"
 
     def model(self) -> Claude:
@@ -79,25 +63,3 @@ class AnthropicModel(Resource[AnthropicModelConfig, AnthropicModelOutputs]):
             Configured Claude instance ready for use with Agno agents.
         """
         return Claude(**self.config.model_dump(exclude_none=True))
-
-    async def on_create(self) -> AnthropicModelOutputs:
-        """Create resource and return serializable outputs.
-
-        Returns:
-            AnthropicModelOutputs with the configured model_id.
-        """
-        return AnthropicModelOutputs(model_id=self.config.id)
-
-    async def on_update(self, previous_config: AnthropicModelConfig) -> AnthropicModelOutputs:
-        """Update resource and return serializable outputs.
-
-        Args:
-            previous_config: The previous configuration before update.
-
-        Returns:
-            AnthropicModelOutputs with updated model_id.
-        """
-        return AnthropicModelOutputs(model_id=self.config.id)
-
-    async def on_delete(self) -> None:
-        """Delete is a no-op since this resource is stateless."""

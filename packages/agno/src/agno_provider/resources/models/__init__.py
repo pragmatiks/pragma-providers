@@ -3,20 +3,20 @@
 from agno_provider.resources.models.anthropic import (
     AnthropicModel,
     AnthropicModelConfig,
-    AnthropicModelOutputs,
 )
+from agno_provider.resources.models.base import Model, ModelConfig, ModelOutputs
 from agno_provider.resources.models.openai import (
     OpenAIModel,
     OpenAIModelConfig,
-    OpenAIModelOutputs,
 )
 
 
 __all__ = [
     "AnthropicModel",
     "AnthropicModelConfig",
-    "AnthropicModelOutputs",
+    "Model",
+    "ModelConfig",
+    "ModelOutputs",
     "OpenAIModel",
     "OpenAIModelConfig",
-    "OpenAIModelOutputs",
 ]

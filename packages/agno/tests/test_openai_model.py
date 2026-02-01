@@ -6,9 +6,9 @@ from agno.models.openai import OpenAIChat
 from pragma_sdk import LifecycleState
 
 from agno_provider import (
+    ModelOutputs,
     OpenAIModel,
     OpenAIModelConfig,
-    OpenAIModelOutputs,
 )
 
 
@@ -27,7 +27,7 @@ def create_openai_model(
     max_retries: int | None = None,
     organization: str | None = None,
     base_url: str | None = None,
-    outputs: OpenAIModelOutputs | None = None,
+    outputs: ModelOutputs | None = None,
 ) -> OpenAIModel:
     """Create an OpenAIModel resource for testing."""
     config = OpenAIModelConfig(
@@ -265,7 +265,7 @@ async def test_on_create_returns_serializable_outputs() -> None:
 
     result = await resource.on_create()
 
-    assert isinstance(result, OpenAIModelOutputs)
+    assert isinstance(result, ModelOutputs)
     assert result.model_id == "gpt-4o"
     assert not hasattr(result, "model") or not isinstance(getattr(result, "model", None), OpenAIChat)
 
@@ -285,7 +285,7 @@ async def test_on_update_returns_serializable_outputs() -> None:
 
     result = await resource.on_update(previous_config)
 
-    assert isinstance(result, OpenAIModelOutputs)
+    assert isinstance(result, ModelOutputs)
     assert result.model_id == "gpt-4o-mini"
 
 
@@ -304,12 +304,6 @@ def test_provider_name() -> None:
 def test_resource_type() -> None:
     """Test resource class variable."""
     assert OpenAIModel.resource == "models/openai"
-
-
-def test_default_model_id() -> None:
-    """Test default model ID is gpt-4o."""
-    config = OpenAIModelConfig(api_key="sk-test")
-    assert config.id == "gpt-4o"
 
 
 def test_config_accepts_various_model_ids() -> None:
@@ -340,7 +334,7 @@ def test_openai_chat_instance_is_usable() -> None:
 
 def test_outputs_are_serializable() -> None:
     """Test that outputs can be serialized to JSON (no arbitrary types)."""
-    outputs = OpenAIModelOutputs(model_id="gpt-4o")
+    outputs = ModelOutputs(model_id="gpt-4o")
 
     json_data = outputs.model_dump_json()
 

@@ -9,16 +9,17 @@ from __future__ import annotations
 from typing import ClassVar
 
 from agno.models.openai import OpenAIChat
-from pragma_sdk import Config, Field, Outputs, Resource
+from pragma_sdk import Field
+
+from agno_provider.resources.models.base import Model, ModelConfig
 
 
-class OpenAIModelConfig(Config):
+class OpenAIModelConfig(ModelConfig):
     """Configuration for OpenAI model.
 
     Maps directly to Agno's OpenAIChat constructor parameters.
 
     Attributes:
-        id: OpenAI model identifier (e.g., "gpt-4o", "gpt-4o-mini").
         api_key: OpenAI API key. Use a FieldReference to inject from pragma/secret.
         max_tokens: Optional maximum tokens in the response.
         temperature: Optional sampling temperature (0.0-2.0).
@@ -33,7 +34,6 @@ class OpenAIModelConfig(Config):
         base_url: Optional custom base URL for OpenAI-compatible APIs.
     """
 
-    id: str = "gpt-4o"
     api_key: Field[str]
     max_tokens: int | None = None
     temperature: float | None = None
@@ -48,26 +48,11 @@ class OpenAIModelConfig(Config):
     base_url: str | None = None
 
 
-class OpenAIModelOutputs(Outputs):
-    """Serializable outputs from OpenAI model resource.
-
-    Attributes:
-        model_id: The configured model identifier.
-    """
-
-    model_id: str
-
-
-class OpenAIModel(Resource[OpenAIModelConfig, OpenAIModelOutputs]):
+class OpenAIModel(Model[OpenAIModelConfig, OpenAIChat]):
     """OpenAI model resource wrapping Agno's OpenAIChat.
 
     This resource is stateless - it just wraps configuration. The actual
     OpenAIChat instance is created on-demand via the model() method.
-
-    Lifecycle:
-        - on_create: Return serializable metadata
-        - on_update: Return updated metadata
-        - on_delete: No-op (stateless)
 
     Example usage with Agno Agent:
         ```python
@@ -81,7 +66,6 @@ class OpenAIModel(Resource[OpenAIModelConfig, OpenAIModelOutputs]):
         ```
     """
 
-    provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "models/openai"
 
     def model(self) -> OpenAIChat:
@@ -91,25 +75,3 @@ class OpenAIModel(Resource[OpenAIModelConfig, OpenAIModelOutputs]):
         the actual SDK object.
         """
         return OpenAIChat(**self.config.model_dump(exclude_none=True))
-
-    async def on_create(self) -> OpenAIModelOutputs:
-        """Create returns serializable metadata only.
-
-        Returns:
-            OpenAIModelOutputs containing model_id.
-        """
-        return OpenAIModelOutputs(model_id=self.config.id)
-
-    async def on_update(self, previous_config: OpenAIModelConfig) -> OpenAIModelOutputs:
-        """Update returns serializable metadata.
-
-        Args:
-            previous_config: The previous configuration before update.
-
-        Returns:
-            OpenAIModelOutputs containing model_id.
-        """
-        return OpenAIModelOutputs(model_id=self.config.id)
-
-    async def on_delete(self) -> None:
-        """Delete is a no-op since this resource is stateless."""

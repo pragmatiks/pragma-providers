@@ -6,9 +6,9 @@ from agno_provider import (
     Agent,
     AgentConfig,
     AgentOutputs,
+    ModelOutputs,
     OpenAIModel,
     OpenAIModelConfig,
-    OpenAIModelOutputs,
     agno,
 )
 
@@ -46,5 +46,5 @@ def test_openai_model_config_model() -> None:
 
 
 def test_openai_model_outputs_model() -> None:
-    """OpenAIModelOutputs can be exported."""
-    assert OpenAIModelOutputs is not None
+    """ModelOutputs can be exported."""
+    assert ModelOutputs is not None

@@ -9,7 +9,7 @@ from pragma_sdk.provider import ProviderHarness
 from agno_provider import (
     AnthropicModel,
     AnthropicModelConfig,
-    AnthropicModelOutputs,
+    ModelOutputs,
 )
 
 
@@ -32,7 +32,6 @@ async def test_create_returns_serializable_outputs(harness: ProviderHarness) -> 
     assert result.outputs is not None
     assert result.outputs.model_id == "claude-sonnet-4-20250514"
 
-    # Outputs should be serializable (no Claude instance)
     assert not hasattr(result.outputs, "model")
 
 
@@ -92,7 +91,6 @@ async def test_model_method_omits_none_optional_params(harness: ProviderHarness)
     assert result.success
     claude = result.resource.model()
 
-    # These should be None/unset since we didn't provide them
     assert claude.temperature is None
     assert claude.top_p is None
     assert claude.top_k is None
@@ -115,7 +113,7 @@ async def test_update_returns_serializable_outputs(harness: ProviderHarness) -> 
         name="claude-sonnet",
         config=current,
         previous_config=previous,
-        current_outputs=AnthropicModelOutputs(model_id="claude-3-5-sonnet-20241022"),
+        current_outputs=ModelOutputs(model_id="claude-3-5-sonnet-20241022"),
     )
 
     assert result.success
@@ -139,7 +137,7 @@ async def test_update_model_method_uses_new_config(harness: ProviderHarness) -> 
         name="claude-sonnet",
         config=current,
         previous_config=previous,
-        current_outputs=AnthropicModelOutputs(model_id="claude-3-5-sonnet-20241022"),
+        current_outputs=ModelOutputs(model_id="claude-3-5-sonnet-20241022"),
     )
 
     assert result.success
@@ -187,10 +185,9 @@ def test_config_defaults() -> None:
 
 def test_outputs_are_serializable() -> None:
     """Outputs contain only serializable data."""
-    outputs = AnthropicModelOutputs(model_id="claude-sonnet-4-20250514")
+    outputs = ModelOutputs(model_id="claude-sonnet-4-20250514")
 
     assert outputs.model_id == "claude-sonnet-4-20250514"
 
-    # Should be JSON serializable
     serialized = outputs.model_dump_json()
     assert "claude-sonnet-4-20250514" in serialized

@@ -12,16 +12,20 @@ from agno_provider.resources import (
     AgentOutputs,
     AnthropicModel,
     AnthropicModelConfig,
-    AnthropicModelOutputs,
     DbPostgres,
     DbPostgresConfig,
     DbPostgresOutputs,
     EmbedderOpenAI,
     EmbedderOpenAIConfig,
     EmbedderOpenAIOutputs,
+    MemoryManager,
+    MemoryManagerConfig,
+    MemoryManagerOutputs,
+    Model,
+    ModelConfig,
+    ModelOutputs,
     OpenAIModel,
     OpenAIModelConfig,
-    OpenAIModelOutputs,
     Prompt,
     PromptConfig,
     PromptOutputs,
@@ -42,6 +46,7 @@ agno = Provider(name="agno")
 agno.resource("agent")(Agent)
 agno.resource("db/postgres")(DbPostgres)
 agno.resource("knowledge/embedder/openai")(EmbedderOpenAI)
+agno.resource("memory/manager")(MemoryManager)
 agno.resource("models/anthropic")(AnthropicModel)
 agno.resource("models/openai")(OpenAIModel)
 agno.resource("prompt")(Prompt)
@@ -56,16 +61,20 @@ __all__ = [
     "AgentOutputs",
     "AnthropicModel",
     "AnthropicModelConfig",
-    "AnthropicModelOutputs",
     "DbPostgres",
     "DbPostgresConfig",
     "DbPostgresOutputs",
     "EmbedderOpenAI",
     "EmbedderOpenAIConfig",
     "EmbedderOpenAIOutputs",
+    "MemoryManager",
+    "MemoryManagerConfig",
+    "MemoryManagerOutputs",
+    "Model",
+    "ModelConfig",
+    "ModelOutputs",
     "OpenAIModel",
     "OpenAIModelConfig",
-    "OpenAIModelOutputs",
     "Prompt",
     "PromptConfig",
     "PromptOutputs",
