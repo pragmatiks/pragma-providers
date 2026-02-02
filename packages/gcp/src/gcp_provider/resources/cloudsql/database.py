@@ -150,6 +150,6 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             database_name=self.config.database_name,
             instance_name=inst.instance_name,
             host=host,
-            port=db_port,
+            port=int(db_port),
             url=f"{db_type}://{host}:{db_port}/{self.config.database_name}",
         )
