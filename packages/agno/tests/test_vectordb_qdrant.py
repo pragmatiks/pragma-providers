@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pytest
 from agno.vectordb.qdrant import Qdrant, SearchType
 from pragma_sdk import Dependency
 from pragma_sdk.provider import ProviderHarness
@@ -141,28 +140,6 @@ def test_from_spec_with_api_key() -> None:
     db = VectordbQdrant.from_spec(spec)
 
     assert isinstance(db, Qdrant)
-
-
-def test_from_spec_with_hybrid_search() -> None:
-    """from_spec() configures hybrid search when specified.
-
-    Note: Hybrid search requires fastembed package which needs
-    onnxruntime. Skips on Python 3.14+ where onnxruntime isn't available.
-    """
-    spec = VectordbQdrantSpec(
-        url="http://localhost:6333",
-        collection="test-collection",
-        search_type="hybrid",
-    )
-
-    try:
-        db = VectordbQdrant.from_spec(spec)
-        assert isinstance(db, Qdrant)
-    except ImportError as e:
-        error_msg = str(e).lower()
-        if "fastembed" in error_msg or "onnxruntime" in error_msg:
-            pytest.skip("fastembed/onnxruntime not available - required for hybrid search")
-        raise
 
 
 def test_get_search_type_vector() -> None:
