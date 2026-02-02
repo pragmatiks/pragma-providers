@@ -110,7 +110,7 @@ jobs:
               VERSION=$(cz version --project)
               echo "Bumped $provider to v$VERSION"
               echo "${provider}_version=$VERSION" >> $GITHUB_OUTPUT
-              uv build --package pragmatiks-${provider}-provider
+              uv build --package pragmatiks-${provider}-provider --out-dir ../../dist
             else
               if grep -qE "No commits found|is not a bump" bump_output.txt; then
                 echo "No bump needed for $provider"
@@ -233,7 +233,7 @@ jobs:
             echo "Bumped kubernetes to v$VERSION"
             echo "kubernetes_version=$VERSION" >> $GITHUB_OUTPUT
 
-            uv build --package pragmatiks-kubernetes-provider
+            uv build --package pragmatiks-kubernetes-provider --out-dir ../../dist
           else
             if grep -qE "No commits found|is not a bump" bump_output.txt; then
               echo "No bump needed for kubernetes"
@@ -353,7 +353,7 @@ jobs:
             echo "Bumped agno to v$VERSION"
             echo "agno_version=$VERSION" >> $GITHUB_OUTPUT
 
-            uv build --package pragmatiks-agno-provider
+            uv build --package pragmatiks-agno-provider --out-dir ../../dist
           else
             if grep -qE "No commits found|is not a bump" bump_output.txt; then
               echo "No bump needed for agno"
