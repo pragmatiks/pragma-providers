@@ -1,3 +1,88 @@
+## gcp-v0.83.0 (2026-02-02)
+
+### Feat
+
+- **agno**: rebuild agent, add team and deployment resources (#24)
+
+### Fix
+
+- **agno**: rewrite agent tests for current AgentConfig implementation
+- **gcp**: convert db_port to int in CloudSQL database outputs
+- **ci**: use PyPI API for availability check instead of pip index
+
+## gcp-v0.77.0 (2026-02-02)
+
+### Feat
+
+- **kubernetes**: add Deployment resource (#25)
+- **agno**: add memory/manager resource and abstract Model interface (#22)
+- **agno**: implement knowledge/embedder/openai resource (#21)
+- **agno**: add vectordb/qdrant resource for Qdrant vector store (#20)
+- **agno**: add tools/mcp resource for MCP server integration
+- **agno**: add tools/websearch resource wrapping DuckDuckGoTools (#19)
+- **agno**: add prompt resource for reusable instruction templates (#18)
+- **agno**: add db/postgres resource for agent storage (#17)
+- **gcp**: add cloudsql resource for Cloud SQL instances (#14)
+- **agno**: add models/openai resource (#13)
+- **agno**: add models/anthropic resource (#12)
+- **qdrant**: add LoadBalancer exposure and API key authentication (#11)
+
+### Fix
+
+- **ci**: output builds to workspace dist directory
+- **ci**: use env vars instead of dynamic expressions in publish workflow
+- **gcp**: add defaults for optional outputs to ensure serialization
+- **gcp**: use Dependency.resolve() for instance access (#16)
+
+### Refactor
+
+- **agno**: DRY refactor with base classes and spec pattern (#23)
+- **agno**: use pytest-mock MockType instead of Any for mock typing
+- **agno**: move mock_mcp_tools fixture to conftest.py
+
+## gcp-v0.66.0 (2026-01-29)
+
+### Feat
+
+- **kubernetes**: add kubernetes provider with lightkube
+
+## gcp-v0.55.0 (2026-01-29)
+
+### Feat
+
+- **gcp**: add logs() and health() methods to GKE resource
+
+## gcp-v0.44.0 (2026-01-29)
+
+### Feat
+
+- **gcp**: rename region to location for zonal cluster support
+
+## gcp-v0.33.0 (2026-01-29)
+
+### Feat
+
+- **gcp**: add standard cluster support to GKE resource
+- **agno**: add agent resource for deploying AI agents to GKE (#9)
+- **qdrant**: add database resource that deploys to GKE via Helm (#8)
+- **gcp**: add GKE Autopilot cluster resource (#7)
+- **docling**: add docling provider for document parsing (#6)
+- **qdrant**: add qdrant provider with collection resource (#5)
+- **openai**: add embeddings resource for text embedding generation (#4)
+- add provider template for pragma providers init (#3)
+- **openai**: add openai provider with chat_completions resource
+- **anthropic**: add anthropic provider with messages resource (#1)
+
+### Fix
+
+- **ci**: use GitHub App token for push to bypass branch protection
+
+## gcp-v0.10.0 (2026-01-18)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v0.6.0
+
 ## gcp-v0.82.0 (2026-02-02)
 
 ### Feat
