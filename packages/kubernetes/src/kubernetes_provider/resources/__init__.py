@@ -8,6 +8,11 @@ from kubernetes_provider.resources.configmap import (
     ConfigMapConfig,
     ConfigMapOutputs,
 )
+from kubernetes_provider.resources.deployment import (
+    Deployment,
+    DeploymentConfig,
+    DeploymentOutputs,
+)
 from kubernetes_provider.resources.secret import (
     Secret,
     SecretConfig,
@@ -29,6 +34,9 @@ __all__ = [
     "ConfigMap",
     "ConfigMapConfig",
     "ConfigMapOutputs",
+    "Deployment",
+    "DeploymentConfig",
+    "DeploymentOutputs",
     "Secret",
     "SecretConfig",
     "SecretOutputs",

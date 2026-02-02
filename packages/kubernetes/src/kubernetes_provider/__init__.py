@@ -11,6 +11,9 @@ from kubernetes_provider.resources import (
     ConfigMap,
     ConfigMapConfig,
     ConfigMapOutputs,
+    Deployment,
+    DeploymentConfig,
+    DeploymentOutputs,
     Secret,
     SecretConfig,
     SecretOutputs,
@@ -25,6 +28,7 @@ from kubernetes_provider.resources import (
 
 kubernetes = Provider(name="kubernetes")
 
+kubernetes.resource("deployment")(Deployment)
 kubernetes.resource("service")(Service)
 kubernetes.resource("configmap")(ConfigMap)
 kubernetes.resource("secret")(Secret)
@@ -36,6 +40,9 @@ __all__ = [
     "ConfigMap",
     "ConfigMapConfig",
     "ConfigMapOutputs",
+    "Deployment",
+    "DeploymentConfig",
+    "DeploymentOutputs",
     "Secret",
     "SecretConfig",
     "SecretOutputs",
