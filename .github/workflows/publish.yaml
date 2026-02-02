@@ -212,15 +212,19 @@ jobs:
       - name: Wait for PyPI availability
         if: needs.publish-tier-1.outputs.gcp_version != ''
         run: |
-          echo "Waiting for gcp-provider v${{ needs.publish-tier-1.outputs.gcp_version }} on PyPI..."
+          PACKAGE="pragmatiks-gcp-provider"
+          VERSION="${{ needs.publish-tier-1.outputs.gcp_version }}"
+          echo "Waiting for $PACKAGE v$VERSION on PyPI..."
           for i in {1..30}; do
-            if pip index versions pragmatiks-gcp-provider 2>/dev/null | grep -q "${{ needs.publish-tier-1.outputs.gcp_version }}"; then
+            if curl -sf "https://pypi.org/pypi/$PACKAGE/$VERSION/json" > /dev/null; then
               echo "Package available on PyPI"
-              break
+              exit 0
             fi
             echo "Attempt $i: Package not yet available, waiting 10s..."
             sleep 10
           done
+          echo "Timed out waiting for package on PyPI"
+          exit 1
 
       - name: Bump and build kubernetes
         id: bump
@@ -316,30 +320,30 @@ jobs:
 
       - name: Wait for PyPI availability
         run: |
-          # Wait for kubernetes if it was just published
-          if [ -n "${{ needs.publish-tier-2.outputs.kubernetes_version }}" ]; then
-            echo "Waiting for kubernetes-provider v${{ needs.publish-tier-2.outputs.kubernetes_version }} on PyPI..."
+          wait_for_package() {
+            local package=$1
+            local version=$2
+            echo "Waiting for $package v$version on PyPI..."
             for i in {1..30}; do
-              if pip index versions pragmatiks-kubernetes-provider 2>/dev/null | grep -q "${{ needs.publish-tier-2.outputs.kubernetes_version }}"; then
+              if curl -sf "https://pypi.org/pypi/$package/$version/json" > /dev/null; then
                 echo "Package available on PyPI"
-                break
+                return 0
               fi
               echo "Attempt $i: Package not yet available, waiting 10s..."
               sleep 10
             done
+            echo "Timed out waiting for $package v$version on PyPI"
+            return 1
+          }
+
+          # Wait for kubernetes if it was just published
+          if [ -n "${{ needs.publish-tier-2.outputs.kubernetes_version }}" ]; then
+            wait_for_package pragmatiks-kubernetes-provider "${{ needs.publish-tier-2.outputs.kubernetes_version }}"
           fi
 
           # Wait for gcp if it was just published
           if [ -n "${{ needs.publish-tier-1.outputs.gcp_version }}" ]; then
-            echo "Waiting for gcp-provider v${{ needs.publish-tier-1.outputs.gcp_version }} on PyPI..."
-            for i in {1..30}; do
-              if pip index versions pragmatiks-gcp-provider 2>/dev/null | grep -q "${{ needs.publish-tier-1.outputs.gcp_version }}"; then
-                echo "Package available on PyPI"
-                break
-              fi
-              echo "Attempt $i: Package not yet available, waiting 10s..."
-              sleep 10
-            done
+            wait_for_package pragmatiks-gcp-provider "${{ needs.publish-tier-1.outputs.gcp_version }}"
           fi
 
       - name: Bump and build agno
