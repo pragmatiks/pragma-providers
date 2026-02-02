@@ -231,8 +231,14 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
     def _build_container(self, config: ContainerConfig) -> Container:
         """Build container from config.
 
+        Args:
+            config: Container configuration.
+
         Returns:
             Kubernetes Container object.
+
+        Raises:
+            ValueError: If env_from_secret has invalid format (missing period).
         """
         container = Container(
             name=config.name,
@@ -256,7 +262,13 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
         if config.env_from_secret:
             for env_name, secret_ref in config.env_from_secret.items():
-                secret_name, key = secret_ref.rsplit(".", 1)
+                parts = secret_ref.rsplit(".", 1)
+
+                if len(parts) != 2:
+                    msg = f"Invalid secret reference '{secret_ref}': expected 'secret_name.key'"
+                    raise ValueError(msg)
+
+                secret_name, key = parts
                 env_vars.append(
                     EnvVar(
                         name=env_name,
