@@ -326,6 +326,11 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
     def _get_pip_dependencies(self) -> list[str]:
         """Aggregate pip dependencies from all members and team dependencies.
 
+        Note: This method accesses dependency._resolved directly instead of using
+        await resolve(). This is intentional because _build_spec() is always called
+        first (in _build_outputs), which resolves all dependencies. This method is
+        synchronous and simply reads the already-resolved values.
+
         Returns:
             Deduplicated list of pip packages required.
         """

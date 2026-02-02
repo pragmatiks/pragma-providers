@@ -8,10 +8,10 @@ from typing import ClassVar, Literal
 
 from gcp_provider import GKE
 from kubernetes_provider import (
-    Deployment as K8sDeployment,
+    Deployment as KubernetesDeployment,
 )
 from kubernetes_provider import (
-    DeploymentConfig as K8sDeploymentConfig,
+    DeploymentConfig as KubernetesDeploymentConfig,
 )
 from kubernetes_provider import (
     Service,
@@ -152,8 +152,8 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
           replicas: 2
 
     Lifecycle:
-        - on_create: Create child K8s Deployment + Service, wait for ready
-        - on_update: Update child K8s resources, wait for ready
+        - on_create: Create child Kubernetes Deployment + Service, wait for ready
+        - on_update: Update child Kubernetes resources, wait for ready
         - on_delete: Child resources cascade deleted via owner_references
     """
 
@@ -177,7 +177,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         return f"agno-{self.name}"
 
     def _labels(self) -> dict[str, str]:
-        """Get labels for K8s resources.
+        """Get labels for Kubernetes resources.
 
         Returns:
             Label dict for selecting pods.
@@ -219,11 +219,11 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         msg = "Neither agent nor team dependency is set"
         raise RuntimeError(msg)
 
-    def _build_k8s_deployment(
+    def _build_kubernetes_deployment(
         self,
         spec_type: Literal["agent", "team"],
         spec: AgentSpec | TeamSpec,
-    ) -> K8sDeployment:
+    ) -> KubernetesDeployment:
         """Build kubernetes/deployment child resource.
 
         Args:
@@ -266,7 +266,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             ),
         )
 
-        config = K8sDeploymentConfig(
+        config = KubernetesDeploymentConfig(
             cluster=self.config.cluster,
             namespace=self.config.namespace,
             replicas=self.config.replicas,
@@ -276,12 +276,12 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             strategy="RollingUpdate",
         )
 
-        return K8sDeployment(
+        return KubernetesDeployment(
             name=self._runner_name(),
             config=config,
         )
 
-    def _build_k8s_service(self) -> Service:
+    def _build_kubernetes_service(self) -> Service:
         """Build kubernetes/service child resource (ClusterIP).
 
         Returns:
@@ -304,7 +304,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             config=config,
         )
 
-    def _build_k8s_deployment_for_delete(self) -> K8sDeployment:
+    def _build_kubernetes_deployment_for_delete(self) -> KubernetesDeployment:
         """Build minimal kubernetes/deployment for deletion.
 
         Creates a deployment resource with just enough config to call on_delete().
@@ -320,7 +320,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             image=self.config.image,
         )
 
-        config = K8sDeploymentConfig(
+        config = KubernetesDeploymentConfig(
             cluster=self.config.cluster,
             namespace=self.config.namespace,
             replicas=1,
@@ -328,7 +328,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             containers=[container],
         )
 
-        return K8sDeployment(
+        return KubernetesDeployment(
             name=self._runner_name(),
             config=config,
         )
@@ -372,7 +372,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             ready=ready,
         )
 
-    async def _apply_k8s_resources(
+    async def _apply_kubernetes_resources(
         self,
         spec_type: Literal["agent", "team"],
         spec: AgentSpec | TeamSpec,
@@ -383,22 +383,22 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             spec_type: Type of spec ("agent" or "team").
             spec: The agent or team spec to deploy.
         """
-        k8s_deployment = self._build_k8s_deployment(spec_type, spec)
-        await k8s_deployment.apply()
-        await k8s_deployment.wait_ready(timeout=300.0)
+        kubernetes_deployment = self._build_kubernetes_deployment(spec_type, spec)
+        await kubernetes_deployment.apply()
+        await kubernetes_deployment.wait_ready(timeout=300.0)
 
-        k8s_service = self._build_k8s_service()
-        await k8s_service.apply()
-        await k8s_service.wait_ready(timeout=60.0)
+        kubernetes_service = self._build_kubernetes_service()
+        await kubernetes_service.apply()
+        await kubernetes_service.wait_ready(timeout=60.0)
 
-    async def _k8s_deployment(self) -> K8sDeployment:
+    async def _kubernetes_deployment(self) -> KubernetesDeployment:
         """Get kubernetes deployment resource for current spec.
 
         Returns:
             Kubernetes Deployment resource configured for current agent/team.
         """
         spec_type, spec = await self._get_spec_info()
-        return self._build_k8s_deployment(spec_type, spec)
+        return self._build_kubernetes_deployment(spec_type, spec)
 
     async def on_create(self) -> RunnerOutputs:
         """Create Kubernetes Deployment + Service and wait for ready.
@@ -407,7 +407,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             RunnerOutputs with runner details.
         """
         spec_type, spec = await self._get_spec_info()
-        await self._apply_k8s_resources(spec_type, spec)
+        await self._apply_kubernetes_resources(spec_type, spec)
 
         return self._build_outputs(spec, ready=True)
 
@@ -432,7 +432,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             raise ValueError(msg)
 
         spec_type, spec = await self._get_spec_info()
-        await self._apply_k8s_resources(spec_type, spec)
+        await self._apply_kubernetes_resources(spec_type, spec)
 
         return self._build_outputs(spec, ready=True)
 
@@ -442,11 +442,11 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         Explicitly deletes child Kubernetes resources. Once cascade delete
         via owner_references is implemented, this can be simplified.
         """
-        k8s_service = self._build_k8s_service()
-        await k8s_service.on_delete()
+        kubernetes_service = self._build_kubernetes_service()
+        await kubernetes_service.on_delete()
 
-        k8s_deployment = self._build_k8s_deployment_for_delete()
-        await k8s_deployment.on_delete()
+        kubernetes_deployment = self._build_kubernetes_deployment_for_delete()
+        await kubernetes_deployment.on_delete()
 
     async def health(self) -> HealthStatus:
         """Check Runner health by delegating to child kubernetes/deployment.
@@ -454,8 +454,8 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         Returns:
             HealthStatus indicating healthy/degraded/unhealthy.
         """
-        k8s_deployment = await self._k8s_deployment()
-        return await k8s_deployment.health()
+        kubernetes_deployment = await self._kubernetes_deployment()
+        return await kubernetes_deployment.health()
 
     async def logs(
         self,
@@ -471,7 +471,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         Yields:
             LogEntry for each log line from pods.
         """
-        k8s_deployment = await self._k8s_deployment()
+        kubernetes_deployment = await self._kubernetes_deployment()
 
-        async for entry in k8s_deployment.logs(since=since, tail=tail):
+        async for entry in kubernetes_deployment.logs(since=since, tail=tail):
             yield entry
