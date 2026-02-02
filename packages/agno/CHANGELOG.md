@@ -1,3 +1,10 @@
+## agno-v0.38.0 (2026-02-02)
+
+### Fix
+
+- **agno**: rewrite agent tests for current AgentConfig implementation
+- **gcp**: convert db_port to int in CloudSQL database outputs
+
 ## agno-v0.37.0 (2026-02-02)
 
 ### Fix
