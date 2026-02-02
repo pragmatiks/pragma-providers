@@ -1,3 +1,13 @@
+## agno-v0.15.0 (2026-02-02)
+
+### Feat
+
+- **agno**: rebuild agent, add team and deployment resources (#24)
+
+### Fix
+
+- **ci**: use PyPI API for availability check instead of pip index
+
 ## agno-v0.14.0 (2026-02-02)
 
 ### Feat
