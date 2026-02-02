@@ -5,11 +5,22 @@ on:
     branches:
       - main
 
+# Provider dependency chain (publish in this order):
+# 1. gcp (no internal deps)
+# 2. qdrant (no internal deps) - can be parallel with gcp
+# 3. kubernetes (depends on gcp)
+# 4. agno (depends on gcp, kubernetes)
+#
+# We publish each tier sequentially to ensure dependencies are available on PyPI.
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      providers: ${{ steps.changes.outputs.providers }}
+      gcp: ${{ steps.changes.outputs.gcp }}
+      qdrant: ${{ steps.changes.outputs.qdrant }}
+      kubernetes: ${{ steps.changes.outputs.kubernetes }}
+      agno: ${{ steps.changes.outputs.agno }}
       has_changes: ${{ steps.changes.outputs.has_changes }}
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +31,6 @@ jobs:
         id: changes
         run: |
           # Get changed files since last provider tag or last commit
-          # Look for any provider tag (gcp-v*, aws-v*, etc.)
           LAST_TAG=$(git tag -l "*-v*" --sort=-version:refname | head -1 || echo "")
           if [ -n "$LAST_TAG" ]; then
             CHANGED_FILES=$(git diff --name-only "$LAST_TAG"..HEAD)
@@ -28,26 +38,33 @@ jobs:
             CHANGED_FILES=$(git diff --name-only HEAD~1..HEAD 2>/dev/null || git ls-files)
           fi
 
-          # Extract unique provider directories that changed
-          PROVIDERS=$(echo "$CHANGED_FILES" | grep "^packages/" | cut -d/ -f2 | sort -u | tr '\n' ' ')
+          # Check each provider individually
+          HAS_CHANGES=false
 
-          if [ -n "$PROVIDERS" ]; then
-            echo "providers=$PROVIDERS" >> $GITHUB_OUTPUT
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "Changed providers: $PROVIDERS"
-          else
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No provider changes detected"
-          fi
+          for provider in gcp qdrant kubernetes agno; do
+            if echo "$CHANGED_FILES" | grep -q "^packages/$provider/"; then
+              echo "$provider=true" >> $GITHUB_OUTPUT
+              echo "Changed: $provider"
+              HAS_CHANGES=true
+            else
+              echo "$provider=false" >> $GITHUB_OUTPUT
+            fi
+          done
 
-  bump-and-publish:
+          echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
+
+  # Tier 1: Base providers with no internal dependencies
+  publish-tier-1:
     needs: detect-changes
-    if: needs.detect-changes.outputs.has_changes == 'true'
+    if: needs.detect-changes.outputs.gcp == 'true' || needs.detect-changes.outputs.qdrant == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       contents: write
       id-token: write
+    outputs:
+      gcp_version: ${{ steps.bump.outputs.gcp_version }}
+      qdrant_version: ${{ steps.bump.outputs.qdrant_version }}
 
     steps:
       - name: Generate GitHub App token
@@ -78,22 +95,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump and build changed providers
+      - name: Bump and build tier 1 providers
         id: bump
         run: |
-          VERSIONS=""
+          for provider in gcp qdrant; do
+            CHANGED="${{ needs.detect-changes.outputs[provider] }}"
+            if [ "$CHANGED" != "true" ]; then
+              continue
+            fi
 
-          for provider in ${{ needs.detect-changes.outputs.providers }}; do
             echo "::group::Processing $provider"
             cd packages/$provider
 
-            # Try to bump version based on conventional commits
             if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
               VERSION=$(cz version --project)
               echo "Bumped $provider to v$VERSION"
-              VERSIONS="$VERSIONS $provider:$VERSION"
+              echo "${provider}_version=$VERSION" >> $GITHUB_OUTPUT
 
-              # Build the package (outputs to workspace root dist/)
               uv build --package pragmatiks-${provider}-provider
             else
               if grep -qE "No commits found|is not a bump" bump_output.txt; then
@@ -108,37 +126,250 @@ jobs:
             echo "::endgroup::"
           done
 
-          echo "versions=$VERSIONS" >> $GITHUB_OUTPUT
-
-          if [ -n "$VERSIONS" ]; then
-            echo "has_releases=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_releases=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Push version bumps and tags
-        if: steps.bump.outputs.has_releases == 'true'
-        run: |
-          git push origin main --follow-tags
+        run: git push origin main --follow-tags || echo "Nothing to push"
 
       - name: Create GitHub Releases
-        if: steps.bump.outputs.has_releases == 'true'
         run: |
-          for entry in ${{ steps.bump.outputs.versions }}; do
-            provider=$(echo $entry | cut -d: -f1)
-            version=$(echo $entry | cut -d: -f2)
-
-            # Find the built packages for this provider in the workspace dist/
-            gh release create "${provider}-v${version}" \
-              --title "pragmatiks-${provider}-provider v${version}" \
-              --generate-notes \
-              dist/pragmatiks_${provider}_provider-${version}* || echo "Release may already exist"
+          for provider in gcp qdrant; do
+            VERSION="${{ steps.bump.outputs[format('{0}_version', provider)] }}"
+            if [ -n "$VERSION" ]; then
+              gh release create "${provider}-v${VERSION}" \
+                --title "pragmatiks-${provider}-provider v${VERSION}" \
+                --generate-notes \
+                dist/pragmatiks_${provider}_provider-${VERSION}* || echo "Release may already exist"
+            fi
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to PyPI
-        if: steps.bump.outputs.has_releases == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
+
+  # Tier 2: Providers that depend on tier 1
+  publish-tier-2:
+    needs: [detect-changes, publish-tier-1]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.kubernetes == 'true' &&
+      (needs.publish-tier-1.result == 'success' || needs.publish-tier-1.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write
+      id-token: write
+    outputs:
+      kubernetes_version: ${{ steps.bump.outputs.kubernetes_version }}
+
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Pull latest changes
+        run: git pull origin main
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install commitizen
+        run: uv tool install commitizen
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Wait for PyPI availability
+        if: needs.publish-tier-1.outputs.gcp_version != ''
+        run: |
+          echo "Waiting for gcp-provider v${{ needs.publish-tier-1.outputs.gcp_version }} on PyPI..."
+          for i in {1..30}; do
+            if pip index versions pragmatiks-gcp-provider 2>/dev/null | grep -q "${{ needs.publish-tier-1.outputs.gcp_version }}"; then
+              echo "Package available on PyPI"
+              break
+            fi
+            echo "Attempt $i: Package not yet available, waiting 10s..."
+            sleep 10
+          done
+
+      - name: Bump and build kubernetes
+        id: bump
+        run: |
+          echo "::group::Processing kubernetes"
+          cd packages/kubernetes
+
+          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+            VERSION=$(cz version --project)
+            echo "Bumped kubernetes to v$VERSION"
+            echo "kubernetes_version=$VERSION" >> $GITHUB_OUTPUT
+
+            uv build --package pragmatiks-kubernetes-provider
+          else
+            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+              echo "No bump needed for kubernetes"
+            else
+              cat bump_output.txt
+              exit 1
+            fi
+          fi
+
+          cd ../..
+          echo "::endgroup::"
+
+      - name: Push version bumps and tags
+        run: git push origin main --follow-tags || echo "Nothing to push"
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.kubernetes_version != ''
+        run: |
+          VERSION="${{ steps.bump.outputs.kubernetes_version }}"
+          gh release create "kubernetes-v${VERSION}" \
+            --title "pragmatiks-kubernetes-provider v${VERSION}" \
+            --generate-notes \
+            dist/pragmatiks_kubernetes_provider-${VERSION}* || echo "Release may already exist"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to PyPI
+        if: steps.bump.outputs.kubernetes_version != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
+
+  # Tier 3: Providers that depend on tier 2
+  publish-tier-3:
+    needs: [detect-changes, publish-tier-1, publish-tier-2]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.agno == 'true' &&
+      (needs.publish-tier-1.result == 'success' || needs.publish-tier-1.result == 'skipped') &&
+      (needs.publish-tier-2.result == 'success' || needs.publish-tier-2.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Pull latest changes
+        run: git pull origin main
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install commitizen
+        run: uv tool install commitizen
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Wait for PyPI availability
+        run: |
+          # Wait for kubernetes if it was just published
+          if [ -n "${{ needs.publish-tier-2.outputs.kubernetes_version }}" ]; then
+            echo "Waiting for kubernetes-provider v${{ needs.publish-tier-2.outputs.kubernetes_version }} on PyPI..."
+            for i in {1..30}; do
+              if pip index versions pragmatiks-kubernetes-provider 2>/dev/null | grep -q "${{ needs.publish-tier-2.outputs.kubernetes_version }}"; then
+                echo "Package available on PyPI"
+                break
+              fi
+              echo "Attempt $i: Package not yet available, waiting 10s..."
+              sleep 10
+            done
+          fi
+
+          # Wait for gcp if it was just published
+          if [ -n "${{ needs.publish-tier-1.outputs.gcp_version }}" ]; then
+            echo "Waiting for gcp-provider v${{ needs.publish-tier-1.outputs.gcp_version }} on PyPI..."
+            for i in {1..30}; do
+              if pip index versions pragmatiks-gcp-provider 2>/dev/null | grep -q "${{ needs.publish-tier-1.outputs.gcp_version }}"; then
+                echo "Package available on PyPI"
+                break
+              fi
+              echo "Attempt $i: Package not yet available, waiting 10s..."
+              sleep 10
+            done
+          fi
+
+      - name: Bump and build agno
+        id: bump
+        run: |
+          echo "::group::Processing agno"
+          cd packages/agno
+
+          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+            VERSION=$(cz version --project)
+            echo "Bumped agno to v$VERSION"
+            echo "agno_version=$VERSION" >> $GITHUB_OUTPUT
+
+            uv build --package pragmatiks-agno-provider
+          else
+            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+              echo "No bump needed for agno"
+            else
+              cat bump_output.txt
+              exit 1
+            fi
+          fi
+
+          cd ../..
+          echo "::endgroup::"
+
+      - name: Push version bumps and tags
+        run: git push origin main --follow-tags || echo "Nothing to push"
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.agno_version != ''
+        run: |
+          VERSION="${{ steps.bump.outputs.agno_version }}"
+          gh release create "agno-v${VERSION}" \
+            --title "pragmatiks-agno-provider v${VERSION}" \
+            --generate-notes \
+            dist/pragmatiks_agno_provider-${VERSION}* || echo "Release may already exist"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to PyPI
+        if: steps.bump.outputs.agno_version != ''
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
