@@ -1,3 +1,9 @@
+## gcp-v0.89.0 (2026-02-05)
+
+### Fix
+
+- **agno**: runtime dependencies and import fix (#27)
+
 ## gcp-v0.88.1 (2026-02-05)
 
 ### Fix
