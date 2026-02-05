@@ -1,3 +1,9 @@
+## agno-v0.50.0 (2026-02-05)
+
+### Fix
+
+- **agno**: runtime dependencies and import fix (#27)
+
 ## agno-v0.49.0 (2026-02-05)
 
 ### Fix
