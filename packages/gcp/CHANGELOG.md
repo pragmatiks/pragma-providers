@@ -1,3 +1,51 @@
+## gcp-v0.97.0 (2026-02-05)
+
+### Fix
+
+- **agno**: runtime dependencies and import fix (#27)
+
+## gcp-v0.88.0 (2026-02-02)
+
+### Feat
+
+- **agno**: rebuild agent, add team and deployment resources (#24)
+
+### Fix
+
+- **agno**: rewrite agent tests for current AgentConfig implementation
+- **gcp**: convert db_port to int in CloudSQL database outputs
+- **ci**: use PyPI API for availability check instead of pip index
+
+## gcp-v0.77.0 (2026-02-02)
+
+### Feat
+
+- **kubernetes**: add Deployment resource (#25)
+- **agno**: add memory/manager resource and abstract Model interface (#22)
+- **agno**: implement knowledge/embedder/openai resource (#21)
+- **agno**: add vectordb/qdrant resource for Qdrant vector store (#20)
+- **agno**: add tools/mcp resource for MCP server integration
+- **agno**: add tools/websearch resource wrapping DuckDuckGoTools (#19)
+- **agno**: add prompt resource for reusable instruction templates (#18)
+- **agno**: add db/postgres resource for agent storage (#17)
+- **gcp**: add cloudsql resource for Cloud SQL instances (#14)
+- **agno**: add models/openai resource (#13)
+- **agno**: add models/anthropic resource (#12)
+- **qdrant**: add LoadBalancer exposure and API key authentication (#11)
+
+### Fix
+
+- **ci**: output builds to workspace dist directory
+- **ci**: use env vars instead of dynamic expressions in publish workflow
+- **gcp**: add defaults for optional outputs to ensure serialization
+- **gcp**: use Dependency.resolve() for instance access (#16)
+
+### Refactor
+
+- **agno**: DRY refactor with base classes and spec pattern (#23)
+- **agno**: use pytest-mock MockType instead of Any for mock typing
+- **agno**: move mock_mcp_tools fixture to conftest.py
+
 ## gcp-v0.96.0 (2026-02-05)
 
 ### Fix
