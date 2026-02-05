@@ -11,6 +11,7 @@ dependencies = [
     "agno[anthropic,openai,postgres,qdrant]>=2.4.0",
     "sqlalchemy>=2.0.0",
     "mcp>=1.26.0",
+    "ddgs>=8.0.0",
 ]
 
 authors = [
@@ -19,7 +20,6 @@ authors = [
 
 [dependency-groups]
 dev = [
-    "ddgs>=8.0.0",
     "psycopg[binary]>=3.0.0",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",

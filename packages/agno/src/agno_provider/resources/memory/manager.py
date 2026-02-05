@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from agno.memory.manager import MemoryManager as AgnoMemoryManager
 from pragma_sdk import Config, Dependency, Outputs
@@ -13,15 +13,11 @@ from agno_provider.resources.models.anthropic import (
     AnthropicModelOutputs,
     AnthropicModelSpec,
 )
-from agno_provider.resources.models.base import model_from_spec
+from agno_provider.resources.models.base import Model, model_from_spec
 from agno_provider.resources.models.openai import (
     OpenAIModelOutputs,
     OpenAIModelSpec,
 )
-
-
-if TYPE_CHECKING:
-    from agno_provider.resources.models.base import Model
 
 
 class MemoryManagerSpec(AgnoSpec):
