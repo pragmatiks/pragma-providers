@@ -1,3 +1,38 @@
+## agno-v0.72.0 (2026-02-07)
+
+### Feat
+
+- **agno**: add team resource, runner auth, model discriminators, and memory config (#29)
+
+## agno-v0.66.0 (2026-02-07)
+
+### Feat
+
+- **kubernetes**: add startup probe support and authorized_user credentials (#28)
+
+## agno-v0.55.0 (2026-02-05)
+
+### Fix
+
+- **agno**: runtime dependencies and import fix (#27)
+
+## agno-v0.44.0 (2026-02-02)
+
+### Fix
+
+- **agno**: rewrite agent tests for current AgentConfig implementation
+- **gcp**: convert db_port to int in CloudSQL database outputs
+
+## agno-v0.33.0 (2026-02-02)
+
+### Feat
+
+- **agno**: rebuild agent, add team and deployment resources (#24)
+
+### Fix
+
+- **ci**: use PyPI API for availability check instead of pip index
+
 ## agno-v0.71.0 (2026-02-07)
 
 ### Feat
