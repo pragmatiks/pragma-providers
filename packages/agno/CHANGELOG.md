@@ -1,3 +1,9 @@
+## agno-v0.77.1 (2026-02-07)
+
+### Fix
+
+- **ci**: prevent infinite publish loop on bump commits
+
 ## agno-v0.77.0 (2026-02-07)
 
 ### Feat
