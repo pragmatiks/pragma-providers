@@ -16,22 +16,13 @@ ENV UV_COMPILE_BYTECODE=1
 
 WORKDIR /app
 
-# Copy package metadata and lock for dependency resolution
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
+
+RUN uv sync --no-sources --no-dev --no-install-project --frozen
+
 COPY src ./src
-COPY README.md ./
 
-# Install all dependencies (excluding dev group) into a venv.
-# Remove [tool.uv.sources] to avoid workspace-relative paths,
-# then install deps from lock, then install the package itself without deps.
-RUN uv export --no-sources --no-group dev --no-editable --no-emit-project > requirements.txt && \
-    uv venv && \
-    uv pip install -r requirements.txt && \
-    python -c "import re; f='pyproject.toml'; open(f,'w').write(re.sub(r'\[tool\.uv\.sources\][^\[]*','',open(f).read()))" && \
-    uv pip install --no-deps .
-
-# Copy runner server code
-COPY runner/server.py ./runner/server.py
+RUN uv sync --no-sources --no-dev --no-editable --frozen
 
 # --- Final image ---
 FROM python:3.13-slim
@@ -46,7 +37,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /app/runner /app/runner
+COPY runner/server.py /app/runner/server.py
 
 ENV PATH="/app/.venv/bin:$PATH"
 
