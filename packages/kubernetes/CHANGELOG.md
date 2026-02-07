@@ -1,3 +1,17 @@
+## kubernetes-v0.117.0 (2026-02-07)
+
+### Feat
+
+- **kubernetes**: add startup probe support and authorized_user credentials (#28)
+- **agno**: rebuild agent, add team and deployment resources (#24)
+
+### Fix
+
+- **agno**: runtime dependencies and import fix (#27)
+- **agno**: rewrite agent tests for current AgentConfig implementation
+- **gcp**: convert db_port to int in CloudSQL database outputs
+- **ci**: use PyPI API for availability check instead of pip index
+
 ## kubernetes-v0.116.0 (2026-02-07)
 
 ### Feat
