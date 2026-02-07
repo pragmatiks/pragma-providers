@@ -1,3 +1,9 @@
+## agno-v0.70.0 (2026-02-07)
+
+### Feat
+
+- **agno**: add team resource, runner auth, model discriminators, and memory config (#29)
+
 ## agno-v0.69.0 (2026-02-07)
 
 ### Feat
