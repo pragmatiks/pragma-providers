@@ -1,3 +1,21 @@
+## agno-v0.75.0 (2026-02-07)
+
+### Feat
+
+- **agno**: add team resource, runner auth, model discriminators, and memory config (#29)
+
+## agno-v0.66.0 (2026-02-07)
+
+### Feat
+
+- **kubernetes**: add startup probe support and authorized_user credentials (#28)
+
+## agno-v0.55.0 (2026-02-05)
+
+### Fix
+
+- **agno**: runtime dependencies and import fix (#27)
+
 ## agno-v0.74.0 (2026-02-07)
 
 ### Feat
