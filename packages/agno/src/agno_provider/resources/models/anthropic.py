@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from agno.models.anthropic import Claude
 from pragma_sdk import Field
@@ -18,6 +18,7 @@ class AnthropicModelSpec(AgnoSpec):
     Use AnthropicModel.from_spec() to reconstruct the Claude instance at runtime.
 
     Attributes:
+        type: Discriminator field, always "anthropic".
         id: Model identifier (e.g., "claude-sonnet-4-20250514").
         api_key: Anthropic API key.
         max_tokens: Maximum tokens in responses.
@@ -27,6 +28,7 @@ class AnthropicModelSpec(AgnoSpec):
         stop_sequences: Stop sequences to end generation.
     """
 
+    type: Literal["anthropic"] = "anthropic"
     id: str
     api_key: str
     max_tokens: int | None = None
@@ -97,7 +99,7 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         Returns:
             Configured Claude instance ready for use.
         """
-        return Claude(**spec.model_dump(exclude_none=True))
+        return Claude(**spec.model_dump(exclude={"type"}, exclude_none=True))
 
     def _build_spec(self) -> AnthropicModelSpec:
         """Build spec from current config.

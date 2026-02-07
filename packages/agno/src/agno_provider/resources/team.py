@@ -2,23 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Annotated, Any, ClassVar
 
 from agno.team import Team as AgnoTeam
 from pragma_sdk import Config, Dependency, Outputs
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from agno_provider.resources.agent import Agent, AgentOutputs, AgentSpec
 from agno_provider.resources.base import AgnoResource, AgnoSpec
 from agno_provider.resources.db.postgres import DbPostgres, DbPostgresSpec
 from agno_provider.resources.knowledge.knowledge import Knowledge, KnowledgeOutputs, KnowledgeSpec
 from agno_provider.resources.memory.manager import MemoryManager, MemoryManagerSpec
+from agno_provider.resources.models import model_from_spec
 from agno_provider.resources.models.anthropic import (
     AnthropicModel,
     AnthropicModelOutputs,
     AnthropicModelSpec,
 )
-from agno_provider.resources.models.base import model_from_spec
 from agno_provider.resources.models.openai import (
     OpenAIModel,
     OpenAIModelOutputs,
@@ -35,23 +35,6 @@ class TeamSpec(AgnoSpec):
     Contains all necessary information to create a Team instance
     with all member agents and dependencies. Used for deployment to containers
     where the team needs to be reconstructed from serialized config.
-
-    Attributes:
-        name: Team name.
-        description: Optional description of the team.
-        role: Optional role for the team.
-        instructions: Optional list of instruction strings.
-        member_specs: List of nested agent specs (team members).
-        model_spec: Optional nested spec for the leader model.
-        tools_specs: List of nested tool specs (MCP or WebSearch) for team-level tools.
-        knowledge_spec: Optional nested spec for knowledge/RAG.
-        memory_spec: Optional nested spec for memory management.
-        storage_spec: Optional nested spec for team session storage.
-        prompt_spec: Optional nested prompt spec for instructions template.
-        respond_directly: If True, don't process member responses.
-        delegate_to_all_members: Delegate to all members vs subset.
-        markdown: Whether to use markdown formatting.
-        add_datetime_to_context: Whether to add datetime to context.
     """
 
     name: str
@@ -61,40 +44,29 @@ class TeamSpec(AgnoSpec):
 
     member_specs: list[AgentSpec]
 
-    model_spec: OpenAIModelSpec | AnthropicModelSpec | None = None
+    model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, Field(discriminator="type")] | None = None
 
     tools_specs: list[ToolsMCPSpec | ToolsWebSearchSpec] = []
     knowledge_spec: KnowledgeSpec | None = None
     memory_spec: MemoryManagerSpec | None = None
-    storage_spec: DbPostgresSpec | None = None
+    db_spec: DbPostgresSpec | None = None
     prompt_spec: PromptSpec | None = None
 
     respond_directly: bool = False
     delegate_to_all_members: bool = False
     markdown: bool = False
     add_datetime_to_context: bool = False
+    read_chat_history: bool | None = None
+    add_history_to_context: bool | None = None
+    num_history_runs: int | None = None
+    enable_agentic_memory: bool = False
+    update_memory_on_run: bool = False
+    add_memories_to_context: bool | None = None
+    enable_session_summaries: bool = False
 
 
 class TeamConfig(Config):
-    """Configuration for an Agno team definition.
-
-    Attributes:
-        name: Optional team name (defaults to resource name).
-        description: Optional description of the team.
-        role: Optional role for the team.
-        members: List of agent dependencies (required).
-        model: Optional leader model dependency (anthropic or openai).
-        instructions: Optional inline instructions for the team.
-        prompt: Optional Prompt dependency for instructions template.
-        tools: Optional list of tool dependencies (MCP or WebSearch) for team-level tools.
-        knowledge: Optional Knowledge dependency for RAG.
-        storage: Optional storage dependency (postgres) for session persistence.
-        memory: Optional MemoryManager dependency for team memory.
-        respond_directly: If True, don't process member responses.
-        delegate_to_all_members: Delegate to all members vs subset.
-        markdown: Whether to use markdown formatting in responses.
-        add_datetime_to_context: Whether to add current datetime to context.
-    """
+    """Configuration for an Agno team definition."""
 
     name: str | None = None
     description: str | None = None
@@ -106,9 +78,6 @@ class TeamConfig(Config):
     @classmethod
     def validate_members_not_empty(cls, v: list[Dependency[Agent]]) -> list[Dependency[Agent]]:
         """Validate that at least one member is provided.
-
-        Args:
-            v: List of member agent dependencies.
 
         Returns:
             The validated members list.
@@ -131,7 +100,7 @@ class TeamConfig(Config):
 
     knowledge: Dependency[Knowledge] | None = None
 
-    storage: Dependency[DbPostgres] | None = None
+    db: Dependency[DbPostgres] | None = None
 
     memory: Dependency[MemoryManager] | None = None
 
@@ -139,6 +108,13 @@ class TeamConfig(Config):
     delegate_to_all_members: bool = False
     markdown: bool = False
     add_datetime_to_context: bool = False
+    read_chat_history: bool | None = None
+    add_history_to_context: bool | None = None
+    num_history_runs: int | None = None
+    enable_agentic_memory: bool = False
+    update_memory_on_run: bool = False
+    add_memories_to_context: bool | None = None
+    enable_session_summaries: bool = False
 
 
 class TeamOutputs(Outputs):
@@ -218,9 +194,9 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
         if spec.memory_spec:
             memory_manager = MemoryManager.from_spec(spec.memory_spec)
 
-        storage = None
-        if spec.storage_spec:
-            storage = DbPostgres.from_spec(spec.storage_spec)
+        db = None
+        if spec.db_spec:
+            db = DbPostgres.from_spec(spec.db_spec)
 
         tools: list[Any] = []
         for tool_spec in spec.tools_specs:
@@ -233,6 +209,14 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
         if spec.prompt_spec:
             instructions = Prompt.from_spec(spec.prompt_spec)
 
+        read_chat_history = spec.read_chat_history
+        if read_chat_history is None:
+            read_chat_history = db is not None
+
+        add_history_to_context = spec.add_history_to_context
+        if add_history_to_context is None:
+            add_history_to_context = db is not None
+
         return AgnoTeam(
             name=spec.name,
             description=spec.description,
@@ -241,13 +225,20 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
             model=model,
             knowledge=knowledge,
             memory_manager=memory_manager,
-            db=storage,
+            db=db,
             tools=tools if tools else None,
             instructions=instructions,
             respond_directly=spec.respond_directly,
             delegate_to_all_members=spec.delegate_to_all_members,
             markdown=spec.markdown,
             add_datetime_to_context=spec.add_datetime_to_context,
+            read_chat_history=read_chat_history,
+            add_history_to_context=add_history_to_context,
+            num_history_runs=spec.num_history_runs,
+            enable_agentic_memory=spec.enable_agentic_memory,
+            update_memory_on_run=spec.update_memory_on_run,
+            add_memories_to_context=spec.add_memories_to_context,
+            enable_session_summaries=spec.enable_session_summaries,
         )
 
     async def _build_spec(self) -> TeamSpec:
@@ -274,7 +265,7 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
             assert isinstance(member.outputs, AgentOutputs)
             member_specs.append(member.outputs.spec)
 
-        model_spec: OpenAIModelSpec | AnthropicModelSpec | None = None
+        model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, Field(discriminator="type")] | None = None
         if self.config.model is not None:
             model = await self.config.model.resolve()
             model_outputs = model.outputs
@@ -303,11 +294,11 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
             if memory.outputs is not None:
                 memory_spec = memory.outputs.spec
 
-        storage_spec: DbPostgresSpec | None = None
-        if self.config.storage is not None:
-            storage = await self.config.storage.resolve()
-            if storage.outputs is not None:
-                storage_spec = storage.outputs.spec
+        db_spec: DbPostgresSpec | None = None
+        if self.config.db is not None:
+            db = await self.config.db.resolve()
+            if db.outputs is not None:
+                db_spec = db.outputs.spec
 
         tools_specs: list[ToolsMCPSpec | ToolsWebSearchSpec] = []
         for tool_dep in self.config.tools:
@@ -336,12 +327,19 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
             tools_specs=tools_specs,
             knowledge_spec=knowledge_spec,
             memory_spec=memory_spec,
-            storage_spec=storage_spec,
+            db_spec=db_spec,
             prompt_spec=prompt_spec,
             respond_directly=self.config.respond_directly,
             delegate_to_all_members=self.config.delegate_to_all_members,
             markdown=self.config.markdown,
             add_datetime_to_context=self.config.add_datetime_to_context,
+            read_chat_history=self.config.read_chat_history,
+            add_history_to_context=self.config.add_history_to_context,
+            num_history_runs=self.config.num_history_runs,
+            enable_agentic_memory=self.config.enable_agentic_memory,
+            update_memory_on_run=self.config.update_memory_on_run,
+            add_memories_to_context=self.config.add_memories_to_context,
+            enable_session_summaries=self.config.enable_session_summaries,
         )
 
     def _get_pip_dependencies(self) -> list[str]:

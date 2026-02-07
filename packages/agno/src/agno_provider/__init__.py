@@ -32,6 +32,9 @@ from agno_provider.resources import (
     Runner,
     RunnerConfig,
     RunnerOutputs,
+    Team,
+    TeamConfig,
+    TeamOutputs,
     ToolsMCP,
     ToolsMCPConfig,
     ToolsMCPOutputs,
@@ -54,6 +57,7 @@ agno.resource("memory/manager")(MemoryManager)
 agno.resource("models/anthropic")(AnthropicModel)
 agno.resource("models/openai")(OpenAIModel)
 agno.resource("prompt")(Prompt)
+agno.resource("team")(Team)
 agno.resource("tools/mcp")(ToolsMCP)
 agno.resource("tools/websearch")(ToolsWebSearch)
 agno.resource("vectordb/qdrant")(VectordbQdrant)
@@ -88,6 +92,9 @@ __all__ = [
     "ToolsMCP",
     "ToolsMCPConfig",
     "ToolsMCPOutputs",
+    "Team",
+    "TeamConfig",
+    "TeamOutputs",
     "ToolsWebSearch",
     "ToolsWebSearchConfig",
     "ToolsWebSearchOutputs",

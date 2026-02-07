@@ -62,35 +62,3 @@ class Model[ModelConfigT: ModelConfig, ModelOutputsT: ModelOutputs, SpecT: AgnoS
 
     async def on_delete(self) -> None:
         """Delete is a no-op since model resources are stateless."""
-
-
-def model_from_spec(
-    spec: OpenAIModelSpec | AnthropicModelSpec,
-) -> AgnoModel:
-    """Factory: create model from spec based on type.
-
-    Args:
-        spec: The model specification (OpenAI or Anthropic).
-
-    Returns:
-        Configured Agno model instance.
-
-    Raises:
-        TypeError: If spec type is unknown.
-    """
-    from agno_provider.resources.models.anthropic import AnthropicModel, AnthropicModelSpec  # noqa: PLC0415
-    from agno_provider.resources.models.openai import OpenAIModel, OpenAIModelSpec  # noqa: PLC0415
-
-    if isinstance(spec, OpenAIModelSpec):
-        return OpenAIModel.from_spec(spec)
-
-    if isinstance(spec, AnthropicModelSpec):
-        return AnthropicModel.from_spec(spec)
-
-    msg = f"Unknown model spec type: {type(spec)}"
-    raise TypeError(msg)
-
-
-if TYPE_CHECKING:
-    from agno_provider.resources.models.anthropic import AnthropicModelSpec
-    from agno_provider.resources.models.openai import OpenAIModelSpec

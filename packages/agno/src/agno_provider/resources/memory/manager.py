@@ -9,12 +9,14 @@ from pragma_sdk import Config, Dependency, Outputs
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
 from agno_provider.resources.db.postgres import DbPostgres, DbPostgresSpec
+from agno_provider.resources.models import model_from_spec
 from agno_provider.resources.models.anthropic import (
+    AnthropicModel,
     AnthropicModelOutputs,
     AnthropicModelSpec,
 )
-from agno_provider.resources.models.base import Model, model_from_spec
 from agno_provider.resources.models.openai import (
+    OpenAIModel,
     OpenAIModelOutputs,
     OpenAIModelSpec,
 )
@@ -68,7 +70,7 @@ class MemoryManagerConfig(Config):
     """
 
     db: Dependency[DbPostgres]
-    model: Dependency[Model] | None = None
+    model: Dependency[AnthropicModel] | Dependency[OpenAIModel] | None = None
     system_message: str | None = None
     memory_capture_instructions: str | None = None
     additional_instructions: str | None = None
