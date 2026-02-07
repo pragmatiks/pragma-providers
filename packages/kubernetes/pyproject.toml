@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-kubernetes-provider"
-version = "0.106.0"
+version = "0.107.0"
 description = "Generic Kubernetes resources using lightkube"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -36,7 +36,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.106.0"
+version = "0.107.0"
 version_files = ["pyproject.toml:^version"]
 tag_format = "kubernetes-v$version"
 update_changelog_on_bump = true
