@@ -6,7 +6,7 @@ by dependent resources at runtime.
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from agno.models.openai import OpenAIChat
 from pragma_sdk import Field
@@ -25,6 +25,7 @@ class OpenAIModelSpec(AgnoSpec):
     Use OpenAIModel.from_spec() to construct the model instance.
 
     Attributes:
+        type: Discriminator field, always "openai".
         id: OpenAI model identifier (e.g., "gpt-4o").
         api_key: OpenAI API key.
         max_tokens: Maximum tokens in the response.
@@ -40,6 +41,7 @@ class OpenAIModelSpec(AgnoSpec):
         base_url: Custom base URL for OpenAI-compatible APIs.
     """
 
+    type: Literal["openai"] = "openai"
     id: str
     api_key: str
     max_tokens: int | None = None
@@ -124,7 +126,7 @@ class OpenAIModel(Model[OpenAIModelConfig, OpenAIModelOutputs, OpenAIModelSpec, 
         Returns:
             Configured OpenAIChat instance.
         """
-        return OpenAIChat(**spec.model_dump(exclude_none=True))
+        return OpenAIChat(**spec.model_dump(exclude={"type"}, exclude_none=True))
 
     def _build_spec(self) -> OpenAIModelSpec:
         """Build spec from current config.

@@ -11,7 +11,6 @@ from pragma_sdk.provider import ProviderHarness
 from agno_provider import (
     DbPostgres,
     DbPostgresConfig,
-    Model,
 )
 from agno_provider.resources.db.postgres import DbPostgresOutputs, DbPostgresSpec
 from agno_provider.resources.memory import (
@@ -20,10 +19,17 @@ from agno_provider.resources.memory import (
     MemoryManagerOutputs,
 )
 from agno_provider.resources.memory.manager import MemoryManagerSpec
-from agno_provider.resources.models.openai import OpenAIModelSpec
+from agno_provider.resources.models.anthropic import AnthropicModel
+from agno_provider.resources.models.openai import OpenAIModel, OpenAIModelSpec
 
 
-MemoryManagerConfig.model_rebuild(_types_namespace={"Model": Model, "DbPostgres": DbPostgres})
+MemoryManagerConfig.model_rebuild(
+    _types_namespace={
+        "AnthropicModel": AnthropicModel,
+        "OpenAIModel": OpenAIModel,
+        "DbPostgres": DbPostgres,
+    }
+)
 
 
 if TYPE_CHECKING:
@@ -60,9 +66,9 @@ def mock_db_dependency(mocker: MockerFixture, mock_db_resource: DbPostgres) -> D
 
 
 @pytest.fixture
-def mock_model_dependency(mocker: MockerFixture, mock_model_resource) -> Dependency[Model]:
-    """Create a mock Model dependency with resolved resource."""
-    dep = Dependency[Model](
+def mock_model_dependency(mocker: MockerFixture, mock_model_resource) -> Dependency[OpenAIModel]:
+    """Create a mock OpenAIModel dependency with resolved resource."""
+    dep = Dependency[OpenAIModel](
         provider="agno",
         resource="models/openai",
         name="test-model",
@@ -99,7 +105,7 @@ def test_config_with_db_only(mock_db_dependency: Dependency[DbPostgres]) -> None
 
 def test_config_with_model(
     mock_db_dependency: Dependency[DbPostgres],
-    mock_model_dependency: Dependency[Model],
+    mock_model_dependency: Dependency[OpenAIModel],
 ) -> None:
     """Config with db and model dependency is valid."""
     config = MemoryManagerConfig(
@@ -114,7 +120,7 @@ def test_config_with_model(
 
 def test_config_with_all_options(
     mock_db_dependency: Dependency[DbPostgres],
-    mock_model_dependency: Dependency[Model],
+    mock_model_dependency: Dependency[OpenAIModel],
 ) -> None:
     """Config with all options set is valid."""
     config = MemoryManagerConfig(
@@ -177,7 +183,7 @@ async def test_create_with_db_only(
 async def test_create_with_model(
     harness: ProviderHarness,
     mock_db_dependency: Dependency[DbPostgres],
-    mock_model_dependency: Dependency[Model],
+    mock_model_dependency: Dependency[OpenAIModel],
 ) -> None:
     """on_create with db and model returns outputs with model_spec."""
     config = MemoryManagerConfig(
@@ -196,7 +202,7 @@ async def test_create_with_model(
 async def test_create_with_all_options(
     harness: ProviderHarness,
     mock_db_dependency: Dependency[DbPostgres],
-    mock_model_dependency: Dependency[Model],
+    mock_model_dependency: Dependency[OpenAIModel],
 ) -> None:
     """on_create with all options returns correct outputs."""
     config = MemoryManagerConfig(
@@ -288,7 +294,7 @@ def test_from_spec_with_model(mocker: MockerFixture) -> None:
 async def test_update(
     harness: ProviderHarness,
     mock_db_dependency: Dependency[DbPostgres],
-    mock_model_dependency: Dependency[Model],
+    mock_model_dependency: Dependency[OpenAIModel],
 ) -> None:
     """on_update returns same outputs as create with updated config."""
     previous = MemoryManagerConfig(db=mock_db_dependency)

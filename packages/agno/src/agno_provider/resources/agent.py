@@ -2,21 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Annotated, Any, ClassVar
 
 from agno.agent import Agent as AgnoAgent
 from pragma_sdk import Config, Dependency, Outputs
+from pydantic import Field
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
 from agno_provider.resources.db.postgres import DbPostgres, DbPostgresSpec
 from agno_provider.resources.knowledge.knowledge import Knowledge, KnowledgeOutputs, KnowledgeSpec
 from agno_provider.resources.memory.manager import MemoryManager, MemoryManagerSpec
+from agno_provider.resources.models import model_from_spec
 from agno_provider.resources.models.anthropic import (
     AnthropicModel,
     AnthropicModelOutputs,
     AnthropicModelSpec,
 )
-from agno_provider.resources.models.base import model_from_spec
 from agno_provider.resources.models.openai import (
     OpenAIModel,
     OpenAIModelOutputs,
@@ -33,53 +34,31 @@ class AgentSpec(AgnoSpec):
     Contains all necessary information to create an Agent instance
     with all nested dependencies. Used for deployment to containers
     where the agent needs to be reconstructed from serialized config.
-
-    Attributes:
-        name: Agent name.
-        description: Optional description of the agent.
-        role: Optional role for the agent.
-        instructions: Optional list of instruction strings.
-        model_spec: Nested spec for the model (OpenAI or Anthropic).
-        tools_specs: List of nested tool specs (MCP or WebSearch).
-        knowledge_spec: Optional nested spec for knowledge/RAG.
-        memory_spec: Optional nested spec for memory management.
-        storage_spec: Optional nested spec for agent session storage.
-        prompt_spec: Optional nested prompt spec for instructions template.
-        markdown: Whether to use markdown formatting.
-        add_datetime_to_context: Whether to add datetime to context.
     """
 
     name: str
     description: str | None = None
     role: str | None = None
     instructions: list[str] | None = None
-    model_spec: OpenAIModelSpec | AnthropicModelSpec
+    model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, Field(discriminator="type")]
     tools_specs: list[ToolsMCPSpec | ToolsWebSearchSpec] = []
     knowledge_spec: KnowledgeSpec | None = None
     memory_spec: MemoryManagerSpec | None = None
-    storage_spec: DbPostgresSpec | None = None
+    db_spec: DbPostgresSpec | None = None
     prompt_spec: PromptSpec | None = None
     markdown: bool = False
     add_datetime_to_context: bool = False
+    read_chat_history: bool | None = None
+    add_history_to_context: bool | None = None
+    num_history_runs: int | None = None
+    enable_agentic_memory: bool = False
+    update_memory_on_run: bool = False
+    add_memories_to_context: bool | None = None
+    enable_session_summaries: bool = False
 
 
 class AgentConfig(Config):
-    """Configuration for an Agno agent definition.
-
-    Attributes:
-        name: Optional agent name (defaults to resource name).
-        description: Optional description of the agent.
-        role: Optional role for the agent.
-        model: Model dependency (anthropic or openai) for agent LLM.
-        instructions: Optional inline instructions for the agent.
-        prompt: Optional Prompt dependency for instructions template.
-        tools: Optional list of tool dependencies (MCP or WebSearch).
-        knowledge: Optional Knowledge dependency for RAG.
-        storage: Optional storage dependency (postgres) for session persistence.
-        memory: Optional MemoryManager dependency for agent memory.
-        markdown: Whether to use markdown formatting in responses.
-        add_datetime_to_context: Whether to add current datetime to context.
-    """
+    """Configuration for an Agno agent definition."""
 
     name: str | None = None
     description: str | None = None
@@ -94,12 +73,19 @@ class AgentConfig(Config):
 
     knowledge: Dependency[Knowledge] | None = None
 
-    storage: Dependency[DbPostgres] | None = None
+    db: Dependency[DbPostgres] | None = None
 
     memory: Dependency[MemoryManager] | None = None
 
     markdown: bool = False
     add_datetime_to_context: bool = False
+    read_chat_history: bool | None = None
+    add_history_to_context: bool | None = None
+    num_history_runs: int | None = None
+    enable_agentic_memory: bool = False
+    update_memory_on_run: bool = False
+    add_memories_to_context: bool | None = None
+    enable_session_summaries: bool = False
 
 
 class AgentOutputs(Outputs):
@@ -130,11 +116,15 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
         name: my-agent
         config:
           model:
-            $ref: agno/models/anthropic/claude
+            provider: agno
+            resource: models/anthropic
+            name: claude
           instructions:
             - "You are a helpful assistant."
           tools:
-            - $ref: agno/tools/mcp/search
+            - provider: agno
+              resource: tools/mcp
+              name: search
           markdown: true
 
     Runtime reconstruction via spec:
@@ -172,9 +162,9 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
         if spec.memory_spec:
             memory_manager = MemoryManager.from_spec(spec.memory_spec)
 
-        storage = None
-        if spec.storage_spec:
-            storage = DbPostgres.from_spec(spec.storage_spec)
+        db = None
+        if spec.db_spec:
+            db = DbPostgres.from_spec(spec.db_spec)
 
         tools: list[Any] = []
         for tool_spec in spec.tools_specs:
@@ -187,6 +177,14 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
         if spec.prompt_spec:
             instructions = Prompt.from_spec(spec.prompt_spec)
 
+        read_chat_history = spec.read_chat_history
+        if read_chat_history is None:
+            read_chat_history = db is not None
+
+        add_history_to_context = spec.add_history_to_context
+        if add_history_to_context is None:
+            add_history_to_context = db is not None
+
         return AgnoAgent(
             name=spec.name,
             description=spec.description,
@@ -194,11 +192,18 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
             model=model,
             knowledge=knowledge,
             memory_manager=memory_manager,
-            db=storage,
+            db=db,
             tools=tools if tools else None,
             instructions=instructions,
             markdown=spec.markdown,
             add_datetime_to_context=spec.add_datetime_to_context,
+            read_chat_history=read_chat_history,
+            add_history_to_context=add_history_to_context,
+            num_history_runs=spec.num_history_runs,
+            enable_agentic_memory=spec.enable_agentic_memory,
+            update_memory_on_run=spec.update_memory_on_run,
+            add_memories_to_context=spec.add_memories_to_context,
+            enable_session_summaries=spec.enable_session_summaries,
         )
 
     async def _build_spec(self) -> AgentSpec:
@@ -221,7 +226,7 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
             msg = "Model dependency not resolved"
             raise RuntimeError(msg)
 
-        model_spec: OpenAIModelSpec | AnthropicModelSpec
+        model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, Field(discriminator="type")]
         if isinstance(model_outputs, OpenAIModelOutputs):
             model_spec = model_outputs.spec
         elif isinstance(model_outputs, AnthropicModelOutputs):
@@ -242,11 +247,11 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
             if memory.outputs is not None:
                 memory_spec = memory.outputs.spec
 
-        storage_spec: DbPostgresSpec | None = None
-        if self.config.storage is not None:
-            storage = await self.config.storage.resolve()
-            if storage.outputs is not None:
-                storage_spec = storage.outputs.spec
+        db_spec: DbPostgresSpec | None = None
+        if self.config.db is not None:
+            db = await self.config.db.resolve()
+            if db.outputs is not None:
+                db_spec = db.outputs.spec
 
         tools_specs: list[ToolsMCPSpec | ToolsWebSearchSpec] = []
         for tool_dep in self.config.tools:
@@ -274,10 +279,17 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
             tools_specs=tools_specs,
             knowledge_spec=knowledge_spec,
             memory_spec=memory_spec,
-            storage_spec=storage_spec,
+            db_spec=db_spec,
             prompt_spec=prompt_spec,
             markdown=self.config.markdown,
             add_datetime_to_context=self.config.add_datetime_to_context,
+            read_chat_history=self.config.read_chat_history,
+            add_history_to_context=self.config.add_history_to_context,
+            num_history_runs=self.config.num_history_runs,
+            enable_agentic_memory=self.config.enable_agentic_memory,
+            update_memory_on_run=self.config.update_memory_on_run,
+            add_memories_to_context=self.config.add_memories_to_context,
+            enable_session_summaries=self.config.enable_session_summaries,
         )
 
     def _get_pip_dependencies(self) -> list[str]:

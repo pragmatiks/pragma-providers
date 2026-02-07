@@ -90,11 +90,20 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
         name: embeddings
         config:
           url:
-            $ref: qdrant/database/main.url
+            provider: qdrant
+            resource: database
+            name: main
+            field: url
           collection:
-            $ref: qdrant/collection/embeddings.name
+            provider: qdrant
+            resource: collection
+            name: embeddings
+            field: name
           api_key:
-            $ref: qdrant/database/main.api_key
+            provider: qdrant
+            resource: database
+            name: main
+            field: api_key
           search_type: hybrid
 
     Runtime reconstruction via spec:

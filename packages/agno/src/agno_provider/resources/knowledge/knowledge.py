@@ -77,7 +77,9 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
         name: docs
         config:
           vector_db:
-            $ref: agno/vectordb/qdrant/embeddings
+            provider: agno
+            resource: vectordb/qdrant
+            name: embeddings
           max_results: 5
 
     Runtime reconstruction via spec:

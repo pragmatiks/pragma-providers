@@ -58,6 +58,7 @@ class RunnerSpec(AgnoSpec):
     image: str
     cpu: str
     memory: str
+    security_key: bool = False
 
 
 class RunnerConfig(Config):
@@ -84,8 +85,11 @@ class RunnerConfig(Config):
     namespace: str = "default"
     replicas: int = 1
     image: str = "ghcr.io/pragmatiks/agno-runner:latest"
+    security_key: str | None = None
+    jwt_verification_key: str | None = None
+    public: bool = False
 
-    cpu: str = "500m"
+    cpu: str = "200m"
     memory: str = "1Gi"
 
     @model_validator(mode="after")
@@ -145,11 +149,16 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         name: my-agent-runner
         config:
           agent:
-            $ref: agno/agent/my-agent
+            provider: agno
+            resource: agent
+            name: my-agent
           cluster:
-            $ref: gcp/gke/my-cluster
+            provider: gcp
+            resource: gke
+            name: my-cluster
           namespace: agents
           replicas: 2
+          security_key: "key-from-agentos-control-plane"
 
     Lifecycle:
         - on_create: Create child Kubernetes Deployment + Service, wait for ready
@@ -236,30 +245,42 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         labels = self._labels()
         spec_json = spec.model_dump_json()
 
+        env = {
+            "AGNO_SPEC_TYPE": spec_type,
+            "AGNO_SPEC_JSON": spec_json,
+        }
+
+        if self.config.security_key:
+            env["OS_SECURITY_KEY"] = self.config.security_key
+
+        if self.config.jwt_verification_key:
+            env["JWT_VERIFICATION_KEY"] = self.config.jwt_verification_key
+
         container = ContainerConfig(
             name="agno",
             image=self.config.image,
             ports=[ContainerPortConfig(container_port=8000, name="http")],
-            env={
-                "AGNO_SPEC_TYPE": spec_type,
-                "AGNO_SPEC_JSON": spec_json,
-            },
+            env=env,
             resources=ResourceRequirementsConfig(
                 cpu=self.config.cpu,
                 memory=self.config.memory,
                 cpu_limit=self.config.cpu,
                 memory_limit=self.config.memory,
             ),
+            startup_probe=ProbeConfig(
+                http_get=HttpGetConfig(path="/health", port=8000),
+                period_seconds=2,
+                failure_threshold=15,
+                timeout_seconds=3,
+            ),
             liveness_probe=ProbeConfig(
                 http_get=HttpGetConfig(path="/health", port=8000),
-                initial_delay_seconds=10,
                 period_seconds=10,
                 timeout_seconds=5,
                 failure_threshold=3,
             ),
             readiness_probe=ProbeConfig(
                 http_get=HttpGetConfig(path="/health", port=8000),
-                initial_delay_seconds=5,
                 period_seconds=5,
                 timeout_seconds=3,
                 failure_threshold=3,
@@ -282,17 +303,20 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         )
 
     def _build_kubernetes_service(self) -> Service:
-        """Build kubernetes/service child resource (ClusterIP).
+        """Build kubernetes/service child resource.
+
+        Uses LoadBalancer when public is true, ClusterIP otherwise.
 
         Returns:
             Kubernetes Service resource ready to apply.
         """
         labels = self._labels()
+        service_type = "LoadBalancer" if self.config.public else "ClusterIP"
 
         config = ServiceConfig(
             cluster=self.config.cluster,
             namespace=self.config.namespace,
-            type="ClusterIP",
+            type=service_type,
             selector=labels,
             ports=[
                 PortConfig(name="http", port=80, target_port=8000),
@@ -364,6 +388,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             image=self.config.image,
             cpu=self.config.cpu,
             memory=self.config.memory,
+            security_key=self.config.security_key is not None,
         )
 
         return RunnerOutputs(
@@ -385,7 +410,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         """
         kubernetes_deployment = self._build_kubernetes_deployment(spec_type, spec)
         await kubernetes_deployment.apply()
-        await kubernetes_deployment.wait_ready(timeout=300.0)
+        await kubernetes_deployment.wait_ready(timeout=30.0)
 
         kubernetes_service = self._build_kubernetes_service()
         await kubernetes_service.apply()

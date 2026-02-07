@@ -336,7 +336,7 @@ def test_config_with_all_options() -> None:
         instructions=["Be helpful."],
         prompt=prompt_dep,
         knowledge=knowledge_dep,
-        storage=storage_dep,
+        db=storage_dep,
         memory=memory_dep,
         markdown=True,
         add_datetime_to_context=True,
@@ -347,7 +347,7 @@ def test_config_with_all_options() -> None:
     assert config.role == "assistant"
     assert config.prompt is not None
     assert config.knowledge is not None
-    assert config.storage is not None
+    assert config.db is not None
     assert config.memory is not None
     assert config.markdown is True
     assert config.add_datetime_to_context is True
@@ -365,7 +365,7 @@ def test_config_defaults() -> None:
     assert config.prompt is None
     assert config.tools == []
     assert config.knowledge is None
-    assert config.storage is None
+    assert config.db is None
     assert config.memory is None
     assert config.markdown is False
     assert config.add_datetime_to_context is False
@@ -405,7 +405,7 @@ def test_outputs_with_nested_specs() -> None:
                 name="kb",
                 vector_db_spec=VectordbQdrantSpec(url="http://localhost:6333", collection="test"),
             ),
-            storage_spec=DbPostgresSpec(connection_url="postgresql://localhost/db", db_schema="ai"),
+            db_spec=DbPostgresSpec(connection_url="postgresql://localhost/db", db_schema="ai"),
             memory_spec=MemoryManagerSpec(
                 db_spec=DbPostgresSpec(connection_url="postgresql://localhost/db", db_schema="ai"),
             ),
@@ -519,22 +519,22 @@ async def test_create_with_knowledge(harness: ProviderHarness) -> None:
     assert "qdrant-client" in result.outputs.pip_dependencies
 
 
-async def test_create_with_storage(harness: ProviderHarness) -> None:
-    """on_create with storage includes storage spec."""
+async def test_create_with_db(harness: ProviderHarness) -> None:
+    """on_create with db includes db spec."""
     model_dep = create_anthropic_model_dependency()
     storage_dep = create_storage_dependency()
 
     config = AgentConfig(
         model=model_dep,
-        storage=storage_dep,
+        db=storage_dep,
     )
 
     result = await harness.invoke_create(Agent, name="test-agent", config=config)
 
     assert result.success
     assert result.outputs is not None
-    assert result.outputs.spec.storage_spec is not None
-    assert result.outputs.spec.storage_spec.db_schema == "ai"
+    assert result.outputs.spec.db_spec is not None
+    assert result.outputs.spec.db_spec.db_schema == "ai"
 
 
 async def test_create_with_memory(harness: ProviderHarness) -> None:
@@ -589,7 +589,7 @@ async def test_create_with_all_options(harness: ProviderHarness) -> None:
         instructions=["Be thorough."],
         tools=[mcp_dep],
         knowledge=knowledge_dep,
-        storage=storage_dep,
+        db=storage_dep,
         memory=memory_dep,
         markdown=True,
         add_datetime_to_context=True,
@@ -605,7 +605,7 @@ async def test_create_with_all_options(harness: ProviderHarness) -> None:
     assert result.outputs.spec.instructions == ["Be thorough."]
     assert len(result.outputs.spec.tools_specs) == 1
     assert result.outputs.spec.knowledge_spec is not None
-    assert result.outputs.spec.storage_spec is not None
+    assert result.outputs.spec.db_spec is not None
     assert result.outputs.spec.memory_spec is not None
     assert result.outputs.spec.markdown is True
     assert result.outputs.spec.add_datetime_to_context is True
@@ -756,8 +756,8 @@ def test_from_spec_with_memory(mocker: MockerFixture) -> None:
     assert call_kwargs["memory_manager"] is not None
 
 
-def test_from_spec_with_storage(mocker: MockerFixture) -> None:
-    """from_spec() constructs storage from nested spec."""
+def test_from_spec_with_db(mocker: MockerFixture) -> None:
+    """from_spec() constructs db from nested spec."""
     mock_agent_init = mocker.patch(
         "agno.agent.Agent.__init__",
         return_value=None,
@@ -766,7 +766,7 @@ def test_from_spec_with_storage(mocker: MockerFixture) -> None:
     spec = AgentSpec(
         name="my-agent",
         model_spec=AnthropicModelSpec(id="claude-sonnet-4-20250514", api_key="sk-test"),
-        storage_spec=DbPostgresSpec(connection_url="postgresql://localhost/db", db_schema="ai"),
+        db_spec=DbPostgresSpec(connection_url="postgresql://localhost/db", db_schema="ai"),
     )
 
     Agent.from_spec(spec)
@@ -774,6 +774,7 @@ def test_from_spec_with_storage(mocker: MockerFixture) -> None:
     mock_agent_init.assert_called_once()
     call_kwargs = mock_agent_init.call_args.kwargs
     assert call_kwargs["db"] is not None
+    assert call_kwargs["read_chat_history"] is True
 
 
 def test_from_spec_with_prompt(mocker: MockerFixture) -> None:
