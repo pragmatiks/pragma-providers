@@ -7,10 +7,12 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from agno.db.postgres import PostgresDb
 from agno.knowledge.knowledge import Knowledge as AgnoKnowledge
 from pragma_sdk import Config, Dependency, Outputs
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
+from agno_provider.resources.db.postgres import DbPostgres, DbPostgresSpec
 from agno_provider.resources.knowledge.embedder.openai import EmbedderOpenAI, EmbedderOpenAISpec
 from agno_provider.resources.vectordb.qdrant import VectordbQdrant, VectordbQdrantSpec
 
@@ -31,6 +33,7 @@ class KnowledgeSpec(AgnoSpec):
     name: str
     max_results: int = 10
     vector_db_spec: VectordbQdrantSpec
+    contents_db_spec: DbPostgresSpec | None = None
     embedder_spec: EmbedderOpenAISpec | None = None
 
 
@@ -46,6 +49,7 @@ class KnowledgeConfig(Config):
     """
 
     vector_db: Dependency[VectordbQdrant]
+    contents_db: Dependency[DbPostgres] | None = None
     embedder: Dependency[EmbedderOpenAI] | None = None
     max_results: int = 10
 
@@ -106,9 +110,18 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
         """
         vectordb = VectordbQdrant.from_spec(spec.vector_db_spec)
 
+        contents_db = None
+        if spec.contents_db_spec:
+            db_url = spec.contents_db_spec.db_url.replace("psycopg_async", "psycopg")
+            contents_db = PostgresDb(
+                db_url=db_url,
+                db_schema=spec.contents_db_spec.db_schema,
+            )
+
         return AgnoKnowledge(
             name=spec.name,
             vector_db=vectordb,
+            contents_db=contents_db,
             max_results=spec.max_results,
         )
 
@@ -132,6 +145,14 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
 
         vector_db_spec = vector_db_resource.outputs.spec
 
+        contents_db_spec = None
+
+        if self.config.contents_db is not None:
+            contents_db_resource = self.config.contents_db._resolved
+
+            if contents_db_resource is not None and contents_db_resource.outputs is not None:
+                contents_db_spec = contents_db_resource.outputs.spec
+
         embedder_spec = None
 
         if self.config.embedder is not None:
@@ -144,6 +165,7 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
             name=self.name,
             max_results=self.config.max_results,
             vector_db_spec=vector_db_spec,
+            contents_db_spec=contents_db_spec,
             embedder_spec=embedder_spec,
         )
 
@@ -175,6 +197,9 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
             KnowledgeOutputs with pip dependencies and spec.
         """
         await self.config.vector_db.resolve()
+
+        if self.config.contents_db is not None:
+            await self.config.contents_db.resolve()
 
         if self.config.embedder is not None:
             await self.config.embedder.resolve()

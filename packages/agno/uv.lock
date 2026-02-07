@@ -1392,7 +1392,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-agno-provider"
-version = "0.77.1"
+version = "0.78.0"
 source = { editable = "." }
 dependencies = [
     { name = "agno", extra = ["anthropic", "openai", "postgres", "qdrant"] },

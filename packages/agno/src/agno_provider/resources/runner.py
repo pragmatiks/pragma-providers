@@ -264,7 +264,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             resources=ResourceRequirementsConfig(
                 cpu=self.config.cpu,
                 memory=self.config.memory,
-                cpu_limit=self.config.cpu,
+                cpu_limit="1",
                 memory_limit=self.config.memory,
             ),
             startup_probe=ProbeConfig(

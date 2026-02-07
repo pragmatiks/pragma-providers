@@ -207,13 +207,33 @@ class Content(AgnoResource[ContentConfig, ContentOutputs, ContentSpec]):
     def _insert_kwargs(self) -> dict:
         """Build kwargs for Knowledge.ainsert() from spec.
 
+        Maps Content field names to Agno's ainsert() parameter names:
+          - urls (list) -> url (first item)
+          - text -> text_content
+
         Returns:
             Dict of kwargs for ainsert().
         """
-        return self._build_spec().model_dump(
-            exclude_none=True,
-            exclude={"knowledge_spec", "name"},
-        )
+        kwargs: dict = {"name": self._content_name()}
+
+        spec = self._build_spec()
+
+        if spec.urls:
+            kwargs["url"] = spec.urls[0]
+
+        if spec.text:
+            kwargs["text_content"] = spec.text
+
+        if spec.description:
+            kwargs["description"] = spec.description
+
+        if spec.metadata:
+            kwargs["metadata"] = spec.metadata
+
+        if spec.topics:
+            kwargs["topics"] = spec.topics
+
+        return kwargs
 
     async def on_create(self) -> ContentOutputs:
         """Insert content into the knowledge's vectordb.
