@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from agno.models.base import Model as AgnoModel
 
 from agno_provider.resources.models.anthropic import (
     AnthropicModel,
@@ -15,10 +15,6 @@ from agno_provider.resources.models.openai import (
     OpenAIModelConfig,
     OpenAIModelSpec,
 )
-
-
-if TYPE_CHECKING:
-    from agno.models.base import Model as AgnoModel
 
 
 __all__ = [

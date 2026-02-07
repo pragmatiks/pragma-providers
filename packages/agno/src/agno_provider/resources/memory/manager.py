@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Annotated, ClassVar
 
 from agno.memory.manager import MemoryManager as AgnoMemoryManager
 from pragma_sdk import Config, Dependency, Outputs
+from pydantic import Field
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
 from agno_provider.resources.db.postgres import DbPostgres, DbPostgresSpec
@@ -42,7 +43,7 @@ class MemoryManagerSpec(AgnoSpec):
     """
 
     db_spec: DbPostgresSpec
-    model_spec: OpenAIModelSpec | AnthropicModelSpec | None = None
+    model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, Field(discriminator="type")] | None = None
     system_message: str | None = None
     memory_capture_instructions: str | None = None
     additional_instructions: str | None = None
@@ -154,7 +155,7 @@ class MemoryManager(AgnoResource[MemoryManagerConfig, MemoryManagerOutputs, Memo
         assert db_outputs is not None
         db_spec = db_outputs.spec
 
-        model_spec: OpenAIModelSpec | AnthropicModelSpec | None = None
+        model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, Field(discriminator="type")] | None = None
         if self.config.model is not None:
             model_resource = await self.config.model.resolve()
             model_outputs = model_resource.outputs
