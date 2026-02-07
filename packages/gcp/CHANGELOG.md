@@ -1,3 +1,9 @@
+## gcp-v0.112.0 (2026-02-07)
+
+### Feat
+
+- **agno**: add team resource, runner auth, model discriminators, and memory config (#29)
+
 ## gcp-v0.111.0 (2026-02-07)
 
 ### Feat
