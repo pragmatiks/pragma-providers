@@ -117,6 +117,7 @@ class ContainerConfig(BaseModel):
         resources: Resource requirements.
         liveness_probe: Liveness probe configuration.
         readiness_probe: Readiness probe configuration.
+        startup_probe: Startup probe configuration.
     """
 
     model_config = {"extra": "forbid"}
@@ -131,6 +132,7 @@ class ContainerConfig(BaseModel):
     resources: ResourceRequirementsConfig | None = None
     liveness_probe: ProbeConfig | None = None
     readiness_probe: ProbeConfig | None = None
+    startup_probe: ProbeConfig | None = None
 
 
 class DeploymentConfig(Config):
@@ -316,6 +318,9 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
         if config.readiness_probe:
             container.readinessProbe = self._build_probe(config.readiness_probe)
+
+        if config.startup_probe:
+            container.startupProbe = self._build_probe(config.startup_probe)
 
         return container
 

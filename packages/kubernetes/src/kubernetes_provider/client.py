@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from google.auth.transport.requests import Request
+from google.oauth2 import credentials as user_credentials
 from google.oauth2 import service_account
 from lightkube import AsyncClient, KubeConfig
 
@@ -21,10 +22,12 @@ _SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 
 
 def _get_access_token(credentials: dict[str, Any] | str) -> str:
-    """Get access token from GCP service account credentials.
+    """Get access token from GCP credentials.
+
+    Supports both service account and authorized_user credential types.
 
     Args:
-        credentials: GCP service account credentials dict or JSON string.
+        credentials: GCP credentials dict or JSON string.
 
     Returns:
         Bearer access token for Kubernetes API authentication.
@@ -32,10 +35,19 @@ def _get_access_token(credentials: dict[str, Any] | str) -> str:
     if isinstance(credentials, str):
         credentials = json.loads(credentials)
 
-    creds = service_account.Credentials.from_service_account_info(
-        credentials,
-        scopes=_SCOPES,
-    )
+    cred_type = credentials.get("type", "service_account")
+
+    if cred_type == "authorized_user":
+        creds = user_credentials.Credentials.from_authorized_user_info(
+            credentials,
+            scopes=_SCOPES,
+        )
+    else:
+        creds = service_account.Credentials.from_service_account_info(
+            credentials,
+            scopes=_SCOPES,
+        )
+
     creds.refresh(Request())
 
     return creds.token
