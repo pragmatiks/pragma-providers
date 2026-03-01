@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import Annotated, Any, ClassVar
 
 from agno.team import Team as AgnoTeam
-from pragma_sdk import Config, Dependency, Outputs
-from pydantic import Field, field_validator
+from pragma_sdk import Config, Dependency, Field, Outputs
+from pydantic import Field as PydanticField
+from pydantic import field_validator
 
 from agno_provider.resources.agent import Agent, AgentOutputs, AgentSpec
 from agno_provider.resources.base import AgnoResource, AgnoSpec
@@ -44,7 +45,7 @@ class TeamSpec(AgnoSpec):
 
     member_specs: list[AgentSpec]
 
-    model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, Field(discriminator="type")] | None = None
+    model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, PydanticField(discriminator="type")] | None = None
 
     tools_specs: list[ToolsMCPSpec | ToolsWebSearchSpec] = []
     knowledge_spec: KnowledgeSpec | None = None
@@ -68,9 +69,9 @@ class TeamSpec(AgnoSpec):
 class TeamConfig(Config):
     """Configuration for an Agno team definition."""
 
-    name: str | None = None
-    description: str | None = None
-    role: str | None = None
+    name: Field[str] | None = None
+    description: Field[str] | None = None
+    role: Field[str] | None = None
 
     members: list[Dependency[Agent]]
 
@@ -93,7 +94,7 @@ class TeamConfig(Config):
 
     model: Dependency[AnthropicModel] | Dependency[OpenAIModel] | None = None
 
-    instructions: list[str] | None = None
+    instructions: Field[list[str]] | None = None
     prompt: Dependency[Prompt] | None = None
 
     tools: list[Dependency[ToolsMCP] | Dependency[ToolsWebSearch]] = []
@@ -104,17 +105,17 @@ class TeamConfig(Config):
 
     memory: Dependency[MemoryManager] | None = None
 
-    respond_directly: bool = False
-    delegate_to_all_members: bool = False
-    markdown: bool = False
-    add_datetime_to_context: bool = False
-    read_chat_history: bool | None = None
-    add_history_to_context: bool | None = None
-    num_history_runs: int | None = None
-    enable_agentic_memory: bool = False
-    update_memory_on_run: bool = False
-    add_memories_to_context: bool | None = None
-    enable_session_summaries: bool = False
+    respond_directly: Field[bool] = False
+    delegate_to_all_members: Field[bool] = False
+    markdown: Field[bool] = False
+    add_datetime_to_context: Field[bool] = False
+    read_chat_history: Field[bool] | None = None
+    add_history_to_context: Field[bool] | None = None
+    num_history_runs: Field[int] | None = None
+    enable_agentic_memory: Field[bool] = False
+    update_memory_on_run: Field[bool] = False
+    add_memories_to_context: Field[bool] | None = None
+    enable_session_summaries: Field[bool] = False
 
 
 class TeamOutputs(Outputs):
@@ -271,7 +272,7 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
             assert isinstance(member.outputs, AgentOutputs)
             member_specs.append(member.outputs.spec)
 
-        model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, Field(discriminator="type")] | None = None
+        model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, PydanticField(discriminator="type")] | None = None
         if self.config.model is not None:
             model = await self.config.model.resolve()
             model_outputs = model.outputs

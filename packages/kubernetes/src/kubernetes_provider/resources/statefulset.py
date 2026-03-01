@@ -29,8 +29,9 @@ from lightkube.models.core_v1 import (
 from lightkube.models.meta_v1 import LabelSelector, ObjectMeta
 from lightkube.resources.apps_v1 import StatefulSet as K8sStatefulSet
 from lightkube.resources.core_v1 import Pod
-from pragma_sdk import Config, Dependency, HealthStatus, LogEntry, Outputs, Resource
-from pydantic import BaseModel, Field
+from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
+from pydantic import BaseModel
+from pydantic import Field as PydanticField
 
 from kubernetes_provider.client import create_client_from_gke
 
@@ -114,7 +115,7 @@ class VolumeClaimTemplateConfig(BaseModel):
 
     name: str
     storage_class: str | None = None
-    access_modes: list[str] = Field(default_factory=lambda: ["ReadWriteOnce"])
+    access_modes: list[str] = PydanticField(default_factory=lambda: ["ReadWriteOnce"])
     storage: str = "10Gi"
 
 
@@ -131,13 +132,13 @@ class StatefulSetConfig(Config):
         volume_claim_templates: PVC templates for persistent storage.
     """
 
-    cluster: Dependency[GKE]
-    namespace: str = "default"
-    replicas: int = 1
-    service_name: str
-    selector: dict[str, str] | None = None
-    containers: list[ContainerConfig]
-    volume_claim_templates: list[VolumeClaimTemplateConfig] | None = None
+    cluster: ImmutableDependency[GKE]
+    namespace: ImmutableField[str] = "default"
+    replicas: Field[int] = 1
+    service_name: ImmutableField[str]
+    selector: Field[dict[str, str]] | None = None
+    containers: Field[list[ContainerConfig]]
+    volume_claim_templates: Field[list[VolumeClaimTemplateConfig]] | None = None
 
 
 class StatefulSetOutputs(Outputs):
@@ -399,22 +400,7 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
 
         Returns:
             StatefulSetOutputs with updated statefulset details.
-
-        Raises:
-            ValueError: If immutable fields changed.
         """
-        if previous_config.cluster.id != self.config.cluster.id:
-            msg = "Cannot change cluster; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.namespace != self.config.namespace:
-            msg = "Cannot change namespace; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.service_name != self.config.service_name:
-            msg = "Cannot change service_name; delete and recreate resource"
-            raise ValueError(msg)
-
         async with self._get_client() as client:
             sts = self._build_statefulset()
 

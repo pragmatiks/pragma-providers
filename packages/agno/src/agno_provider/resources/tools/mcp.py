@@ -56,16 +56,16 @@ class ToolsMCPConfig(Config):
         tool_name_prefix: Prefix to add to all tool names (avoids collisions).
     """
 
-    command: str | None = None
-    url: str | None = None
-    transport: TransportType | None = None
-    env: dict[str, Field[str]] | None = None
-    headers: dict[str, Field[str]] | None = None
-    include_run_context_headers: bool = False
-    timeout_seconds: int = 10
-    include_tools: list[str] | None = None
-    exclude_tools: list[str] | None = None
-    tool_name_prefix: str | None = None
+    command: Field[str] | None = None
+    url: Field[str] | None = None
+    transport: Field[TransportType] | None = None
+    env: Field[dict[str, str]] | None = None
+    headers: Field[dict[str, str]] | None = None
+    include_run_context_headers: Field[bool] = False
+    timeout_seconds: Field[int] = 10
+    include_tools: Field[list[str]] | None = None
+    exclude_tools: Field[list[str]] | None = None
+    tool_name_prefix: Field[str] | None = None
 
     @model_validator(mode="after")
     def validate_transport_config(self) -> ToolsMCPConfig:

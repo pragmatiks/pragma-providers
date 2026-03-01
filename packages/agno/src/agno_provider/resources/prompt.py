@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import ClassVar
 
-from pragma_sdk import Config, Outputs
+from pragma_sdk import Config, Field, Outputs
 from pydantic import model_validator
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
@@ -34,9 +34,9 @@ class PromptConfig(Config):
         template: Template string with {{variable}} placeholders.
     """
 
-    instructions: list[str] = []
-    variables: dict[str, str] = {}
-    template: str | None = None
+    instructions: Field[list[str]] = []
+    variables: Field[dict[str, str]] = {}
+    template: Field[str] | None = None
 
     @model_validator(mode="after")
     def validate_content(self) -> PromptConfig:

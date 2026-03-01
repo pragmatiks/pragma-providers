@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pytest
 from lightkube import ApiError
 from pragma_sdk import Dependency, LifecycleState
 
@@ -102,27 +101,6 @@ async def test_update_secret_success(
 
     assert result.name == "test-secret"
     mock_lightkube_client.apply.assert_called_once()
-
-
-async def test_update_rejects_namespace_change(
-    mock_lightkube_client: Any,
-    mock_gke_cluster: Any,
-) -> None:
-    """on_update rejects namespace changes."""
-    secret = create_secret_with_mocked_dependency(
-        name="test-secret",
-        namespace="ns-b",
-        mock_gke_cluster=mock_gke_cluster,
-    )
-
-    previous = SecretConfig(
-        cluster=Dependency(provider="gcp", resource="gke", name="test-cluster"),
-        namespace="ns-a",
-        data={"key": "value"},
-    )
-
-    with pytest.raises(ValueError, match="namespace"):
-        await secret.on_update(previous)
 
 
 async def test_delete_secret_success(

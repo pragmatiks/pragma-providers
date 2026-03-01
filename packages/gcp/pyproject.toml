@@ -50,6 +50,9 @@ changelog_file = "CHANGELOG.md"
 extend = "../../pyproject.toml"
 line-length = 120
 
+[tool.uv.sources]
+pragmatiks-sdk = { path = "../../../pragma-sdk", editable = true }
+
 [tool.uv.build-backend]
 module-name = "gcp_provider"
 

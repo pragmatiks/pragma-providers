@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal, cast
 
-from pragma_sdk import Config, Field, Outputs, Resource
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
 from pydantic import BaseModel
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
@@ -35,10 +35,10 @@ class CollectionConfig(Config):
     """
 
     api_key: Field[str] | None = None
-    url: str = "http://localhost:6333"
-    name: str
-    vectors: VectorConfig
-    on_disk: bool = False
+    url: Field[str] = "http://localhost:6333"
+    name: ImmutableField[str]
+    vectors: Field[VectorConfig]
+    on_disk: Field[bool] = False
 
 
 class CollectionOutputs(Outputs):

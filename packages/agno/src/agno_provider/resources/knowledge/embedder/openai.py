@@ -56,12 +56,12 @@ class EmbedderOpenAIConfig(Config):
         base_url: Optional custom base URL for OpenAI-compatible APIs.
     """
 
-    id: str = "text-embedding-3-small"
+    id: Field[str] = "text-embedding-3-small"
     api_key: Field[str]
-    dimensions: int | None = None
-    encoding_format: Literal["float", "base64"] = "float"
-    organization: str | None = None
-    base_url: str | None = None
+    dimensions: Field[int] | None = None
+    encoding_format: Field[Literal["float", "base64"]] = "float"
+    organization: Field[str] | None = None
+    base_url: Field[str] | None = None
 
 
 class EmbedderOpenAIOutputs(Outputs):

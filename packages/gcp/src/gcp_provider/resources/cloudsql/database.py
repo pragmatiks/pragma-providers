@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from pragma_sdk import Config, Dependency, Outputs, Resource
-from pydantic import Field
+from pragma_sdk import Config, Dependency, ImmutableField, Outputs, Resource
 
 from gcp_provider.resources.cloudsql.database_instance import DatabaseInstance
 from gcp_provider.resources.cloudsql.helpers import (
@@ -26,7 +25,7 @@ class DatabaseConfig(Config):
     """
 
     instance: Dependency[DatabaseInstance]
-    database_name: str = Field(json_schema_extra={"immutable": True})
+    database_name: ImmutableField[str]
 
 
 class DatabaseOutputs(Outputs):
@@ -88,18 +87,10 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         """Handle database updates.
 
         If instance changed, delete from old instance and create in new one.
-        database_name cannot be changed (truly immutable).
 
         Returns:
             DatabaseOutputs with database details.
-
-        Raises:
-            ValueError: If database_name changed (immutable field).
         """
-        if previous_config.database_name != self.config.database_name:
-            msg = "Cannot change database_name; delete and recreate resource"
-            raise ValueError(msg)
-
         if previous_config.instance != self.config.instance:
             await self._delete(previous_config)
             return await self.on_create()

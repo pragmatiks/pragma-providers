@@ -13,7 +13,7 @@ from lightkube.models.core_v1 import ServicePort, ServiceSpec
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Endpoints
 from lightkube.resources.core_v1 import Service as K8sService
-from pragma_sdk import Config, Dependency, HealthStatus, LogEntry, Outputs, Resource
+from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import BaseModel
 
 from kubernetes_provider.client import create_client_from_gke
@@ -49,12 +49,12 @@ class ServiceConfig(Config):
         cluster_ip: Explicit cluster IP (use "None" for headless services).
     """
 
-    cluster: Dependency[GKE]
-    namespace: str = "default"
-    type: Literal["ClusterIP", "NodePort", "LoadBalancer", "Headless"] = "ClusterIP"
-    selector: dict[str, str]
-    ports: list[PortConfig]
-    cluster_ip: str | None = None
+    cluster: ImmutableDependency[GKE]
+    namespace: ImmutableField[str] = "default"
+    type: Field[Literal["ClusterIP", "NodePort", "LoadBalancer", "Headless"]] = "ClusterIP"
+    selector: Field[dict[str, str]]
+    ports: Field[list[PortConfig]]
+    cluster_ip: Field[str] | None = None
 
 
 class ServiceOutputs(Outputs):
@@ -201,18 +201,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
 
         Returns:
             ServiceOutputs with updated service details.
-
-        Raises:
-            ValueError: If immutable fields changed.
         """
-        if previous_config.cluster.id != self.config.cluster.id:
-            msg = "Cannot change cluster; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.namespace != self.config.namespace:
-            msg = "Cannot change namespace; delete and recreate resource"
-            raise ValueError(msg)
-
         async with self._get_client() as client:
             service = self._build_service()
 

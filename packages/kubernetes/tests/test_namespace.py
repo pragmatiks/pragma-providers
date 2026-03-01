@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pytest
 from lightkube import ApiError
 from pragma_sdk import Dependency, LifecycleState
 
@@ -95,24 +94,6 @@ async def test_update_namespace_success(
 
     assert result.name == "agents"
     mock_lightkube_client.apply.assert_called_once()
-
-
-async def test_update_rejects_cluster_change(
-    mock_lightkube_client: Any,
-    mock_gke_cluster: Any,
-) -> None:
-    """on_update rejects cluster changes."""
-    ns = create_namespace_with_mocked_dependency(
-        name="agents",
-        mock_gke_cluster=mock_gke_cluster,
-    )
-
-    previous = NamespaceConfig(
-        cluster=Dependency(provider="gcp", resource="gke", name="other-cluster"),
-    )
-
-    with pytest.raises(ValueError, match="cluster"):
-        await ns.on_update(previous)
 
 
 async def test_delete_namespace_success(

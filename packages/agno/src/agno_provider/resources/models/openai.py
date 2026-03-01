@@ -78,17 +78,17 @@ class OpenAIModelConfig(ModelConfig):
     """
 
     api_key: Field[str]
-    max_tokens: int | None = None
-    temperature: float | None = None
-    top_p: float | None = None
-    frequency_penalty: float | None = None
-    presence_penalty: float | None = None
-    seed: int | None = None
-    stop: str | list[str] | None = None
-    timeout: float | None = None
-    max_retries: int | None = None
-    organization: str | None = None
-    base_url: str | None = None
+    max_tokens: Field[int] | None = None
+    temperature: Field[float] | None = None
+    top_p: Field[float] | None = None
+    frequency_penalty: Field[float] | None = None
+    presence_penalty: Field[float] | None = None
+    seed: Field[int] | None = None
+    stop: Field[str | list[str]] | None = None
+    timeout: Field[float] | None = None
+    max_retries: Field[int] | None = None
+    organization: Field[str] | None = None
+    base_url: Field[str] | None = None
 
 
 class OpenAIModelOutputs(ModelOutputs):

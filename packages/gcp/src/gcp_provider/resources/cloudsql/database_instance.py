@@ -10,8 +10,8 @@ from datetime import datetime
 from typing import Any, ClassVar, Literal
 
 from google.cloud.logging_v2 import Client as LoggingClient
-from pragma_sdk import Config, HealthStatus, LogEntry, Outputs, Resource
-from pydantic import Field, field_validator
+from pragma_sdk import Config, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
+from pydantic import field_validator
 
 from gcp_provider.resources.cloudsql.helpers import (
     execute,
@@ -43,34 +43,17 @@ class DatabaseInstanceConfig(Config):
         enable_public_ip: Whether to assign a public IP address.
     """
 
-    project_id: str = Field(json_schema_extra={"immutable": True})
-    credentials: dict[str, Any] | str
-    region: str = Field(json_schema_extra={"immutable": True})
-    instance_name: str = Field(json_schema_extra={"immutable": True})
-    database_version: str = Field(default="POSTGRES_15", json_schema_extra={"immutable": True})
-    tier: str = "db-f1-micro"
-    availability_type: Literal["ZONAL", "REGIONAL"] = "ZONAL"
-    backup_enabled: bool = True
-    deletion_protection: bool = False
-    authorized_networks: list[str] = Field(default_factory=list)
-    enable_public_ip: bool = True
-
-    def validate_update(self, previous: DatabaseInstanceConfig) -> None:
-        """Validate that immutable fields have not changed.
-
-        Raises:
-            ValueError: If any immutable field differs from previous config.
-        """
-        for name, field_info in self.__class__.model_fields.items():
-            extra = field_info.json_schema_extra
-
-            if isinstance(extra, dict) and extra.get("immutable"):
-                current_value = getattr(self, name)
-                previous_value = getattr(previous, name)
-
-                if current_value != previous_value:
-                    msg = f"Cannot change {name}; delete and recreate resource"
-                    raise ValueError(msg)
+    project_id: ImmutableField[str]
+    credentials: Field[dict[str, Any] | str]
+    region: ImmutableField[str]
+    instance_name: ImmutableField[str]
+    database_version: ImmutableField[str] = "POSTGRES_15"
+    tier: Field[str] = "db-f1-micro"
+    availability_type: Field[Literal["ZONAL", "REGIONAL"]] = "ZONAL"
+    backup_enabled: Field[bool] = True
+    deletion_protection: Field[bool] = False
+    authorized_networks: list[Field[str]] = []
+    enable_public_ip: Field[bool] = True
 
     @field_validator("instance_name")
     @classmethod
@@ -178,7 +161,6 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         """Update instance configuration.
 
         Updates mutable settings (tier, availability, backups, network config).
-        Immutable fields (project, region, name, database version) cannot be changed.
 
         Args:
             previous_config: The previous configuration before update.
@@ -186,8 +168,6 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         Returns:
             DatabaseInstanceOutputs with updated instance state.
         """
-        self.config.validate_update(previous_config)
-
         service = get_sqladmin_service(get_credentials(self.config.credentials))
 
         await execute(

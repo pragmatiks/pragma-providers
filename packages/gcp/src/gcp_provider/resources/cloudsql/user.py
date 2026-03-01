@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from pragma_sdk import Config, Dependency, Field, Outputs, Resource
-from pydantic import Field as PydanticField
+from pragma_sdk import Config, Dependency, Field, ImmutableField, Outputs, Resource
 
 from gcp_provider.resources.cloudsql.database_instance import DatabaseInstance
 from gcp_provider.resources.cloudsql.helpers import execute, get_credentials, get_sqladmin_service
@@ -21,7 +20,7 @@ class UserConfig(Config):
     """
 
     instance: Dependency[DatabaseInstance]
-    username: str = PydanticField(json_schema_extra={"immutable": True})
+    username: ImmutableField[str]
     password: Field[str]
 
 
@@ -87,19 +86,14 @@ class User(Resource[UserConfig, UserOutputs]):
         """Handle user updates.
 
         If instance changed, delete from old instance and create in new one.
-        Password changes are applied in place. Username cannot be changed.
+        Password changes are applied in place.
 
         Returns:
             UserOutputs with updated user details.
 
         Raises:
-            ValueError: If username changed (immutable field).
             RuntimeError: If user not found after update.
         """
-        if previous_config.username != self.config.username:
-            msg = "Cannot change username; delete and recreate resource"
-            raise ValueError(msg)
-
         if previous_config.instance != self.config.instance:
             await self._delete(previous_config)
             return await self.on_create()

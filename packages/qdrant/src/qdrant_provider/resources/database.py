@@ -27,7 +27,7 @@ from kubernetes_provider.resources.statefulset import (
     VolumeMountConfig,
 )
 from lightkube.resources.core_v1 import Service as K8sService
-from pragma_sdk import Config, Dependency, HealthStatus, LogEntry, Outputs, Resource
+from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
 from pydantic import BaseModel, model_validator
 from pydantic import Field as PydanticField
 
@@ -75,13 +75,13 @@ class DatabaseConfig(Config):
         generate_api_key: If True and api_key is None, generates a secure 32-char key.
     """
 
-    cluster: Dependency[GKE]
-    replicas: int = 1
-    image: str = "qdrant/qdrant:latest"
-    storage: StorageConfig | None = None
-    resources: ResourceConfig | None = None
-    api_key: str | None = None
-    generate_api_key: bool = False
+    cluster: ImmutableDependency[GKE]
+    replicas: Field[int] = 1
+    image: Field[str] = "qdrant/qdrant:latest"
+    storage: Field[StorageConfig] | None = None
+    resources: Field[ResourceConfig] | None = None
+    api_key: Field[str] | None = None
+    generate_api_key: Field[bool] = False
 
     @model_validator(mode="after")
     def validate_api_key_options(self) -> DatabaseConfig:
