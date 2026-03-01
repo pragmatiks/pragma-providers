@@ -12,7 +12,7 @@ from gcp_provider import GKE
 from lightkube import ApiError
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Secret as K8sSecret
-from pragma_sdk import Config, Dependency, HealthStatus, LogEntry, Outputs, Resource
+from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 
 from kubernetes_provider.client import create_client_from_gke
 
@@ -28,11 +28,11 @@ class SecretConfig(Config):
         string_data: Plain text key-value pairs (Kubernetes will base64 encode).
     """
 
-    cluster: Dependency[GKE]
-    namespace: str = "default"
-    type: str = "Opaque"
-    data: dict[str, str] | None = None
-    string_data: dict[str, str] | None = None
+    cluster: ImmutableDependency[GKE]
+    namespace: ImmutableField[str] = "default"
+    type: Field[str] = "Opaque"
+    data: Field[dict[str, str]] | None = None
+    string_data: Field[dict[str, str]] | None = None
 
 
 class SecretOutputs(Outputs):
@@ -168,18 +168,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
         Returns:
             SecretOutputs with updated secret details.
-
-        Raises:
-            ValueError: If immutable fields changed.
         """
-        if previous_config.cluster.id != self.config.cluster.id:
-            msg = "Cannot change cluster; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.namespace != self.config.namespace:
-            msg = "Cannot change namespace; delete and recreate resource"
-            raise ValueError(msg)
-
         async with self._get_client() as client:
             secret = self._build_secret()
 

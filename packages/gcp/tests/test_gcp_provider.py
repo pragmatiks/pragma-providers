@@ -140,48 +140,6 @@ async def test_update_no_change_returns_existing(
     mock_secretmanager_client.add_secret_version.assert_not_called()
 
 
-async def test_update_rejects_project_change(
-    harness: ProviderHarness,
-    mock_secretmanager_client: MagicMock,
-    sample_credentials: dict,
-) -> None:
-    """on_update rejects project_id changes."""
-    previous = SecretConfig(project_id="proj-a", secret_id="sec", data="val", credentials=sample_credentials)
-    current = SecretConfig(project_id="proj-b", secret_id="sec", data="val", credentials=sample_credentials)
-
-    result = await harness.invoke_update(
-        Secret,
-        name="test",
-        config=current,
-        previous_config=previous,
-    )
-
-    assert result.failed
-    assert result.error is not None
-    assert "project_id" in str(result.error)
-
-
-async def test_update_rejects_secret_id_change(
-    harness: ProviderHarness,
-    mock_secretmanager_client: MagicMock,
-    sample_credentials: dict,
-) -> None:
-    """on_update rejects secret_id changes."""
-    previous = SecretConfig(project_id="proj", secret_id="sec-a", data="val", credentials=sample_credentials)
-    current = SecretConfig(project_id="proj", secret_id="sec-b", data="val", credentials=sample_credentials)
-
-    result = await harness.invoke_update(
-        Secret,
-        name="test",
-        config=current,
-        previous_config=previous,
-    )
-
-    assert result.failed
-    assert result.error is not None
-    assert "secret_id" in str(result.error)
-
-
 async def test_delete_success(
     harness: ProviderHarness,
     mock_secretmanager_client: MagicMock,

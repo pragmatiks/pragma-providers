@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Annotated, Any, ClassVar
 
 from agno.agent import Agent as AgnoAgent
-from pragma_sdk import Config, Dependency, Outputs
-from pydantic import Field
+from pragma_sdk import Config, Dependency, Field, Outputs
+from pydantic import Field as PydanticField
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
 from agno_provider.resources.db.postgres import DbPostgres, DbPostgresSpec
@@ -40,7 +40,7 @@ class AgentSpec(AgnoSpec):
     description: str | None = None
     role: str | None = None
     instructions: list[str] | None = None
-    model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, Field(discriminator="type")]
+    model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, PydanticField(discriminator="type")]
     tools_specs: list[ToolsMCPSpec | ToolsWebSearchSpec] = []
     knowledge_spec: KnowledgeSpec | None = None
     memory_spec: MemoryManagerSpec | None = None
@@ -60,13 +60,13 @@ class AgentSpec(AgnoSpec):
 class AgentConfig(Config):
     """Configuration for an Agno agent definition."""
 
-    name: str | None = None
-    description: str | None = None
-    role: str | None = None
+    name: Field[str] | None = None
+    description: Field[str] | None = None
+    role: Field[str] | None = None
 
     model: Dependency[AnthropicModel] | Dependency[OpenAIModel]
 
-    instructions: list[str] | None = None
+    instructions: list[Field[str]] | None = None
     prompt: Dependency[Prompt] | None = None
 
     tools: list[Dependency[ToolsMCP] | Dependency[ToolsWebSearch]] = []
@@ -77,15 +77,15 @@ class AgentConfig(Config):
 
     memory: Dependency[MemoryManager] | None = None
 
-    markdown: bool = False
-    add_datetime_to_context: bool = False
-    read_chat_history: bool | None = None
-    add_history_to_context: bool | None = None
-    num_history_runs: int | None = None
-    enable_agentic_memory: bool = False
-    update_memory_on_run: bool = False
-    add_memories_to_context: bool | None = None
-    enable_session_summaries: bool = False
+    markdown: Field[bool] = False
+    add_datetime_to_context: Field[bool] = False
+    read_chat_history: Field[bool] | None = None
+    add_history_to_context: Field[bool] | None = None
+    num_history_runs: Field[int] | None = None
+    enable_agentic_memory: Field[bool] = False
+    update_memory_on_run: Field[bool] = False
+    add_memories_to_context: Field[bool] | None = None
+    enable_session_summaries: Field[bool] = False
 
 
 class AgentOutputs(Outputs):
@@ -226,7 +226,7 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
             msg = "Model dependency not resolved"
             raise RuntimeError(msg)
 
-        model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, Field(discriminator="type")]
+        model_spec: Annotated[OpenAIModelSpec | AnthropicModelSpec, PydanticField(discriminator="type")]
         if isinstance(model_outputs, OpenAIModelOutputs):
             model_spec = model_outputs.spec
         elif isinstance(model_outputs, AnthropicModelOutputs):

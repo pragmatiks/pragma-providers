@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pytest
 from lightkube import ApiError
 from pragma_sdk import Dependency, LifecycleState
 
@@ -189,29 +188,6 @@ async def test_update_statefulset_success(
     result = await sts.on_update(previous)
 
     assert result.replicas == 2
-
-
-async def test_update_rejects_service_name_change(
-    mock_lightkube_client: Any,
-    mock_gke_cluster: Any,
-) -> None:
-    """on_update rejects service_name changes."""
-    sts = create_statefulset_with_mocked_dependency(
-        name="test-sts",
-        service_name="svc-b",
-        mock_gke_cluster=mock_gke_cluster,
-    )
-
-    previous = StatefulSetConfig(
-        cluster=Dependency(provider="gcp", resource="gke", name="test-cluster"),
-        namespace="default",
-        replicas=1,
-        service_name="svc-a",
-        containers=[ContainerConfig(name="app", image="nginx")],
-    )
-
-    with pytest.raises(ValueError, match="service_name"):
-        await sts.on_update(previous)
 
 
 async def test_delete_statefulset_success(

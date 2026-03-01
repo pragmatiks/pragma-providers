@@ -8,7 +8,7 @@ from typing import Any, ClassVar
 from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.secretmanager_v1 import SecretManagerServiceAsyncClient
 from google.oauth2 import service_account
-from pragma_sdk import Config, Outputs, Resource
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
 
 
 class SecretConfig(Config):
@@ -23,10 +23,10 @@ class SecretConfig(Config):
             Use a pragma/secret resource with a FieldReference to provide credentials.
     """
 
-    project_id: str
-    secret_id: str
-    data: str
-    credentials: dict[str, Any] | str
+    project_id: ImmutableField[str]
+    secret_id: ImmutableField[str]
+    data: Field[str]
+    credentials: Field[dict[str, Any] | str]
 
 
 class SecretOutputs(Outputs):
@@ -127,18 +127,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
         Returns:
             SecretOutputs with updated version info.
-
-        Raises:
-            ValueError: If project_id or secret_id changed (requires delete + create).
         """
-        if previous_config.project_id != self.config.project_id:
-            msg = "Cannot change project_id; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.secret_id != self.config.secret_id:
-            msg = "Cannot change secret_id; delete and recreate resource"
-            raise ValueError(msg)
-
         if previous_config.data == self.config.data and self.outputs is not None:
             return self.outputs
 

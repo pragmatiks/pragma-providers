@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pytest
 from lightkube import ApiError
 from pragma_sdk import Dependency, LifecycleState
 
@@ -81,27 +80,6 @@ async def test_update_configmap_success(
 
     assert result.name == "test-cm"
     mock_lightkube_client.apply.assert_called_once()
-
-
-async def test_update_rejects_namespace_change(
-    mock_lightkube_client: Any,
-    mock_gke_cluster: Any,
-) -> None:
-    """on_update rejects namespace changes."""
-    cm = create_configmap_with_mocked_dependency(
-        name="test-cm",
-        namespace="ns-b",
-        mock_gke_cluster=mock_gke_cluster,
-    )
-
-    previous = ConfigMapConfig(
-        cluster=Dependency(provider="gcp", resource="gke", name="test-cluster"),
-        namespace="ns-a",
-        data={"key": "value"},
-    )
-
-    with pytest.raises(ValueError, match="namespace"):
-        await cm.on_update(previous)
 
 
 async def test_delete_configmap_success(

@@ -11,7 +11,7 @@ from gcp_provider import GKE
 from lightkube import ApiError
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import ConfigMap as K8sConfigMap
-from pragma_sdk import Config, Dependency, HealthStatus, LogEntry, Outputs, Resource
+from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 
 from kubernetes_provider.client import create_client_from_gke
 
@@ -25,9 +25,9 @@ class ConfigMapConfig(Config):
         data: Key-value pairs to store in the configmap.
     """
 
-    cluster: Dependency[GKE]
-    namespace: str = "default"
-    data: dict[str, str]
+    cluster: ImmutableDependency[GKE]
+    namespace: ImmutableField[str] = "default"
+    data: Field[dict[str, str]]
 
 
 class ConfigMapOutputs(Outputs):
@@ -132,18 +132,7 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
 
         Returns:
             ConfigMapOutputs with updated configmap details.
-
-        Raises:
-            ValueError: If immutable fields changed.
         """
-        if previous_config.cluster.id != self.config.cluster.id:
-            msg = "Cannot change cluster; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.namespace != self.config.namespace:
-            msg = "Cannot change namespace; delete and recreate resource"
-            raise ValueError(msg)
-
         async with self._get_client() as client:
             configmap = self._build_configmap()
 

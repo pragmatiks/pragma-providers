@@ -1392,7 +1392,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-agno-provider"
-version = "0.86.0"
+version = "0.88.0"
 source = { editable = "." }
 dependencies = [
     { name = "agno", extra = ["anthropic", "openai", "postgres", "qdrant"] },
@@ -1421,9 +1421,9 @@ requires-dist = [
     { name = "ddgs", specifier = ">=8.0.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.0" },
     { name = "mcp", specifier = ">=1.26.0" },
-    { name = "pragmatiks-gcp-provider", specifier = ">=0.77.0" },
-    { name = "pragmatiks-kubernetes-provider", specifier = ">=0.100.0" },
-    { name = "pragmatiks-sdk", specifier = ">=0.6.0" },
+    { name = "pragmatiks-gcp-provider", editable = "../gcp" },
+    { name = "pragmatiks-kubernetes-provider", editable = "../kubernetes" },
+    { name = "pragmatiks-sdk", editable = "../../../pragma-sdk" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
 ]
@@ -1439,8 +1439,8 @@ dev = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "0.124.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.134.0"
+source = { editable = "../gcp" }
 dependencies = [
     { name = "google-api-python-client" },
     { name = "google-auth" },
@@ -1449,15 +1449,30 @@ dependencies = [
     { name = "google-cloud-secret-manager" },
     { name = "pragmatiks-sdk" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/67/c2/d9df8b2020ac76c14b7a4cac9e8ea7be28d7799e949dbc987d6ff16b343b/pragmatiks_gcp_provider-0.124.0.tar.gz", hash = "sha256:5cc55f0c8f1ba5d530fd1984e2b1e0cf98d2a4e30312eb85b3a07acdb24b7307", size = 12422, upload-time = "2026-02-07T14:06:57.968Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/83/c2/453956b762a21516ddf877c9c9a5ef01c538a116dba33ddd9a6a4185023b/pragmatiks_gcp_provider-0.124.0-py3-none-any.whl", hash = "sha256:56e8e5977f41e1ccc6ef09417609df4330b90b7e9fdfeab1ff6e9327b44a4b4a", size = 19046, upload-time = "2026-02-07T14:06:56.435Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "google-api-python-client", specifier = ">=2.150.0" },
+    { name = "google-auth", specifier = ">=2.35.0" },
+    { name = "google-cloud-container", specifier = ">=2.50.0" },
+    { name = "google-cloud-logging", specifier = ">=3.10.0" },
+    { name = "google-cloud-secret-manager", specifier = ">=2.20.0" },
+    { name = "pragmatiks-sdk", editable = "../../../pragma-sdk" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-asyncio", specifier = ">=1.0.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
+    { name = "ty", specifier = ">=0.0.14" },
 ]
 
 [[package]]
 name = "pragmatiks-kubernetes-provider"
-version = "0.134.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.145.0"
+source = { editable = "../kubernetes" }
 dependencies = [
     { name = "google-auth" },
     { name = "lightkube" },
@@ -1465,24 +1480,57 @@ dependencies = [
     { name = "pragmatiks-sdk" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/86/dd/0c50a0419357dc3fbc84f193b9c51471a6187376686d07b69c3e6959abea/pragmatiks_kubernetes_provider-0.134.0.tar.gz", hash = "sha256:f936928fee0cde25d010e15bb771903ea2c6129d86375192acec9c5e87ac3f41", size = 12014, upload-time = "2026-02-07T14:07:57.696Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f7/ec/1d7fede99536c1bc2116203d053b467d94effa4ae0470721e5eb3e0497f5/pragmatiks_kubernetes_provider-0.134.0-py3-none-any.whl", hash = "sha256:5250e7afce5c35044e87e22111da2e73600a0bbd074099501fa9c71701c00daf", size = 19928, upload-time = "2026-02-07T14:07:56.219Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "google-auth", specifier = ">=2.30.0" },
+    { name = "lightkube", specifier = ">=0.15.0" },
+    { name = "pragmatiks-gcp-provider", editable = "../gcp" },
+    { name = "pragmatiks-sdk", editable = "../../../pragma-sdk" },
+    { name = "requests", specifier = ">=2.32.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-asyncio", specifier = ">=1.0.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
+    { name = "ty", specifier = ">=0.0.14" },
 ]
 
 [[package]]
 name = "pragmatiks-sdk"
-version = "0.18.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.22.0"
+source = { editable = "../../../pragma-sdk" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/19/22/8feaf25477c6a480625e620c6a051174afdeedaa1608322ca7090b524563/pragmatiks_sdk-0.18.0.tar.gz", hash = "sha256:f3f838e76e73b23ceeb0d6d834be7e7b72671d2ab18f46079952bc7c324d3733", size = 21452, upload-time = "2026-01-31T19:30:12.102Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d0/f0/4574706fde87b1ae586917772522af46b95773cd1d53243aab10ccd78d95/pragmatiks_sdk-0.18.0-py3-none-any.whl", hash = "sha256:12009a776dfc40136da3b4c30d6ae052db0153b9a483c649bf51f1b83026665c", size = 29070, upload-time = "2026-01-31T19:30:10.541Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pydantic", specifier = ">=2.11.4" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "structlog", specifier = ">=24.1.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "commitizen", specifier = ">=4.11.0" },
+    { name = "pre-commit", specifier = ">=4.0.0" },
+    { name = "respx", specifier = ">=0.22.0" },
+]
+test = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-asyncio", specifier = ">=1.0.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
+    { name = "respx", specifier = ">=0.21.1" },
 ]
 
 [[package]]

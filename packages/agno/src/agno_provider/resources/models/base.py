@@ -9,7 +9,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, ClassVar
 
-from pragma_sdk import Config, Outputs
+from pragma_sdk import Config, Field, Outputs
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
 
@@ -25,7 +25,7 @@ class ModelConfig(Config):
         id: The model identifier (e.g., "gpt-4o", "claude-sonnet-4-20250514").
     """
 
-    id: str
+    id: Field[str]
 
 
 class ModelOutputs(Outputs):

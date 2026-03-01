@@ -11,7 +11,7 @@ from gcp_provider import GKE
 from lightkube import ApiError
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Namespace as K8sNamespace
-from pragma_sdk import Config, Dependency, HealthStatus, LogEntry, Outputs, Resource
+from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
 
 from kubernetes_provider.client import create_client_from_gke
 
@@ -26,8 +26,8 @@ class NamespaceConfig(Config):
         labels: Optional labels to apply to the namespace.
     """
 
-    cluster: Dependency[GKE]
-    labels: dict[str, str] | None = None
+    cluster: ImmutableDependency[GKE]
+    labels: Field[dict[str, str]] | None = None
 
 
 class NamespaceOutputs(Outputs):
@@ -124,14 +124,7 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
 
         Returns:
             NamespaceOutputs with namespace name.
-
-        Raises:
-            ValueError: If immutable fields changed.
         """
-        if previous_config.cluster.id != self.config.cluster.id:
-            msg = "Cannot change cluster; delete and recreate resource"
-            raise ValueError(msg)
-
         async with self._get_client() as client:
             namespace = self._build_namespace()
 

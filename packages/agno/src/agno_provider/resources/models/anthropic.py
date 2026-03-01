@@ -53,11 +53,11 @@ class AnthropicModelConfig(ModelConfig):
     """
 
     api_key: Field[str]
-    max_tokens: int = 8192
-    temperature: float | None = None
-    top_p: float | None = None
-    top_k: int | None = None
-    stop_sequences: list[str] | None = None
+    max_tokens: Field[int] = 8192
+    temperature: Field[float] | None = None
+    top_p: Field[float] | None = None
+    top_k: Field[int] | None = None
+    stop_sequences: list[Field[str]] | None = None
 
 
 class AnthropicModelOutputs(ModelOutputs):

@@ -593,7 +593,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "0.132.0"
+version = "0.134.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-api-python-client" },
@@ -620,7 +620,7 @@ requires-dist = [
     { name = "google-cloud-container", specifier = ">=2.50.0" },
     { name = "google-cloud-logging", specifier = ">=3.10.0" },
     { name = "google-cloud-secret-manager", specifier = ">=2.20.0" },
-    { name = "pragmatiks-sdk", specifier = ">=0.17.1" },
+    { name = "pragmatiks-sdk", editable = "../../../pragma-sdk" },
 ]
 
 [package.metadata.requires-dev]
@@ -634,17 +634,36 @@ dev = [
 
 [[package]]
 name = "pragmatiks-sdk"
-version = "0.17.1"
-source = { registry = "https://pypi.org/simple" }
+version = "0.22.0"
+source = { editable = "../../../pragma-sdk" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/52/8f/5b5a6ea6f7506f2d4fdb33b9213c8e1ba2d72be90af189a7565305bd9f3c/pragmatiks_sdk-0.17.1.tar.gz", hash = "sha256:43259a852db7b01311011a21fd023f8db839faca95b9c19fac2abed0b5ed785d", size = 21252, upload-time = "2026-01-31T18:16:10.601Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f0/1a/8c2bcccfa09670ec38a52c948d6a71cb92b00403678a6d0fddb338c856bb/pragmatiks_sdk-0.17.1-py3-none-any.whl", hash = "sha256:3db27539b7451c76395190506ae632874b3bd4014ce2c60e9f237d310d4a445c", size = 28865, upload-time = "2026-01-31T18:16:08.975Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pydantic", specifier = ">=2.11.4" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "structlog", specifier = ">=24.1.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "commitizen", specifier = ">=4.11.0" },
+    { name = "pre-commit", specifier = ">=4.0.0" },
+    { name = "respx", specifier = ">=0.22.0" },
+]
+test = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-asyncio", specifier = ">=1.0.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
+    { name = "respx", specifier = ">=0.21.1" },
 ]
 
 [[package]]

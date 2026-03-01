@@ -122,15 +122,15 @@ class DbPostgresConfig(Config):
     connection_url: Field[str] | None = None
 
     host: Field[str] | None = None
-    port: int = 5432
+    port: Field[int] = 5432
     database: Field[str] | None = None
 
     username: Field[str] | None = None
     password: Field[str] | None = None
 
-    db_schema: str = "ai"
-    session_table: str | None = None
-    memory_table: str | None = None
+    db_schema: Field[str] = "ai"
+    session_table: Field[str] | None = None
+    memory_table: Field[str] | None = None
 
     @model_validator(mode="after")
     def validate_connection_config(self) -> DbPostgresConfig:

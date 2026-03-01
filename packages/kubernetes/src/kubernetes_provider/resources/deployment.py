@@ -26,7 +26,7 @@ from lightkube.models.core_v1 import (
 from lightkube.models.meta_v1 import LabelSelector, ObjectMeta
 from lightkube.resources.apps_v1 import Deployment as K8sDeployment
 from lightkube.resources.core_v1 import Pod
-from pragma_sdk import Config, Dependency, HealthStatus, LogEntry, Outputs, Resource
+from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import BaseModel
 
 from kubernetes_provider.client import create_client_from_gke
@@ -149,13 +149,13 @@ class DeploymentConfig(Config):
         strategy: Deployment strategy (RollingUpdate or Recreate).
     """
 
-    cluster: Dependency[GKE]
-    namespace: str = "default"
-    replicas: int = 1
-    selector: dict[str, str]
-    labels: dict[str, str] | None = None
-    containers: list[ContainerConfig]
-    strategy: Literal["RollingUpdate", "Recreate"] = "RollingUpdate"
+    cluster: ImmutableDependency[GKE]
+    namespace: ImmutableField[str] = "default"
+    replicas: Field[int] = 1
+    selector: ImmutableField[dict[str, str]]
+    labels: Field[dict[str, str]] | None = None
+    containers: Field[list[ContainerConfig]]
+    strategy: Field[Literal["RollingUpdate", "Recreate"]] = "RollingUpdate"
 
 
 class DeploymentOutputs(Outputs):
@@ -458,22 +458,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
         Returns:
             DeploymentOutputs with updated deployment details.
-
-        Raises:
-            ValueError: If immutable fields changed.
         """
-        if previous_config.cluster.id != self.config.cluster.id:
-            msg = "Cannot change cluster; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.namespace != self.config.namespace:
-            msg = "Cannot change namespace; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.selector != self.config.selector:
-            msg = "Cannot change selector; delete and recreate resource"
-            raise ValueError(msg)
-
         async with self._get_client() as client:
             deployment = self._build_deployment()
 

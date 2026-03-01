@@ -7,7 +7,7 @@ import json
 import re
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Annotated, Any, ClassVar, Literal, Self
+from typing import Any, ClassVar, Literal, Self
 
 from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.container_v1 import ClusterManagerAsyncClient
@@ -22,8 +22,8 @@ from google.cloud.container_v1.types import (
 )
 from google.cloud.logging_v2 import Client as LoggingClient
 from google.oauth2 import service_account
-from pragma_sdk import Config, HealthStatus, LogEntry, Outputs, Resource
-from pydantic import Field, field_validator, model_validator
+from pragma_sdk import Config, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
+from pydantic import field_validator, model_validator
 
 
 _CLUSTER_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,38}[a-z0-9]$|^[a-z]$")
@@ -47,17 +47,17 @@ class GKEConfig(Config):
         disk_size_gb: Boot disk size in GB (standard clusters only).
     """
 
-    project_id: str
-    credentials: dict[str, Any] | str
-    location: str
-    name: str
-    autopilot: bool = True
-    network: str = "default"
-    subnetwork: str | None = None
-    release_channel: Literal["RAPID", "REGULAR", "STABLE"] = "REGULAR"
-    initial_node_count: Annotated[int, Field(ge=1)] = 1
-    machine_type: str = "e2-medium"
-    disk_size_gb: Annotated[int, Field(ge=10)] = 100
+    project_id: ImmutableField[str]
+    credentials: Field[dict[str, Any] | str]
+    location: ImmutableField[str]
+    name: ImmutableField[str]
+    autopilot: ImmutableField[bool] = True
+    network: ImmutableField[str] = "default"
+    subnetwork: Field[str] | None = None
+    release_channel: Field[Literal["RAPID", "REGULAR", "STABLE"]] = "REGULAR"
+    initial_node_count: Field[int] = 1
+    machine_type: Field[str] = "e2-medium"
+    disk_size_gb: Field[int] = 100
 
     @field_validator("name")
     @classmethod
@@ -312,38 +312,12 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
     async def on_update(self, previous_config: GKEConfig) -> GKEOutputs:
         """Update cluster configuration.
 
-        Most GKE cluster properties require recreation. This method validates
-        that immutable fields haven't changed and returns current state.
-
         Args:
             previous_config: The previous configuration before update.
 
         Returns:
             GKEOutputs with current cluster state.
-
-        Raises:
-            ValueError: If immutable fields changed (requires delete + create).
         """
-        if previous_config.project_id != self.config.project_id:
-            msg = "Cannot change project_id; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.location != self.config.location:
-            msg = "Cannot change location; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.name != self.config.name:
-            msg = "Cannot change name; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.network != self.config.network:
-            msg = "Cannot change network; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.autopilot != self.config.autopilot:
-            msg = "Cannot change autopilot mode; delete and recreate resource"
-            raise ValueError(msg)
-
         if self.outputs is not None:
             return self.outputs
 
