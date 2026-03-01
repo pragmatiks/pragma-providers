@@ -17,7 +17,9 @@ includes:
 tasks:
   default: task --list-all
 
-  install: uv sync --all-groups
+  install:
+    desc: Install all provider dependencies
+    cmd: uv sync --all-groups
 
   test:
     desc: Run all tests across all packages
