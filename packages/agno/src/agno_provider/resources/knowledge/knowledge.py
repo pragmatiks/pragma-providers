@@ -9,7 +9,7 @@ from typing import ClassVar
 
 from agno.db.postgres import PostgresDb
 from agno.knowledge.knowledge import Knowledge as AgnoKnowledge
-from pragma_sdk import Config, Dependency, Outputs
+from pragma_sdk import Config, Dependency, Field, Outputs
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
 from agno_provider.resources.db.postgres import DbPostgres, DbPostgresSpec
@@ -51,7 +51,7 @@ class KnowledgeConfig(Config):
     vector_db: Dependency[VectordbQdrant]
     contents_db: Dependency[DbPostgres] | None = None
     embedder: Dependency[EmbedderOpenAI] | None = None
-    max_results: int = 10
+    max_results: Field[int] = 10
 
 
 class KnowledgeOutputs(Outputs):

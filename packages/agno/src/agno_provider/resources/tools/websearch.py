@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import ClassVar, Literal
 
 from agno.tools.websearch import WebSearchTools
-from pragma_sdk import Config, Outputs
+from pragma_sdk import Config, Field, Outputs
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
 
@@ -54,14 +54,14 @@ class ToolsWebSearchConfig(Config):
         verify_ssl: Whether to verify SSL certificates.
     """
 
-    enable_search: bool = True
-    enable_news: bool = True
-    backend: BackendType = "auto"
-    modifier: str | None = None
-    fixed_max_results: int | None = None
-    proxy: str | None = None
-    timeout: int = 10
-    verify_ssl: bool = True
+    enable_search: Field[bool] = True
+    enable_news: Field[bool] = True
+    backend: Field[BackendType] = "auto"
+    modifier: Field[str] | None = None
+    fixed_max_results: Field[int] | None = None
+    proxy: Field[str] | None = None
+    timeout: Field[int] = 10
+    verify_ssl: Field[bool] = True
 
 
 class ToolsWebSearchOutputs(Outputs):

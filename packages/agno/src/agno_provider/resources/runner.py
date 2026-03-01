@@ -27,7 +27,7 @@ from kubernetes_provider.resources.deployment import (
     ResourceRequirementsConfig,
 )
 from kubernetes_provider.resources.service import PortConfig
-from pragma_sdk import Config, Dependency, HealthStatus, LogEntry, Outputs, Resource
+from pragma_sdk import Config, Dependency, Field, HealthStatus, LogEntry, Outputs, Resource
 from pydantic import model_validator
 
 from agno_provider.resources.agent import Agent, AgentOutputs, AgentSpec
@@ -84,14 +84,14 @@ class RunnerConfig(Config):
 
     cluster: Dependency[GKE]
     namespace: Dependency[Namespace]
-    replicas: int = 1
-    image: str = "ghcr.io/pragmatiks/agno-runner:latest"
-    security_key: str | None = None
-    jwt_verification_key: str | None = None
-    public: bool = False
+    replicas: Field[int] = 1
+    image: Field[str] = "ghcr.io/pragmatiks/agno-runner:latest"
+    security_key: Field[str] | None = None
+    jwt_verification_key: Field[str] | None = None
+    public: Field[bool] = False
 
-    cpu: str = "200m"
-    memory: str = "1Gi"
+    cpu: Field[str] = "200m"
+    memory: Field[str] = "1Gi"
 
     @model_validator(mode="after")
     def validate_exactly_one_target(self) -> RunnerConfig:

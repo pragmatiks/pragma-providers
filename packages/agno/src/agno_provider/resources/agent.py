@@ -66,7 +66,7 @@ class AgentConfig(Config):
 
     model: Dependency[AnthropicModel] | Dependency[OpenAIModel]
 
-    instructions: list[Field[str]] | None = None
+    instructions: Field[list[str]] | None = None
     prompt: Dependency[Prompt] | None = None
 
     tools: list[Dependency[ToolsMCP] | Dependency[ToolsWebSearch]] = []

@@ -57,7 +57,7 @@ class AnthropicModelConfig(ModelConfig):
     temperature: Field[float] | None = None
     top_p: Field[float] | None = None
     top_k: Field[int] | None = None
-    stop_sequences: list[Field[str]] | None = None
+    stop_sequences: Field[list[str]] | None = None
 
 
 class AnthropicModelOutputs(ModelOutputs):

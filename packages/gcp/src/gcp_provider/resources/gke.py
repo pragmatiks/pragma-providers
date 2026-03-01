@@ -23,6 +23,7 @@ from google.cloud.container_v1.types import (
 from google.cloud.logging_v2 import Client as LoggingClient
 from google.oauth2 import service_account
 from pragma_sdk import Config, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
+from pydantic import Field as PydanticField
 from pydantic import field_validator, model_validator
 
 
@@ -55,9 +56,9 @@ class GKEConfig(Config):
     network: ImmutableField[str] = "default"
     subnetwork: Field[str] | None = None
     release_channel: Field[Literal["RAPID", "REGULAR", "STABLE"]] = "REGULAR"
-    initial_node_count: Field[int] = 1
+    initial_node_count: Field[int] = PydanticField(default=1, ge=1)
     machine_type: Field[str] = "e2-medium"
-    disk_size_gb: Field[int] = 100
+    disk_size_gb: Field[int] = PydanticField(default=100, ge=10)
 
     @field_validator("name")
     @classmethod

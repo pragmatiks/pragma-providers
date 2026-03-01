@@ -62,7 +62,7 @@ class VectordbQdrantConfig(Config):
     url: Field[str]
     collection: Field[str]
     api_key: Field[str] | None = None
-    search_type: Literal["vector", "keyword", "hybrid"] = "hybrid"
+    search_type: Field[Literal["vector", "keyword", "hybrid"]] = "hybrid"
     embedder: Dependency[EmbedderOpenAI] | None = None
 
 

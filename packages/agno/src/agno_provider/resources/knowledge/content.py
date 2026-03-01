@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from pragma_sdk import Config, Dependency, Outputs
+from pragma_sdk import Config, Dependency, Field, Outputs
 from pydantic import model_validator
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
@@ -73,12 +73,12 @@ class ContentConfig(Config):
     """
 
     knowledge: Dependency[Knowledge]
-    url: str | None = None
-    text_content: str | None = None
-    name: str | None = None
-    description: str | None = None
-    metadata: dict[str, str] | None = None
-    topics: list[str] | None = None
+    url: Field[str] | None = None
+    text_content: Field[str] | None = None
+    name: Field[str] | None = None
+    description: Field[str] | None = None
+    metadata: Field[dict[str, str]] | None = None
+    topics: Field[list[str]] | None = None
 
     @model_validator(mode="after")
     def validate_content_source(self) -> ContentConfig:

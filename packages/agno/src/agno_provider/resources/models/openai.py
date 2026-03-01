@@ -84,7 +84,7 @@ class OpenAIModelConfig(ModelConfig):
     frequency_penalty: Field[float] | None = None
     presence_penalty: Field[float] | None = None
     seed: Field[int] | None = None
-    stop: Field[str] | list[Field[str]] | None = None
+    stop: Field[str | list[str]] | None = None
     timeout: Field[float] | None = None
     max_retries: Field[int] | None = None
     organization: Field[str] | None = None
