@@ -213,6 +213,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
     provider: ClassVar[str] = "kubernetes"
     resource: ClassVar[str] = "deployment"
+    description = "Manages Kubernetes deployments for stateless workloads."
 
     @asynccontextmanager
     async def _get_client(self):

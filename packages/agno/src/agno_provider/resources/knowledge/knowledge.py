@@ -97,6 +97,7 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "knowledge"
+    description = "Configures a knowledge base for semantic search."
 
     @staticmethod
     def from_spec(spec: KnowledgeSpec) -> AgnoKnowledge:

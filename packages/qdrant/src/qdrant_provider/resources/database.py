@@ -132,6 +132,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
     provider: ClassVar[str] = "qdrant"
     resource: ClassVar[str] = "database"
+    description = "Deploys a Qdrant vector database to Kubernetes."
 
     _resolved_api_key: str | None = None
 

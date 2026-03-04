@@ -91,6 +91,7 @@ class ToolsWebSearch(AgnoResource[ToolsWebSearchConfig, ToolsWebSearchOutputs, T
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "tools/websearch"
+    description = "Provides web search capabilities to agents."
 
     @staticmethod
     def from_spec(spec: ToolsWebSearchSpec) -> WebSearchTools:

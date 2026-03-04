@@ -202,6 +202,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
 
     provider: ClassVar[str] = "gcp"
     resource: ClassVar[str] = "gke"
+    description = "Manages Google Kubernetes Engine clusters."
 
     def _get_client(self) -> ClusterManagerAsyncClient:
         """Get Cluster Manager async client with user-provided credentials.

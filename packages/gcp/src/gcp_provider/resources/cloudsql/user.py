@@ -79,6 +79,7 @@ class User(Resource[UserConfig, UserOutputs]):
 
     provider: ClassVar[str] = "gcp"
     resource: ClassVar[str] = "cloudsql/user"
+    description = "Manages database users within a Cloud SQL instance."
 
     async def on_create(self) -> UserOutputs:
         """Create user in the Cloud SQL instance.
