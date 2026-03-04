@@ -326,8 +326,7 @@ resources:
       instance:
         $ref: prod-instance
       username: app_service
-      password:
-        $ref: db-password.outputs.version_id
+      password: "my-secure-password"
 ```
 
 ## Credentials
