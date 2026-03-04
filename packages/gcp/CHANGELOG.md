@@ -1,3 +1,13 @@
+## gcp-v0.139.0 (2026-03-04)
+
+### Feat
+
+- migrate provider configs to Field[T] and ImmutableField[T] (PRA-225) (#36)
+
+### Fix
+
+- remove editable SDK source overrides from provider pyproject.toml files (#38)
+
 ## gcp-v0.138.0 (2026-03-04)
 
 ### Feat
