@@ -221,7 +221,6 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "team"
-    description = "Defines a team of AI agents with coordinated workflows."
 
     @staticmethod
     def from_spec(spec: TeamSpec) -> AgnoTeam:

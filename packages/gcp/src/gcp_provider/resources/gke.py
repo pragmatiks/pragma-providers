@@ -48,50 +48,17 @@ class GKEConfig(Config):
         disk_size_gb: Boot disk size in GB (standard clusters only).
     """
 
-    project_id: ImmutableField[str] = PydanticField(
-        description="GCP project ID where the cluster will be created.",
-    )
-    credentials: Field[dict[str, Any] | str] = PydanticField(
-        description="GCP service account credentials as a JSON object or JSON string.",
-    )
-    location: ImmutableField[str] = PydanticField(
-        description="GCP location -- a region (e.g., europe-west4) for regional clusters "
-        "or a zone (e.g., europe-west4-a) for zonal clusters.",
-    )
-    name: ImmutableField[str] = PydanticField(
-        description="Cluster name. Must be lowercase, start with a letter, "
-        "contain only letters, numbers, and hyphens, and be 1-40 characters.",
-    )
-    autopilot: ImmutableField[bool] = PydanticField(
-        default=True,
-        description="Create an Autopilot cluster. Set to false for Standard mode with manual node pools.",
-    )
-    network: ImmutableField[str] = PydanticField(
-        default="default",
-        description="VPC network name for the cluster.",
-    )
-    subnetwork: Field[str] | None = PydanticField(
-        default=None,
-        description="VPC subnetwork name. If not specified, uses the network default.",
-    )
-    release_channel: Field[Literal["RAPID", "REGULAR", "STABLE"]] = PydanticField(
-        default="REGULAR",
-        description="Release channel for automatic cluster version upgrades.",
-    )
-    initial_node_count: Field[int] = PydanticField(
-        default=1,
-        ge=1,
-        description="Number of nodes in the default pool. Only used for Standard clusters.",
-    )
-    machine_type: Field[str] = PydanticField(
-        default="e2-medium",
-        description="Compute Engine machine type for nodes. Only used for Standard clusters.",
-    )
-    disk_size_gb: Field[int] = PydanticField(
-        default=100,
-        ge=10,
-        description="Boot disk size in GB per node. Only used for Standard clusters.",
-    )
+    project_id: ImmutableField[str]
+    credentials: Field[dict[str, Any] | str]
+    location: ImmutableField[str]
+    name: ImmutableField[str]
+    autopilot: ImmutableField[bool] = True
+    network: ImmutableField[str] = "default"
+    subnetwork: Field[str] | None = None
+    release_channel: Field[Literal["RAPID", "REGULAR", "STABLE"]] = "REGULAR"
+    initial_node_count: Field[int] = PydanticField(default=1, ge=1)
+    machine_type: Field[str] = "e2-medium"
+    disk_size_gb: Field[int] = PydanticField(default=100, ge=10)
 
     @field_validator("name")
     @classmethod
@@ -141,17 +108,13 @@ class GKEOutputs(Outputs):
         logs_url: URL to view cluster logs in Cloud Logging.
     """
 
-    name: str = PydanticField(description="Cluster name.")
-    endpoint: str = PydanticField(description="Kubernetes API server endpoint URL.")
-    cluster_ca_certificate: str = PydanticField(
-        description="Base64-encoded cluster CA certificate for TLS verification.",
-    )
-    location: str = PydanticField(description="Cluster location (region or zone).")
-    status: str = PydanticField(
-        description="Cluster status (e.g., RUNNING, PROVISIONING, RECONCILING, ERROR).",
-    )
-    console_url: str = PydanticField(description="URL to view the cluster in the GCP Console.")
-    logs_url: str = PydanticField(description="URL to view cluster logs in Cloud Logging.")
+    name: str
+    endpoint: str
+    cluster_ca_certificate: str
+    location: str
+    status: str
+    console_url: str
+    logs_url: str
 
 
 _POLL_INTERVAL_SECONDS = 30
@@ -202,7 +165,6 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
 
     provider: ClassVar[str] = "gcp"
     resource: ClassVar[str] = "gke"
-    description = "Manages Google Kubernetes Engine clusters."
 
     def _get_client(self) -> ClusterManagerAsyncClient:
         """Get Cluster Manager async client with user-provided credentials.

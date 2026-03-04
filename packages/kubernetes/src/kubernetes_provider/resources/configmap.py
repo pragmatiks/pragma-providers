@@ -62,7 +62,6 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
 
     provider: ClassVar[str] = "kubernetes"
     resource: ClassVar[str] = "configmap"
-    description = "Manages Kubernetes config maps for application configuration."
 
     @asynccontextmanager
     async def _get_client(self):

@@ -124,7 +124,6 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "tools/mcp"
-    description = "Integrates an MCP server as agent tools."
 
     @staticmethod
     def from_spec(spec: ToolsMCPSpec) -> MCPTools:

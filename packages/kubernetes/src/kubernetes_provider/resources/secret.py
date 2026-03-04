@@ -70,7 +70,6 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
     provider: ClassVar[str] = "kubernetes"
     resource: ClassVar[str] = "secret"
-    description = "Manages Kubernetes secrets for sensitive data."
 
     @asynccontextmanager
     async def _get_client(self):

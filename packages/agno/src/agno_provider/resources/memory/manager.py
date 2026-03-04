@@ -111,7 +111,6 @@ class MemoryManager(AgnoResource[MemoryManagerConfig, MemoryManagerOutputs, Memo
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "memory/manager"
-    description = "Configures persistent memory for AI agents."
 
     @staticmethod
     def from_spec(spec: MemoryManagerSpec) -> AgnoMemoryManager:

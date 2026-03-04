@@ -88,7 +88,6 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
     """
 
     resource: ClassVar[str] = "models/anthropic"
-    description = "Configures an Anthropic Claude language model."
 
     @staticmethod
     def from_spec(spec: AnthropicModelSpec) -> Claude:

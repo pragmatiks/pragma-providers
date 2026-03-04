@@ -185,7 +185,6 @@ class DbPostgres(AgnoResource[DbPostgresConfig, DbPostgresOutputs, DbPostgresSpe
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "db/postgres"
-    description = "Configures a PostgreSQL database for agent storage."
 
     @staticmethod
     def from_spec(spec: DbPostgresSpec) -> AsyncPostgresDb:

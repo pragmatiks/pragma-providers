@@ -99,7 +99,6 @@ class Prompt(AgnoResource[PromptConfig, PromptOutputs, PromptSpec]):
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "prompt"
-    description = "Defines a reusable prompt template with variables."
 
     @staticmethod
     def from_spec(spec: PromptSpec) -> str:

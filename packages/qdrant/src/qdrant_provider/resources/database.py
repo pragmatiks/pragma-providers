@@ -46,8 +46,8 @@ class StorageConfig(BaseModel):
 
     model_config = {"populate_by_name": True}
 
-    size: str = PydanticField(default="10Gi", description="Persistent volume size (e.g., '10Gi', '50Gi').")
-    class_: str = PydanticField(default="standard-rwo", alias="class", description="Kubernetes storage class name.")
+    size: str = "10Gi"
+    class_: str = PydanticField(default="standard-rwo", alias="class")
 
 
 class ResourceConfig(BaseModel):
@@ -58,8 +58,8 @@ class ResourceConfig(BaseModel):
         cpu: CPU limit (e.g., "1" or "500m").
     """
 
-    memory: str = PydanticField(default="2Gi", description="Memory limit per pod (e.g., '2Gi', '4Gi').")
-    cpu: str = PydanticField(default="1", description="CPU limit per pod (e.g., '1', '500m', '2').")
+    memory: str = "2Gi"
+    cpu: str = "1"
 
 
 class DatabaseConfig(Config):
@@ -110,10 +110,10 @@ class DatabaseOutputs(Outputs):
         ready: Whether the StatefulSet is ready.
     """
 
-    url: str = PydanticField(description="HTTP endpoint for Qdrant REST API (e.g., 'http://34.x.x.x:6333').")
-    grpc_url: str = PydanticField(description="gRPC endpoint for Qdrant (e.g., 'http://34.x.x.x:6334').")
-    api_key: str | None = PydanticField(description="API key for authentication, or None if not configured.")
-    ready: bool = PydanticField(description="Whether the Qdrant StatefulSet is ready and serving traffic.")
+    url: str
+    grpc_url: str
+    api_key: str | None
+    ready: bool
 
 
 class Database(Resource[DatabaseConfig, DatabaseOutputs]):
@@ -132,7 +132,6 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
     provider: ClassVar[str] = "qdrant"
     resource: ClassVar[str] = "database"
-    description = "Deploys a Qdrant vector database to Kubernetes."
 
     _resolved_api_key: str | None = None
 

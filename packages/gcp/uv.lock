@@ -593,7 +593,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "0.136.0"
+version = "0.137.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-api-python-client" },
@@ -634,7 +634,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-sdk"
-version = "0.23.0"
+version = "0.25.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -642,9 +642,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e6/73/8e5e2cfdb8fc226f6067945fed6e26c1cc32ab7d0fdc91343c6ed0630d16/pragmatiks_sdk-0.23.0.tar.gz", hash = "sha256:a111ae25152cb5655d9f3f699d9178d4a61b968e3c11c4ed18d5360b67cf3714", size = 26069, upload-time = "2026-03-01T17:37:57.408Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/9d/b732eebfc41176c934408f3fc27b1dd6d4f2f7b9ddbac7a49f6b8868d54f/pragmatiks_sdk-0.25.0.tar.gz", hash = "sha256:b0fd9569f052e5dd411e89a1a4748b33dbe6c9cdb6bfcab2f2b0dc8eae05f749", size = 28836, upload-time = "2026-03-04T16:08:52.4Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/eb/99ea303f7d6f50fa458693b508b823def235e78ae72b55c51be1610cccd5/pragmatiks_sdk-0.23.0-py3-none-any.whl", hash = "sha256:8d1a40b61652317715bf2c306bdda9192e5c8213f629b694942b1c65f25b6b03", size = 33963, upload-time = "2026-03-01T17:37:55.951Z" },
+    { url = "https://files.pythonhosted.org/packages/ad/ba/2690acc9d5ffe901d5ca628a9f342dd7c9efd7702f3a944045b457a129c9/pragmatiks_sdk-0.25.0-py3-none-any.whl", hash = "sha256:1a7671e70382b88e2ddc88c5e02a89f25341f5549543c08cdc0766029ca2fd84", size = 36286, upload-time = "2026-03-04T16:08:51.292Z" },
 ]
 
 [[package]]

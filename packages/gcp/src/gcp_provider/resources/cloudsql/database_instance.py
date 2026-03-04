@@ -11,7 +11,6 @@ from typing import Any, ClassVar, Literal
 
 from google.cloud.logging_v2 import Client as LoggingClient
 from pragma_sdk import Config, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
-from pydantic import Field as PydanticField
 from pydantic import field_validator
 
 from gcp_provider.resources.cloudsql.helpers import (
@@ -44,47 +43,17 @@ class DatabaseInstanceConfig(Config):
         enable_public_ip: Whether to assign a public IP address.
     """
 
-    project_id: ImmutableField[str] = PydanticField(
-        description="GCP project ID where the instance will be created.",
-    )
-    credentials: Field[dict[str, Any] | str] = PydanticField(
-        description="GCP service account credentials as a JSON object or JSON string.",
-    )
-    region: ImmutableField[str] = PydanticField(
-        description="GCP region for the instance (e.g., europe-west4).",
-    )
-    instance_name: ImmutableField[str] = PydanticField(
-        description="Cloud SQL instance name. Must be unique per project, 1-98 characters, "
-        "start with a letter, and contain only letters, numbers, and hyphens.",
-    )
-    database_version: ImmutableField[str] = PydanticField(
-        default="POSTGRES_15",
-        description="Database engine and version (e.g., POSTGRES_15, MYSQL_8_0, SQLSERVER_2019_STANDARD).",
-    )
-    tier: Field[str] = PydanticField(
-        default="db-f1-micro",
-        description="Machine tier for the instance (e.g., db-f1-micro, db-custom-1-3840, db-custom-2-7680).",
-    )
-    availability_type: Field[Literal["ZONAL", "REGIONAL"]] = PydanticField(
-        default="ZONAL",
-        description="ZONAL for single-zone or REGIONAL for high availability with automatic failover.",
-    )
-    backup_enabled: Field[bool] = PydanticField(
-        default=True,
-        description="Enable automatic daily backups at 03:00 UTC.",
-    )
-    deletion_protection: Field[bool] = PydanticField(
-        default=False,
-        description="Prevent accidental deletion. Must be disabled before the instance can be deleted.",
-    )
-    authorized_networks: list[Field[str]] = PydanticField(
-        default=[],
-        description="CIDR ranges allowed to connect (e.g., ['10.0.0.0/8', '192.168.1.0/24']).",
-    )
-    enable_public_ip: Field[bool] = PydanticField(
-        default=True,
-        description="Assign a public IP address to the instance.",
-    )
+    project_id: ImmutableField[str]
+    credentials: Field[dict[str, Any] | str]
+    region: ImmutableField[str]
+    instance_name: ImmutableField[str]
+    database_version: ImmutableField[str] = "POSTGRES_15"
+    tier: Field[str] = "db-f1-micro"
+    availability_type: Field[Literal["ZONAL", "REGIONAL"]] = "ZONAL"
+    backup_enabled: Field[bool] = True
+    deletion_protection: Field[bool] = False
+    authorized_networks: list[Field[str]] = []
+    enable_public_ip: Field[bool] = True
 
     @field_validator("instance_name")
     @classmethod
@@ -143,23 +112,12 @@ class DatabaseInstanceOutputs(Outputs):
         logs_url: URL to view instance logs in Cloud Logging.
     """
 
-    connection_name: str = PydanticField(
-        description="Cloud SQL connection name in project:region:instance format. "
-        "Used by Cloud SQL Proxy and client libraries.",
-    )
-    public_ip: str | None = PydanticField(
-        default=None,
-        description="Public IP address of the instance, if public IP is enabled.",
-    )
-    private_ip: str | None = PydanticField(
-        default=None,
-        description="Private IP address of the instance, if private IP is configured.",
-    )
-    ready: bool = PydanticField(
-        description="Whether the instance is in RUNNABLE state and accepting connections.",
-    )
-    console_url: str = PydanticField(description="URL to view the instance in the GCP Console.")
-    logs_url: str = PydanticField(description="URL to view instance logs in Cloud Logging.")
+    connection_name: str
+    public_ip: str | None = None
+    private_ip: str | None = None
+    ready: bool
+    console_url: str
+    logs_url: str
 
 
 class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]):
@@ -205,7 +163,6 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
 
     provider: ClassVar[str] = "gcp"
     resource: ClassVar[str] = "cloudsql/database_instance"
-    description = "Manages Google Cloud SQL database instances."
 
     async def on_create(self) -> DatabaseInstanceOutputs:
         """Create Cloud SQL instance and wait for RUNNABLE state.

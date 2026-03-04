@@ -9,7 +9,6 @@ from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.secretmanager_v1 import SecretManagerServiceAsyncClient
 from google.oauth2 import service_account
 from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
-from pydantic import Field as PydanticField
 
 
 class SecretConfig(Config):
@@ -24,19 +23,10 @@ class SecretConfig(Config):
             Use a pragma/secret resource with a FieldReference to provide credentials.
     """
 
-    project_id: ImmutableField[str] = PydanticField(
-        description="GCP project ID where the secret will be created.",
-    )
-    secret_id: ImmutableField[str] = PydanticField(
-        description="Identifier for the secret within GCP. Must be unique per project.",
-    )
-    data: Field[str] = PydanticField(
-        description="Secret payload data to store as a UTF-8 string.",
-    )
-    credentials: Field[dict[str, Any] | str] = PydanticField(
-        description="GCP service account credentials as a JSON object or JSON string. "
-        "Required for multi-tenant SaaS -- no ADC fallback.",
-    )
+    project_id: ImmutableField[str]
+    secret_id: ImmutableField[str]
+    data: Field[str]
+    credentials: Field[dict[str, Any] | str]
 
 
 class SecretOutputs(Outputs):
@@ -48,16 +38,9 @@ class SecretOutputs(Outputs):
         version_id: The version number as a string.
     """
 
-    resource_name: str = PydanticField(
-        description="Full GCP resource name (e.g., projects/{project}/secrets/{id}).",
-    )
-    version_name: str = PydanticField(
-        description="Full version resource name including version number "
-        "(e.g., projects/{project}/secrets/{id}/versions/{version}).",
-    )
-    version_id: str = PydanticField(
-        description="The secret version number as a string.",
-    )
+    resource_name: str
+    version_name: str
+    version_id: str
 
 
 class Secret(Resource[SecretConfig, SecretOutputs]):
@@ -95,7 +78,6 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
     provider: ClassVar[str] = "gcp"
     resource: ClassVar[str] = "secret"
-    description = "Manages secrets in Google Cloud Secret Manager."
 
     def _get_client(self) -> SecretManagerServiceAsyncClient:
         """Get Secret Manager async client with user-provided credentials.

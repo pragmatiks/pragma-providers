@@ -134,7 +134,6 @@ class Content(AgnoResource[ContentConfig, ContentOutputs, ContentSpec]):
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "knowledge/content"
-    description = "Ingests content into a knowledge base."
 
     async def _resolve_knowledge(self) -> AgnoKnowledge:
         """Resolve knowledge dependency and return Agno Knowledge instance.

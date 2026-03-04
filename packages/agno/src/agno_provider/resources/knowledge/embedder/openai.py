@@ -93,7 +93,6 @@ class EmbedderOpenAI(AgnoResource[EmbedderOpenAIConfig, EmbedderOpenAIOutputs, E
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "knowledge/embedder/openai"
-    description = "Configures an OpenAI embedding model."
 
     @staticmethod
     def from_spec(spec: EmbedderOpenAISpec) -> OpenAIEmbedder:
