@@ -227,7 +227,9 @@ config:
   replicas: 2
   cpu: 500m
   memory: 2Gi
-  security_key: my-secret-key
+  security_key:
+    ref: secrets/runner-security-key
+    field: value
 ```
 
 ## Common Patterns
