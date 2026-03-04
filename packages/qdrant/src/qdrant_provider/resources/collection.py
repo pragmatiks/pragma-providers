@@ -76,6 +76,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
 
     provider: ClassVar[str] = "qdrant"
     resource: ClassVar[str] = "collection"
+    description = "Manages Qdrant vector collections for similarity search."
 
     def _get_client(self) -> AsyncQdrantClient:
         """Get Qdrant async client with configured credentials.

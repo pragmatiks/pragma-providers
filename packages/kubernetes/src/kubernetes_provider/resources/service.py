@@ -100,6 +100,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
 
     provider: ClassVar[str] = "kubernetes"
     resource: ClassVar[str] = "service"
+    description = "Manages Kubernetes services for network access to pods."
 
     @asynccontextmanager
     async def _get_client(self):

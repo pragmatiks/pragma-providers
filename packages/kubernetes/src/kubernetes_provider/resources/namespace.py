@@ -58,6 +58,7 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
 
     provider: ClassVar[str] = "kubernetes"
     resource: ClassVar[str] = "namespace"
+    description = "Manages Kubernetes namespaces for workload isolation."
 
     @asynccontextmanager
     async def _get_client(self):

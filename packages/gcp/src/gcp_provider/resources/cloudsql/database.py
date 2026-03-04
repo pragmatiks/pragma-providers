@@ -89,6 +89,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
     provider: ClassVar[str] = "gcp"
     resource: ClassVar[str] = "cloudsql/database"
+    description = "Manages databases within a Cloud SQL instance."
 
     async def on_create(self) -> DatabaseOutputs:
         """Create database in the Cloud SQL instance.

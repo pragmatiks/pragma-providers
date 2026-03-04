@@ -255,6 +255,7 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
 
     provider: ClassVar[str] = "kubernetes"
     resource: ClassVar[str] = "statefulset"
+    description = "Manages Kubernetes stateful sets with persistent storage."
 
     @asynccontextmanager
     async def _get_client(self):

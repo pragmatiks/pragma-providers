@@ -95,6 +95,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
     provider: ClassVar[str] = "gcp"
     resource: ClassVar[str] = "secret"
+    description = "Manages secrets in Google Cloud Secret Manager."
 
     def _get_client(self) -> SecretManagerServiceAsyncClient:
         """Get Secret Manager async client with user-provided credentials.

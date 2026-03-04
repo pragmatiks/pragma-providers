@@ -115,6 +115,7 @@ class OpenAIModel(Model[OpenAIModelConfig, OpenAIModelOutputs, OpenAIModelSpec, 
     """
 
     resource: ClassVar[str] = "models/openai"
+    description = "Configures an OpenAI language model."
 
     @staticmethod
     def from_spec(spec: OpenAIModelSpec) -> OpenAIChat:

@@ -181,6 +181,7 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "agent"
+    description = "Defines an AI agent with model, tools, and memory."
 
     @staticmethod
     def from_spec(spec: AgentSpec) -> AgnoAgent:

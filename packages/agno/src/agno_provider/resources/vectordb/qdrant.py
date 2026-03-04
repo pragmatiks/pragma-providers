@@ -117,6 +117,7 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "vectordb/qdrant"
+    description = "Configures a Qdrant vector store for knowledge bases."
 
     @staticmethod
     def from_spec(spec: VectordbQdrantSpec) -> Qdrant:

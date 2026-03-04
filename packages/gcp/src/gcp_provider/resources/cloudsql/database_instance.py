@@ -205,6 +205,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
 
     provider: ClassVar[str] = "gcp"
     resource: ClassVar[str] = "cloudsql/database_instance"
+    description = "Manages Google Cloud SQL database instances."
 
     async def on_create(self) -> DatabaseInstanceOutputs:
         """Create Cloud SQL instance and wait for RUNNABLE state.

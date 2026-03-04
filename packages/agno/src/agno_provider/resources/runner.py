@@ -176,6 +176,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
 
     provider: ClassVar[str] = "agno"
     resource: ClassVar[str] = "runner"
+    description = "Deploys an AI agent or team to Kubernetes."
 
     def _runner_name(self) -> str:
         """Get Kubernetes deployment name based on resource name.
