@@ -1,3 +1,100 @@
+## agno-v0.93.0 (2026-03-04)
+
+### Feat
+
+- migrate provider configs to Field[T] and ImmutableField[T] (PRA-225) (#36)
+
+### Fix
+
+- remove editable SDK source overrides from provider pyproject.toml files (#38)
+
+## agno-v0.88.0 (2026-02-27)
+
+### Feat
+
+- add pragma store publish to CI/CD pipeline (#35)
+- add kubernetes/namespace resource type (PRA-177) (#34)
+- add store metadata and seed script (PRA-211) (#33)
+- add store metadata fields to provider copier template (PRA-193) (#32)
+- **agno**: add knowledge and content resource support (#30)
+
+### Fix
+
+- **gcp**: handle CloudSQL 400 error when deleting non-existent user
+- **agno**: remove wait_ready calls from runner resource application
+- **gcp**: handle HTTP 400 for already-existing CloudSQL databases
+- **agno**: drop --frozen from Dockerfile uv sync (incompatible with --no-sources)
+- **ci**: prevent infinite publish loop on bump commits
+
+## agno-v0.77.0 (2026-02-07)
+
+### Feat
+
+- **agno**: add team resource, runner auth, model discriminators, and memory config (#29)
+
+## agno-v0.66.0 (2026-02-07)
+
+### Feat
+
+- **kubernetes**: add startup probe support and authorized_user credentials (#28)
+
+## agno-v0.55.0 (2026-02-05)
+
+### Fix
+
+- **agno**: runtime dependencies and import fix (#27)
+
+## agno-v0.44.0 (2026-02-02)
+
+### Fix
+
+- **agno**: rewrite agent tests for current AgentConfig implementation
+- **gcp**: convert db_port to int in CloudSQL database outputs
+
+## agno-v0.33.0 (2026-02-02)
+
+### Feat
+
+- **agno**: rebuild agent, add team and deployment resources (#24)
+
+### Fix
+
+- **ci**: use PyPI API for availability check instead of pip index
+
+## agno-v0.10.0 (2026-02-02)
+
+### Feat
+
+- **kubernetes**: add Deployment resource (#25)
+- **agno**: add memory/manager resource and abstract Model interface (#22)
+- **agno**: implement knowledge/embedder/openai resource (#21)
+- **agno**: add vectordb/qdrant resource for Qdrant vector store (#20)
+- **agno**: add tools/mcp resource for MCP server integration
+- **agno**: add tools/websearch resource wrapping DuckDuckGoTools (#19)
+- **agno**: add prompt resource for reusable instruction templates (#18)
+- **agno**: add db/postgres resource for agent storage (#17)
+- **gcp**: add cloudsql resource for Cloud SQL instances (#14)
+- **agno**: add models/openai resource (#13)
+- **agno**: add models/anthropic resource (#12)
+- **qdrant**: add LoadBalancer exposure and API key authentication (#11)
+- **kubernetes**: add kubernetes provider with lightkube
+- **gcp**: add logs() and health() methods to GKE resource
+- **gcp**: rename region to location for zonal cluster support
+- **gcp**: add standard cluster support to GKE resource
+
+### Fix
+
+- **ci**: output builds to workspace dist directory
+- **ci**: use env vars instead of dynamic expressions in publish workflow
+- **gcp**: add defaults for optional outputs to ensure serialization
+- **gcp**: use Dependency.resolve() for instance access (#16)
+
+### Refactor
+
+- **agno**: DRY refactor with base classes and spec pattern (#23)
+- **agno**: use pytest-mock MockType instead of Any for mock typing
+- **agno**: move mock_mcp_tools fixture to conftest.py
+
 ## agno-v0.92.0 (2026-03-04)
 
 ### Feat
