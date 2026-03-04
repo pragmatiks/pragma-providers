@@ -48,17 +48,50 @@ class GKEConfig(Config):
         disk_size_gb: Boot disk size in GB (standard clusters only).
     """
 
-    project_id: ImmutableField[str]
-    credentials: Field[dict[str, Any] | str]
-    location: ImmutableField[str]
-    name: ImmutableField[str]
-    autopilot: ImmutableField[bool] = True
-    network: ImmutableField[str] = "default"
-    subnetwork: Field[str] | None = None
-    release_channel: Field[Literal["RAPID", "REGULAR", "STABLE"]] = "REGULAR"
-    initial_node_count: Field[int] = PydanticField(default=1, ge=1)
-    machine_type: Field[str] = "e2-medium"
-    disk_size_gb: Field[int] = PydanticField(default=100, ge=10)
+    project_id: ImmutableField[str] = PydanticField(
+        description="GCP project ID where the cluster will be created.",
+    )
+    credentials: Field[dict[str, Any] | str] = PydanticField(
+        description="GCP service account credentials as a JSON object or JSON string.",
+    )
+    location: ImmutableField[str] = PydanticField(
+        description="GCP location -- a region (e.g., europe-west4) for regional clusters "
+        "or a zone (e.g., europe-west4-a) for zonal clusters.",
+    )
+    name: ImmutableField[str] = PydanticField(
+        description="Cluster name. Must be lowercase, start with a letter, "
+        "contain only letters, numbers, and hyphens, and be 1-40 characters.",
+    )
+    autopilot: ImmutableField[bool] = PydanticField(
+        default=True,
+        description="Create an Autopilot cluster. Set to false for Standard mode with manual node pools.",
+    )
+    network: ImmutableField[str] = PydanticField(
+        default="default",
+        description="VPC network name for the cluster.",
+    )
+    subnetwork: Field[str] | None = PydanticField(
+        default=None,
+        description="VPC subnetwork name. If not specified, uses the network default.",
+    )
+    release_channel: Field[Literal["RAPID", "REGULAR", "STABLE"]] = PydanticField(
+        default="REGULAR",
+        description="Release channel for automatic cluster version upgrades.",
+    )
+    initial_node_count: Field[int] = PydanticField(
+        default=1,
+        ge=1,
+        description="Number of nodes in the default pool. Only used for Standard clusters.",
+    )
+    machine_type: Field[str] = PydanticField(
+        default="e2-medium",
+        description="Compute Engine machine type for nodes. Only used for Standard clusters.",
+    )
+    disk_size_gb: Field[int] = PydanticField(
+        default=100,
+        ge=10,
+        description="Boot disk size in GB per node. Only used for Standard clusters.",
+    )
 
     @field_validator("name")
     @classmethod
@@ -108,13 +141,17 @@ class GKEOutputs(Outputs):
         logs_url: URL to view cluster logs in Cloud Logging.
     """
 
-    name: str
-    endpoint: str
-    cluster_ca_certificate: str
-    location: str
-    status: str
-    console_url: str
-    logs_url: str
+    name: str = PydanticField(description="Cluster name.")
+    endpoint: str = PydanticField(description="Kubernetes API server endpoint URL.")
+    cluster_ca_certificate: str = PydanticField(
+        description="Base64-encoded cluster CA certificate for TLS verification.",
+    )
+    location: str = PydanticField(description="Cluster location (region or zone).")
+    status: str = PydanticField(
+        description="Cluster status (e.g., RUNNING, PROVISIONING, RECONCILING, ERROR).",
+    )
+    console_url: str = PydanticField(description="URL to view the cluster in the GCP Console.")
+    logs_url: str = PydanticField(description="URL to view cluster logs in Cloud Logging.")
 
 
 _POLL_INTERVAL_SECONDS = 30
@@ -125,16 +162,42 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
     """GCP GKE cluster resource supporting Autopilot and Standard modes.
 
     Creates and manages GKE clusters using user-provided service account
-    credentials (multi-tenant SaaS pattern).
+    credentials (multi-tenant SaaS pattern). Supports health checks and
+    log streaming from Cloud Logging.
 
     Modes:
-        - Autopilot (default): Fully managed, no node configuration needed
-        - Standard: Manual node pool with configurable machine type and count
+        - **Autopilot** (default): Fully managed node infrastructure. GCP
+          automatically provisions and scales nodes. No ``initial_node_count``,
+          ``machine_type``, or ``disk_size_gb`` configuration needed.
+        - **Standard**: Manual node pool with configurable machine type, count,
+          and disk size. Set ``autopilot: false`` to use this mode.
 
     Lifecycle:
-        - on_create: Creates cluster, waits for RUNNING state
-        - on_update: Limited updates (some require recreation)
-        - on_delete: Deletes cluster, waits for completion
+        - on_create: Creates the cluster and polls until RUNNING (up to 20 min).
+          Idempotent -- if the cluster already exists, waits for RUNNING.
+        - on_update: Returns current cluster state. Immutable fields (name,
+          location, autopilot, network) require delete and recreate.
+        - on_delete: Deletes the cluster and polls until fully removed.
+          Idempotent -- succeeds silently if the cluster does not exist.
+
+    Required IAM role: ``roles/container.admin``
+
+    Required APIs: ``container.googleapis.com``, ``logging.googleapis.com``
+
+    Example::
+
+        resources:
+          - name: prod-cluster
+            provider: gcp
+            type: gke
+            config:
+              project_id: my-project
+              location: europe-west4
+              name: prod-cluster
+              autopilot: true
+              release_channel: STABLE
+              credentials:
+                $ref: gcp-credentials
     """
 
     provider: ClassVar[str] = "gcp"

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from pragma_sdk import Config, Dependency, ImmutableField, Outputs, Resource
+from pydantic import Field as PydanticField
 
 from gcp_provider.resources.cloudsql.database_instance import DatabaseInstance
 from gcp_provider.resources.cloudsql.helpers import (
@@ -25,7 +26,9 @@ class DatabaseConfig(Config):
     """
 
     instance: Dependency[DatabaseInstance]
-    database_name: ImmutableField[str]
+    database_name: ImmutableField[str] = PydanticField(
+        description="Name of the database to create within the Cloud SQL instance.",
+    )
 
 
 class DatabaseOutputs(Outputs):
@@ -39,18 +42,49 @@ class DatabaseOutputs(Outputs):
         url: Connection URL format (without credentials).
     """
 
-    database_name: str
-    instance_name: str
-    host: str
-    port: int
-    url: str
+    database_name: str = PydanticField(description="Name of the created database.")
+    instance_name: str = PydanticField(
+        description="Name of the Cloud SQL instance hosting this database.",
+    )
+    host: str = PydanticField(
+        description="Database host -- public IP, private IP, or connection name (project:region:instance).",
+    )
+    port: int = PydanticField(
+        description="Database port (5432 for PostgreSQL, 3306 for MySQL, 1433 for SQL Server).",
+    )
+    url: str = PydanticField(
+        description="Connection URL without credentials (e.g., postgresql://host:port/database_name).",
+    )
 
 
 class Database(Resource[DatabaseConfig, DatabaseOutputs]):
     """GCP Cloud SQL database resource.
 
-    Creates and manages databases within a Cloud SQL instance.
-    Changing the instance triggers replacement (delete from old, create in new).
+    Creates and manages databases within a Cloud SQL instance. Requires a
+    dependency on a ``gcp/cloudsql/database_instance`` resource, from which
+    it inherits credentials and connection details.
+
+    Lifecycle:
+        - on_create: Creates the database in the target instance. Idempotent --
+          succeeds if the database already exists.
+        - on_update: If the instance dependency changes, deletes from the old
+          instance and creates in the new one. Otherwise returns current state.
+        - on_delete: Drops the database from the instance. Idempotent --
+          succeeds silently if the database does not exist.
+
+    Outputs include a connection URL in the format
+    ``{db_type}://host:port/database_name`` (without credentials).
+
+    Example::
+
+        resources:
+          - name: app-database
+            provider: gcp
+            type: cloudsql/database
+            config:
+              instance:
+                $ref: prod-db-instance
+              database_name: myapp
     """
 
     provider: ClassVar[str] = "gcp"

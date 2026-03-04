@@ -41,82 +41,154 @@ _MAX_POLL_ATTEMPTS = 60
 
 
 class ContainerPortConfig(BaseModel):
-    """Container port configuration."""
+    """Container port configuration for StatefulSet pods.
+
+    Attributes:
+        name: Optional port name for service discovery.
+        container_port: Port number exposed by the container.
+        protocol: Network protocol (TCP or UDP).
+    """
 
     model_config = {"extra": "forbid"}
 
-    name: str | None = None
-    container_port: int
-    protocol: Literal["TCP", "UDP"] = "TCP"
+    name: str | None = PydanticField(default=None, description="Optional port name for service discovery.")
+    container_port: int = PydanticField(description="Port number exposed by the container.")
+    protocol: Literal["TCP", "UDP"] = PydanticField(default="TCP", description="Network protocol (TCP or UDP).")
 
 
 class EnvVarConfig(BaseModel):
-    """Environment variable configuration."""
+    """Environment variable injected into a container.
+
+    Attributes:
+        name: Environment variable name.
+        value: Environment variable value.
+    """
 
     model_config = {"extra": "forbid"}
 
-    name: str
-    value: str
+    name: str = PydanticField(description="Environment variable name.")
+    value: str = PydanticField(description="Environment variable value.")
 
 
 class VolumeMountConfig(BaseModel):
-    """Volume mount configuration."""
+    """Volume mount attaching a PVC or volume to a container path.
+
+    Attributes:
+        name: Name of the volume (must match a volume_claim_template name).
+        mount_path: Filesystem path inside the container where the volume is mounted.
+        sub_path: Sub-path within the volume to mount.
+        read_only: Whether the mount is read-only.
+    """
 
     model_config = {"extra": "forbid"}
 
-    name: str
-    mount_path: str
-    sub_path: str | None = None
-    read_only: bool = False
+    name: str = PydanticField(description="Name of the volume (must match a volume_claim_template name).")
+    mount_path: str = PydanticField(description="Filesystem path inside the container.")
+    sub_path: str | None = PydanticField(default=None, description="Sub-path within the volume to mount.")
+    read_only: bool = PydanticField(default=False, description="Whether the mount is read-only.")
 
 
 class ResourcesConfig(BaseModel):
-    """Container resource requirements."""
+    """Container CPU and memory resource requirements.
+
+    Attributes:
+        requests: Resource requests (e.g., {"cpu": "500m", "memory": "1Gi"}).
+        limits: Resource limits (e.g., {"cpu": "2000m", "memory": "4Gi"}).
+    """
 
     model_config = {"extra": "forbid"}
 
-    requests: dict[str, str] | None = None
-    limits: dict[str, str] | None = None
+    requests: dict[str, str] | None = PydanticField(
+        default=None, description='Resource requests (e.g., {"cpu": "500m", "memory": "1Gi"}).'
+    )
+    limits: dict[str, str] | None = PydanticField(
+        default=None, description='Resource limits (e.g., {"cpu": "2000m", "memory": "4Gi"}).'
+    )
 
 
 class ProbeConfig(BaseModel):
-    """Container probe configuration."""
+    """Container health probe using TCP socket checks.
+
+    Attributes:
+        tcp_socket_port: Port to probe via TCP connection.
+        initial_delay_seconds: Delay before the first probe after container start.
+        period_seconds: Interval between probes.
+        timeout_seconds: Timeout for each probe attempt.
+        failure_threshold: Consecutive failures before marking unhealthy.
+    """
 
     model_config = {"extra": "forbid"}
 
-    tcp_socket_port: int | None = None
-    initial_delay_seconds: int = 10
-    period_seconds: int = 10
-    timeout_seconds: int = 5
-    failure_threshold: int = 3
+    tcp_socket_port: int | None = PydanticField(default=None, description="Port to probe via TCP connection.")
+    initial_delay_seconds: int = PydanticField(default=10, description="Delay in seconds before the first probe.")
+    period_seconds: int = PydanticField(default=10, description="Interval in seconds between probes.")
+    timeout_seconds: int = PydanticField(default=5, description="Timeout in seconds for each probe attempt.")
+    failure_threshold: int = PydanticField(default=3, description="Consecutive failures before marking unhealthy.")
 
 
 class ContainerConfig(BaseModel):
-    """Container specification."""
+    """Container specification for a StatefulSet pod.
+
+    Attributes:
+        name: Container name (unique within the pod).
+        image: Container image including tag (e.g., "postgres:16").
+        ports: Ports exposed by the container.
+        env: Environment variables as name-value pairs.
+        volume_mounts: Volume mounts attaching PVCs to container paths.
+        resources: CPU and memory resource requests and limits.
+        command: Override the container entrypoint.
+        args: Arguments passed to the entrypoint.
+        liveness_probe: Probe to detect if the container is alive.
+        readiness_probe: Probe to detect if the container is ready for traffic.
+    """
 
     model_config = {"extra": "forbid"}
 
-    name: str
-    image: str
-    ports: list[ContainerPortConfig] | None = None
-    env: list[EnvVarConfig] | None = None
-    volume_mounts: list[VolumeMountConfig] | None = None
-    resources: ResourcesConfig | None = None
-    command: list[str] | None = None
-    args: list[str] | None = None
-    liveness_probe: ProbeConfig | None = None
-    readiness_probe: ProbeConfig | None = None
+    name: str = PydanticField(description="Container name (unique within the pod).")
+    image: str = PydanticField(description='Container image including tag (e.g., "postgres:16").')
+    ports: list[ContainerPortConfig] | None = PydanticField(default=None, description="Ports exposed by the container.")
+    env: list[EnvVarConfig] | None = PydanticField(
+        default=None, description="Environment variables as name-value pairs."
+    )
+    volume_mounts: list[VolumeMountConfig] | None = PydanticField(
+        default=None, description="Volume mounts attaching PVCs to container paths."
+    )
+    resources: ResourcesConfig | None = PydanticField(
+        default=None, description="CPU and memory resource requests and limits."
+    )
+    command: list[str] | None = PydanticField(default=None, description="Override the container entrypoint.")
+    args: list[str] | None = PydanticField(default=None, description="Arguments passed to the entrypoint.")
+    liveness_probe: ProbeConfig | None = PydanticField(
+        default=None, description="Probe to detect if the container is alive."
+    )
+    readiness_probe: ProbeConfig | None = PydanticField(
+        default=None, description="Probe to detect if the container is ready for traffic."
+    )
 
 
 class VolumeClaimTemplateConfig(BaseModel):
-    """PersistentVolumeClaim template for StatefulSet."""
+    """PersistentVolumeClaim template for StatefulSet persistent storage.
+
+    Each pod replica gets its own PVC from this template, providing stable
+    storage that survives pod restarts.
+
+    Attributes:
+        name: PVC name (referenced by volume_mounts in containers).
+        storage_class: Kubernetes StorageClass name (e.g., "premium-rwo").
+        access_modes: Volume access modes.
+        storage: Storage capacity (e.g., "10Gi", "50Gi").
+    """
 
     model_config = {"extra": "forbid"}
 
-    name: str
-    storage_class: str | None = None
-    access_modes: list[str] = PydanticField(default_factory=lambda: ["ReadWriteOnce"])
-    storage: str = "10Gi"
+    name: str = PydanticField(description="PVC name (referenced by volume_mounts in containers).")
+    storage_class: str | None = PydanticField(
+        default=None, description='Kubernetes StorageClass name (e.g., "premium-rwo").'
+    )
+    access_modes: list[str] = PydanticField(
+        default_factory=lambda: ["ReadWriteOnce"], description="Volume access modes."
+    )
+    storage: str = PydanticField(default="10Gi", description='Storage capacity (e.g., "10Gi", "50Gi").')
 
 
 class StatefulSetConfig(Config):
@@ -124,12 +196,12 @@ class StatefulSetConfig(Config):
 
     Attributes:
         cluster: GKE cluster dependency providing Kubernetes credentials.
-        namespace: Kubernetes namespace.
-        replicas: Number of pod replicas.
-        service_name: Name of the headless service for pod DNS.
-        selector: Label selector for pods (defaults to app: {name}).
-        containers: List of container specifications.
-        volume_claim_templates: PVC templates for persistent storage.
+        namespace: Kubernetes namespace (immutable after creation).
+        replicas: Number of pod replicas to maintain.
+        service_name: Name of the headless service for stable pod DNS (immutable after creation).
+        selector: Label selector for pods; defaults to ``{"app": "<name>"}`` if not set.
+        containers: List of container specifications defining the pod template.
+        volume_claim_templates: PVC templates for persistent storage per replica.
     """
 
     cluster: ImmutableDependency[GKE]
@@ -145,11 +217,11 @@ class StatefulSetOutputs(Outputs):
     """Outputs from Kubernetes StatefulSet creation.
 
     Attributes:
-        name: StatefulSet name.
-        namespace: Kubernetes namespace.
-        replicas: Desired replicas.
-        ready_replicas: Current ready replicas.
-        service_name: Associated headless service name.
+        name: StatefulSet name as created in the cluster.
+        namespace: Kubernetes namespace containing the statefulset.
+        replicas: Desired number of pod replicas.
+        ready_replicas: Number of pods that have passed readiness checks.
+        service_name: Associated headless service name for pod DNS.
     """
 
     name: str
@@ -162,13 +234,23 @@ class StatefulSetOutputs(Outputs):
 class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
     """Kubernetes StatefulSet resource.
 
-    Creates and manages Kubernetes StatefulSets with persistent storage.
-    Waits for all replicas to be ready before returning.
+    Manages stateful workloads with stable pod identity, persistent storage
+    via PVC templates, and ordered deployment. Each pod gets a predictable
+    hostname (e.g., ``postgres-0``, ``postgres-1``) and its own PersistentVolumeClaim
+    that survives pod restarts.
+
+    Requires a headless Service (``service_name``) for DNS-based pod discovery.
+    Waits for all replicas to reach ready state before reporting success
+    (polls every 5s, max 300s).
+
+    Uses server-side apply with ``field_manager="pragma-kubernetes"`` for
+    idempotent create and update operations. Deletes use background cascade
+    to clean up owned pods and PVCs.
 
     Lifecycle:
         - on_create: Apply statefulset, wait for ready
         - on_update: Apply updated statefulset, wait for ready
-        - on_delete: Delete statefulset with cascade
+        - on_delete: Delete statefulset with background cascade
     """
 
     provider: ClassVar[str] = "kubernetes"
