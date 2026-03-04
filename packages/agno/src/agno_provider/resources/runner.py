@@ -42,14 +42,15 @@ class RunnerSpec(AgnoSpec):
     Used for tracking what was deployed.
 
     Attributes:
-        name: Runner name.
-        namespace: Kubernetes namespace.
-        agent_spec: Nested agent spec if deploying an agent.
+        name: Runner name (Kubernetes deployment name).
+        namespace: Kubernetes namespace where the runner is deployed.
+        agent_spec: Nested agent spec if deploying a single agent.
         team_spec: Nested team spec if deploying a team.
-        replicas: Number of replicas.
-        image: Container image.
-        cpu: CPU resource limit.
-        memory: Memory resource limit.
+        replicas: Number of pod replicas.
+        image: Container image used for the runner pods.
+        cpu: CPU resource request.
+        memory: Memory resource request and limit.
+        security_key: Whether a security key is configured for auth.
     """
 
     name: str
@@ -69,14 +70,17 @@ class RunnerConfig(Config):
     Exactly one of agent or team must be provided.
 
     Attributes:
-        agent: Agent dependency to deploy.
-        team: Team dependency to deploy.
+        agent: Agent dependency to deploy. Mutually exclusive with team.
+        team: Team dependency to deploy. Mutually exclusive with agent.
         cluster: GKE cluster dependency providing Kubernetes credentials.
-        namespace: Kubernetes namespace dependency for runner.
-        replicas: Number of pod replicas.
+        namespace: Kubernetes namespace dependency for the runner pods.
+        replicas: Number of pod replicas. Defaults to 1.
         image: Container image for running the agent/team.
-        cpu: CPU resource limit.
-        memory: Memory resource limit.
+        security_key: Bearer token for AgentOS basic auth (dev environments).
+        jwt_verification_key: Public key for JWT/RBAC auth (production environments).
+        public: Expose the service via LoadBalancer instead of ClusterIP. Defaults to False.
+        cpu: CPU resource request (e.g., "200m", "1"). Defaults to "200m".
+        memory: Memory resource request and limit (e.g., "1Gi", "2Gi"). Defaults to "1Gi".
     """
 
     agent: Dependency[Agent] | None = None

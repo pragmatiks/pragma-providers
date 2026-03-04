@@ -34,6 +34,27 @@ class AgentSpec(AgnoSpec):
     Contains all necessary information to create an Agent instance
     with all nested dependencies. Used for deployment to containers
     where the agent needs to be reconstructed from serialized config.
+
+    Attributes:
+        name: Agent display name.
+        description: Human-readable description of the agent.
+        role: Role assigned to the agent.
+        instructions: System instruction strings.
+        model_spec: Nested model specification (OpenAI or Anthropic).
+        tools_specs: Nested tool specifications (MCP or web search).
+        knowledge_spec: Nested knowledge base specification.
+        memory_spec: Nested memory manager specification.
+        db_spec: Nested PostgreSQL database specification.
+        prompt_spec: Nested prompt template specification.
+        markdown: Whether the agent formats responses in Markdown.
+        add_datetime_to_context: Include current date/time in context.
+        read_chat_history: Read chat history from the database.
+        add_history_to_context: Add chat history to context.
+        num_history_runs: Number of previous runs to include in history.
+        enable_agentic_memory: Enable autonomous memory management.
+        update_memory_on_run: Update memories after each run.
+        add_memories_to_context: Include stored memories in context.
+        enable_session_summaries: Enable automatic session summarization.
     """
 
     name: str
@@ -58,7 +79,29 @@ class AgentSpec(AgnoSpec):
 
 
 class AgentConfig(Config):
-    """Configuration for an Agno agent definition."""
+    """Configuration for an Agno agent definition.
+
+    Attributes:
+        name: Display name for the agent. Defaults to the resource name.
+        description: Human-readable description of the agent's purpose.
+        role: Role assigned to the agent (e.g., "Research Analyst").
+        model: LLM model dependency (OpenAI or Anthropic). Required.
+        instructions: List of system instruction strings joined with newlines.
+        prompt: Prompt template dependency for reusable instructions.
+        tools: List of tool dependencies (MCP servers or web search).
+        knowledge: Knowledge base dependency for semantic search (RAG).
+        db: PostgreSQL database dependency for session and chat history storage.
+        memory: Memory manager dependency for persistent agent memory.
+        markdown: Whether the agent should format responses in Markdown.
+        add_datetime_to_context: Include current date/time in the agent's context.
+        read_chat_history: Read chat history from the database. Defaults to True when db is set.
+        add_history_to_context: Add chat history to the agent's context. Defaults to True when db is set.
+        num_history_runs: Number of previous runs to include in history context.
+        enable_agentic_memory: Enable the agent to autonomously create and manage memories.
+        update_memory_on_run: Update memories after each agent run.
+        add_memories_to_context: Include stored memories in the agent's context.
+        enable_session_summaries: Enable automatic session summarization.
+    """
 
     name: Field[str] | None = None
     description: Field[str] | None = None

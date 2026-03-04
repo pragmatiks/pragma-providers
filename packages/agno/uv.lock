@@ -1392,7 +1392,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-agno-provider"
-version = "0.88.0"
+version = "0.89.0"
 source = { editable = "." }
 dependencies = [
     { name = "agno", extra = ["anthropic", "openai", "postgres", "qdrant"] },
@@ -1439,7 +1439,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "0.134.0"
+version = "0.135.0"
 source = { editable = "../gcp" }
 dependencies = [
     { name = "google-api-python-client" },
@@ -1471,7 +1471,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-kubernetes-provider"
-version = "0.145.0"
+version = "0.147.0"
 source = { editable = "../kubernetes" }
 dependencies = [
     { name = "google-auth" },
@@ -1501,7 +1501,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-sdk"
-version = "0.22.0"
+version = "0.23.0"
 source = { editable = "../../../pragma-sdk" }
 dependencies = [
     { name = "httpx" },

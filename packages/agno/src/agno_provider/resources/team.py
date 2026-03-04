@@ -36,6 +36,30 @@ class TeamSpec(AgnoSpec):
     Contains all necessary information to create a Team instance
     with all member agents and dependencies. Used for deployment to containers
     where the team needs to be reconstructed from serialized config.
+
+    Attributes:
+        name: Team display name.
+        description: Human-readable description of the team.
+        role: Role assigned to the team leader.
+        instructions: System instruction strings for the team leader.
+        member_specs: Nested agent specifications for each team member.
+        model_spec: Nested model specification for the team leader.
+        tools_specs: Nested tool specifications for the team leader.
+        knowledge_spec: Nested knowledge base specification.
+        memory_spec: Nested memory manager specification.
+        db_spec: Nested PostgreSQL database specification.
+        prompt_spec: Nested prompt template specification.
+        respond_directly: Whether the team leader responds without delegating.
+        delegate_to_all_members: Send tasks to all members simultaneously.
+        markdown: Whether the team formats responses in Markdown.
+        add_datetime_to_context: Include current date/time in context.
+        read_chat_history: Read chat history from the database.
+        add_history_to_context: Add chat history to context.
+        num_history_runs: Number of previous runs to include in history.
+        enable_agentic_memory: Enable autonomous memory management.
+        update_memory_on_run: Update memories after each run.
+        add_memories_to_context: Include stored memories in context.
+        enable_session_summaries: Enable automatic session summarization.
     """
 
     name: str
@@ -67,7 +91,32 @@ class TeamSpec(AgnoSpec):
 
 
 class TeamConfig(Config):
-    """Configuration for an Agno team definition."""
+    """Configuration for an Agno team definition.
+
+    Attributes:
+        name: Display name for the team. Defaults to the resource name.
+        description: Human-readable description of the team's purpose.
+        role: Role assigned to the team leader (e.g., "Project Manager").
+        members: List of agent dependencies that form the team. At least one required.
+        model: Optional LLM model for the team leader. If not set, members handle all tasks.
+        instructions: List of system instruction strings for the team leader.
+        prompt: Prompt template dependency for reusable team instructions.
+        tools: List of tool dependencies available to the team leader.
+        knowledge: Knowledge base dependency for the team leader's semantic search.
+        db: PostgreSQL database dependency for session and history storage.
+        memory: Memory manager dependency for persistent team memory.
+        respond_directly: Whether the team leader responds directly without delegating.
+        delegate_to_all_members: Send tasks to all members simultaneously instead of selecting one.
+        markdown: Whether the team should format responses in Markdown.
+        add_datetime_to_context: Include current date/time in the team's context.
+        read_chat_history: Read chat history from the database. Defaults to True when db is set.
+        add_history_to_context: Add chat history to the team's context. Defaults to True when db is set.
+        num_history_runs: Number of previous runs to include in history context.
+        enable_agentic_memory: Enable the team to autonomously create and manage memories.
+        update_memory_on_run: Update memories after each team run.
+        add_memories_to_context: Include stored memories in the team's context.
+        enable_session_summaries: Enable automatic session summarization.
+    """
 
     name: Field[str] | None = None
     description: Field[str] | None = None

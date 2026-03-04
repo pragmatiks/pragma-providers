@@ -1,7 +1,9 @@
-"""Agno agent provider for Pragmatiks.
+"""Agno provider for Pragmatiks.
 
-Deploys Agno AI agents to Kubernetes clusters with reactive
-dependency management for models, embeddings, and vector stores.
+Deploys Agno AI agents and teams to Kubernetes clusters with reactive
+dependency management. Provides declarative resources for models, tools,
+knowledge bases, memory, and prompt templates that compose into deployable
+agent configurations.
 """
 
 from pragma_sdk import Provider
