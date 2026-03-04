@@ -28,6 +28,7 @@ from lightkube.resources.apps_v1 import Deployment as K8sDeployment
 from lightkube.resources.core_v1 import Pod
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import BaseModel
+from pydantic import Field as PydanticField
 
 from kubernetes_provider.client import create_client_from_gke
 
@@ -40,100 +41,114 @@ class HttpGetConfig(BaseModel):
     """HTTP GET probe configuration.
 
     Attributes:
-        path: HTTP path to probe.
-        port: Port to probe.
+        path: HTTP path to probe (e.g., "/healthz").
+        port: Port number to send the HTTP request to.
     """
 
     model_config = {"extra": "forbid"}
 
-    path: str
-    port: int
+    path: str = PydanticField(description='HTTP path to probe (e.g., "/healthz").')
+    port: int = PydanticField(description="Port number to send the HTTP request to.")
 
 
 class ProbeConfig(BaseModel):
-    """Container probe configuration.
+    """Container health probe using HTTP GET checks.
 
     Attributes:
-        http_get: HTTP GET probe settings.
-        initial_delay_seconds: Delay before first probe.
-        period_seconds: How often to probe.
-        timeout_seconds: Probe timeout.
-        failure_threshold: Failures before unhealthy.
+        http_get: HTTP GET probe endpoint configuration.
+        initial_delay_seconds: Delay in seconds before the first probe after container start.
+        period_seconds: Interval in seconds between probes.
+        timeout_seconds: Timeout in seconds for each probe attempt.
+        failure_threshold: Consecutive failures before marking the container unhealthy.
     """
 
     model_config = {"extra": "forbid"}
 
-    http_get: HttpGetConfig | None = None
-    initial_delay_seconds: int = 0
-    period_seconds: int = 10
-    timeout_seconds: int = 1
-    failure_threshold: int = 3
+    http_get: HttpGetConfig | None = PydanticField(default=None, description="HTTP GET probe endpoint configuration.")
+    initial_delay_seconds: int = PydanticField(default=0, description="Delay in seconds before the first probe.")
+    period_seconds: int = PydanticField(default=10, description="Interval in seconds between probes.")
+    timeout_seconds: int = PydanticField(default=1, description="Timeout in seconds for each probe attempt.")
+    failure_threshold: int = PydanticField(default=3, description="Consecutive failures before marking unhealthy.")
 
 
 class ResourceRequirementsConfig(BaseModel):
-    """Container resource requirements.
+    """Container CPU and memory resource requests and limits.
+
+    Requests define the minimum guaranteed resources. Limits define the
+    maximum resources a container can consume.
 
     Attributes:
-        cpu: CPU request (e.g., "500m").
-        memory: Memory request (e.g., "1Gi").
-        cpu_limit: CPU limit.
-        memory_limit: Memory limit.
+        cpu: CPU request (e.g., "250m", "1").
+        memory: Memory request (e.g., "512Mi", "1Gi").
+        cpu_limit: CPU limit (e.g., "1000m", "2").
+        memory_limit: Memory limit (e.g., "1Gi", "4Gi").
     """
 
     model_config = {"extra": "forbid"}
 
-    cpu: str | None = None
-    memory: str | None = None
-    cpu_limit: str | None = None
-    memory_limit: str | None = None
+    cpu: str | None = PydanticField(default=None, description='CPU request (e.g., "250m", "1").')
+    memory: str | None = PydanticField(default=None, description='Memory request (e.g., "512Mi", "1Gi").')
+    cpu_limit: str | None = PydanticField(default=None, description='CPU limit (e.g., "1000m", "2").')
+    memory_limit: str | None = PydanticField(default=None, description='Memory limit (e.g., "1Gi", "4Gi").')
 
 
 class ContainerPortConfig(BaseModel):
-    """Container port configuration.
+    """Container port configuration for Deployment pods.
 
     Attributes:
-        container_port: Port number on the container.
-        name: Optional name for the port.
-        protocol: Protocol (TCP or UDP).
+        container_port: Port number exposed by the container.
+        name: Optional port name for service discovery.
+        protocol: Network protocol (TCP or UDP).
     """
 
     model_config = {"extra": "forbid"}
 
-    container_port: int
-    name: str | None = None
-    protocol: Literal["TCP", "UDP"] = "TCP"
+    container_port: int = PydanticField(description="Port number exposed by the container.")
+    name: str | None = PydanticField(default=None, description="Optional port name for service discovery.")
+    protocol: Literal["TCP", "UDP"] = PydanticField(default="TCP", description="Network protocol (TCP or UDP).")
 
 
 class ContainerConfig(BaseModel):
-    """Container configuration.
+    """Container specification for a Deployment pod.
 
     Attributes:
-        name: Container name.
-        image: Container image.
-        ports: List of port configurations.
+        name: Container name (unique within the pod).
+        image: Container image including tag (e.g., "nginx:1.25").
+        ports: Ports exposed by the container.
         env: Environment variables as key-value pairs.
-        env_from_secret: Environment variables from secrets (env_name -> secret_name.key).
-        command: Container command.
-        args: Container arguments.
-        resources: Resource requirements.
-        liveness_probe: Liveness probe configuration.
-        readiness_probe: Readiness probe configuration.
-        startup_probe: Startup probe configuration.
+        env_from_secret: Environment variables sourced from Kubernetes Secrets.
+            Format: ``{"ENV_NAME": "secret-name.key"}``.
+        command: Override the container entrypoint.
+        args: Arguments passed to the entrypoint.
+        resources: CPU and memory resource requests and limits.
+        liveness_probe: Probe to detect if the container is alive.
+        readiness_probe: Probe to detect if the container is ready for traffic.
+        startup_probe: Probe to detect if the container has started successfully.
     """
 
     model_config = {"extra": "forbid"}
 
-    name: str
-    image: str
-    ports: list[ContainerPortConfig] | None = None
-    env: dict[str, str] | None = None
-    env_from_secret: dict[str, str] | None = None
-    command: list[str] | None = None
-    args: list[str] | None = None
-    resources: ResourceRequirementsConfig | None = None
-    liveness_probe: ProbeConfig | None = None
-    readiness_probe: ProbeConfig | None = None
-    startup_probe: ProbeConfig | None = None
+    name: str = PydanticField(description="Container name (unique within the pod).")
+    image: str = PydanticField(description='Container image including tag (e.g., "nginx:1.25").')
+    ports: list[ContainerPortConfig] | None = PydanticField(default=None, description="Ports exposed by the container.")
+    env: dict[str, str] | None = PydanticField(default=None, description="Environment variables as key-value pairs.")
+    env_from_secret: dict[str, str] | None = PydanticField(
+        default=None, description='Environment variables from Secrets (e.g., {"DB_URL": "db-secret.url"}).'
+    )
+    command: list[str] | None = PydanticField(default=None, description="Override the container entrypoint.")
+    args: list[str] | None = PydanticField(default=None, description="Arguments passed to the entrypoint.")
+    resources: ResourceRequirementsConfig | None = PydanticField(
+        default=None, description="CPU and memory resource requests and limits."
+    )
+    liveness_probe: ProbeConfig | None = PydanticField(
+        default=None, description="Probe to detect if the container is alive."
+    )
+    readiness_probe: ProbeConfig | None = PydanticField(
+        default=None, description="Probe to detect if the container is ready for traffic."
+    )
+    startup_probe: ProbeConfig | None = PydanticField(
+        default=None, description="Probe to detect if the container has started successfully."
+    )
 
 
 class DeploymentConfig(Config):
@@ -141,12 +156,12 @@ class DeploymentConfig(Config):
 
     Attributes:
         cluster: GKE cluster dependency providing Kubernetes credentials.
-        namespace: Kubernetes namespace for the deployment.
-        replicas: Number of pod replicas.
-        selector: Label selector for pods.
-        labels: Pod labels (defaults to selector).
-        containers: List of container specifications.
-        strategy: Deployment strategy (RollingUpdate or Recreate).
+        namespace: Kubernetes namespace for the deployment (immutable after creation).
+        replicas: Number of pod replicas to maintain.
+        selector: Label selector for identifying managed pods (immutable after creation).
+        labels: Pod template labels; defaults to selector if not set.
+        containers: List of container specifications defining the pod template.
+        strategy: Deployment update strategy (RollingUpdate or Recreate).
     """
 
     cluster: ImmutableDependency[GKE]
@@ -162,11 +177,11 @@ class DeploymentOutputs(Outputs):
     """Outputs from Kubernetes Deployment creation.
 
     Attributes:
-        name: Deployment name.
-        namespace: Kubernetes namespace.
-        replicas: Desired replicas.
-        ready_replicas: Current ready replicas.
-        available_replicas: Current available replicas.
+        name: Deployment name as created in the cluster.
+        namespace: Kubernetes namespace containing the deployment.
+        replicas: Desired number of pod replicas.
+        ready_replicas: Number of pods that have passed readiness checks.
+        available_replicas: Number of pods available to serve traffic.
     """
 
     name: str
@@ -179,13 +194,21 @@ class DeploymentOutputs(Outputs):
 class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
     """Kubernetes Deployment resource.
 
-    Creates and manages Kubernetes Deployments using lightkube.
-    Waits for all replicas to be ready before returning.
+    Manages stateless workloads with configurable replicas, rolling update
+    strategy, container health probes, environment variables (including
+    references to Kubernetes Secrets), and resource limits.
+
+    Waits for all replicas to reach ready state before reporting success
+    (polls every 5s, default timeout 300s). Uses server-side apply with
+    ``field_manager="pragma-kubernetes"`` for idempotent operations.
+
+    Supports fetching aggregated logs from all pods matching the label
+    selector, and health checks that compare ready replicas to desired count.
 
     Lifecycle:
-        - on_create: Apply deployment, wait for ready
-        - on_update: Apply updated deployment, wait for ready
-        - on_delete: Delete the deployment
+        - on_create: Apply deployment, wait for all replicas ready
+        - on_update: Apply updated deployment, wait for all replicas ready
+        - on_delete: Delete the deployment (idempotent)
     """
 
     provider: ClassVar[str] = "kubernetes"

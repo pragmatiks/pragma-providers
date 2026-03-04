@@ -22,10 +22,10 @@ class SecretConfig(Config):
 
     Attributes:
         cluster: GKE cluster dependency providing Kubernetes credentials.
-        namespace: Kubernetes namespace for the secret.
-        type: Secret type (Opaque, kubernetes.io/tls, etc.).
-        data: Base64-encoded key-value pairs (will be encoded if not already).
-        string_data: Plain text key-value pairs (Kubernetes will base64 encode).
+        namespace: Kubernetes namespace for the secret (immutable after creation).
+        type: Secret type (e.g., ``Opaque``, ``kubernetes.io/tls``).
+        data: Key-value pairs that will be base64-encoded before storage.
+        string_data: Plain-text key-value pairs (Kubernetes base64-encodes them on the server).
     """
 
     cluster: ImmutableDependency[GKE]
@@ -39,10 +39,10 @@ class SecretOutputs(Outputs):
     """Outputs from Kubernetes Secret creation.
 
     Attributes:
-        name: Secret name.
-        namespace: Kubernetes namespace.
-        type: Secret type.
-        data: Key-value pairs stored in the secret (decoded from base64).
+        name: Secret name as created in the cluster.
+        namespace: Kubernetes namespace containing the secret.
+        type: Kubernetes secret type (e.g., ``Opaque``).
+        data: Merged key-value pairs from both ``data`` and ``string_data`` inputs (plain text).
     """
 
     name: str
@@ -54,13 +54,18 @@ class SecretOutputs(Outputs):
 class Secret(Resource[SecretConfig, SecretOutputs]):
     """Kubernetes Secret resource.
 
-    Creates and manages Kubernetes Secrets using lightkube.
-    Data values are base64 encoded automatically.
+    Stores sensitive data (credentials, tokens, TLS certificates) as
+    base64-encoded key-value pairs. Supports both ``data`` (auto-encoded)
+    and ``string_data`` (server-encoded) inputs.
+
+    Uses server-side apply with ``field_manager="pragma-kubernetes"`` for
+    idempotent operations. Health checks verify the secret exists and
+    report the number of stored keys.
 
     Lifecycle:
         - on_create: Apply secret configuration
         - on_update: Apply updated secret configuration
-        - on_delete: Delete the secret
+        - on_delete: Delete the secret (idempotent)
     """
 
     provider: ClassVar[str] = "kubernetes"

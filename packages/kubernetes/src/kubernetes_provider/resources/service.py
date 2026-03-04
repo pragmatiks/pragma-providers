@@ -15,26 +15,31 @@ from lightkube.resources.core_v1 import Endpoints
 from lightkube.resources.core_v1 import Service as K8sService
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import BaseModel
+from pydantic import Field as PydanticField
 
 from kubernetes_provider.client import create_client_from_gke
 
 
 class PortConfig(BaseModel):
-    """Service port configuration.
+    """Service port mapping between the service and target pods.
 
     Attributes:
-        name: Optional name for the port.
-        port: Port exposed by the service.
-        target_port: Port on the target pods.
-        protocol: Protocol (TCP or UDP).
+        name: Optional port name (required when exposing multiple ports).
+        port: Port number exposed by the service.
+        target_port: Port on the target pods; defaults to ``port`` if not set.
+        protocol: Network protocol (TCP or UDP).
     """
 
     model_config = {"extra": "forbid"}
 
-    name: str | None = None
-    port: int
-    target_port: int | None = None
-    protocol: Literal["TCP", "UDP"] = "TCP"
+    name: str | None = PydanticField(
+        default=None, description="Optional port name (required when exposing multiple ports)."
+    )
+    port: int = PydanticField(description="Port number exposed by the service.")
+    target_port: int | None = PydanticField(
+        default=None, description="Port on the target pods; defaults to port if not set."
+    )
+    protocol: Literal["TCP", "UDP"] = PydanticField(default="TCP", description="Network protocol (TCP or UDP).")
 
 
 class ServiceConfig(Config):
@@ -42,11 +47,11 @@ class ServiceConfig(Config):
 
     Attributes:
         cluster: GKE cluster dependency providing Kubernetes credentials.
-        namespace: Kubernetes namespace for the service.
-        type: Service type (ClusterIP, NodePort, LoadBalancer, Headless).
-        selector: Label selector for target pods.
-        ports: List of port configurations.
-        cluster_ip: Explicit cluster IP (use "None" for headless services).
+        namespace: Kubernetes namespace for the service (immutable after creation).
+        type: Service type (ClusterIP, NodePort, LoadBalancer, or Headless).
+        selector: Label selector matching the target pods.
+        ports: List of port mappings between the service and target pods.
+        cluster_ip: Explicit cluster IP; use ``"None"`` for headless services.
     """
 
     cluster: ImmutableDependency[GKE]
@@ -61,10 +66,10 @@ class ServiceOutputs(Outputs):
     """Outputs from Kubernetes Service creation.
 
     Attributes:
-        name: Service name.
-        namespace: Kubernetes namespace.
-        cluster_ip: Assigned cluster IP (empty for headless).
-        type: Service type.
+        name: Service name as created in the cluster.
+        namespace: Kubernetes namespace containing the service.
+        cluster_ip: Assigned cluster IP (empty string for headless services).
+        type: Kubernetes service type after apply.
     """
 
     name: str
@@ -76,13 +81,21 @@ class ServiceOutputs(Outputs):
 class Service(Resource[ServiceConfig, ServiceOutputs]):
     """Kubernetes Service resource.
 
-    Creates and manages Kubernetes Services using lightkube.
-    Services are immediately ready after apply (no polling needed).
+    Exposes workloads via ClusterIP, NodePort, LoadBalancer, or Headless
+    service types. Headless services (``type: "Headless"``) automatically
+    set ``clusterIP: None`` for DNS-based pod discovery.
+
+    Services are immediately ready after apply (no polling needed). Health
+    checks verify both the Service existence and the presence of backend
+    endpoints.
+
+    Uses server-side apply with ``field_manager="pragma-kubernetes"`` for
+    idempotent operations.
 
     Lifecycle:
         - on_create: Apply service configuration
         - on_update: Apply updated service configuration
-        - on_delete: Delete the service
+        - on_delete: Delete the service (idempotent)
     """
 
     provider: ClassVar[str] = "kubernetes"
@@ -301,14 +314,15 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
     ) -> AsyncIterator[LogEntry]:
         """Services do not produce logs.
 
-        This method exists for interface compatibility but yields nothing.
+        This method exists for interface compatibility and yields a single
+        informational entry.
 
         Args:
             since: Ignored for services.
             tail: Ignored for services.
 
         Yields:
-            Nothing - services don't have logs.
+            A single informational LogEntry.
         """
         yield LogEntry(
             timestamp=datetime.now(UTC),

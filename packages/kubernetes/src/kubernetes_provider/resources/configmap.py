@@ -21,7 +21,7 @@ class ConfigMapConfig(Config):
 
     Attributes:
         cluster: GKE cluster dependency providing Kubernetes credentials.
-        namespace: Kubernetes namespace for the configmap.
+        namespace: Kubernetes namespace for the configmap (immutable after creation).
         data: Key-value pairs to store in the configmap.
     """
 
@@ -34,8 +34,8 @@ class ConfigMapOutputs(Outputs):
     """Outputs from Kubernetes ConfigMap creation.
 
     Attributes:
-        name: ConfigMap name.
-        namespace: Kubernetes namespace.
+        name: ConfigMap name as created in the cluster.
+        namespace: Kubernetes namespace containing the configmap.
         data: Key-value pairs stored in the configmap.
     """
 
@@ -47,12 +47,17 @@ class ConfigMapOutputs(Outputs):
 class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
     """Kubernetes ConfigMap resource.
 
-    Creates and manages Kubernetes ConfigMaps using lightkube.
+    Stores non-sensitive configuration data as key-value pairs that can be
+    mounted as files or exposed as environment variables in pods.
+
+    Uses server-side apply with ``field_manager="pragma-kubernetes"`` for
+    idempotent operations. Health checks verify the ConfigMap exists and
+    report the number of stored keys.
 
     Lifecycle:
         - on_create: Apply configmap configuration
         - on_update: Apply updated configmap configuration
-        - on_delete: Delete the configmap
+        - on_delete: Delete the configmap (idempotent)
     """
 
     provider: ClassVar[str] = "kubernetes"

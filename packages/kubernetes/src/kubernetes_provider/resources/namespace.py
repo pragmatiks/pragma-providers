@@ -43,13 +43,17 @@ class NamespaceOutputs(Outputs):
 class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
     """Kubernetes Namespace resource.
 
-    Creates and manages Kubernetes Namespaces using lightkube.
-    Namespaces are cluster-scoped and do not belong to another namespace.
+    Manages cluster-scoped Namespace objects for workload isolation. Namespaces
+    do not belong to another namespace and have no ``namespace`` config field.
+
+    Uses server-side apply with ``field_manager="pragma-kubernetes"`` for
+    idempotent operations. Health checks verify the namespace exists and
+    reports its phase (Active or Terminating).
 
     Lifecycle:
         - on_create: Apply namespace configuration
-        - on_update: Apply updated namespace configuration
-        - on_delete: Delete the namespace
+        - on_update: Apply updated namespace configuration (labels)
+        - on_delete: Delete the namespace (idempotent)
     """
 
     provider: ClassVar[str] = "kubernetes"
