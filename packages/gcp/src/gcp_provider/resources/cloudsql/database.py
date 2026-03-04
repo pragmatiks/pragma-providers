@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from pragma_sdk import Config, Dependency, ImmutableField, Outputs, Resource
-from pydantic import Field as PydanticField
 
 from gcp_provider.resources.cloudsql.database_instance import DatabaseInstance
 from gcp_provider.resources.cloudsql.helpers import (
@@ -26,9 +25,7 @@ class DatabaseConfig(Config):
     """
 
     instance: Dependency[DatabaseInstance]
-    database_name: ImmutableField[str] = PydanticField(
-        description="Name of the database to create within the Cloud SQL instance.",
-    )
+    database_name: ImmutableField[str]
 
 
 class DatabaseOutputs(Outputs):
@@ -42,19 +39,11 @@ class DatabaseOutputs(Outputs):
         url: Connection URL format (without credentials).
     """
 
-    database_name: str = PydanticField(description="Name of the created database.")
-    instance_name: str = PydanticField(
-        description="Name of the Cloud SQL instance hosting this database.",
-    )
-    host: str = PydanticField(
-        description="Database host -- public IP, private IP, or connection name (project:region:instance).",
-    )
-    port: int = PydanticField(
-        description="Database port (5432 for PostgreSQL, 3306 for MySQL, 1433 for SQL Server).",
-    )
-    url: str = PydanticField(
-        description="Connection URL without credentials (e.g., postgresql://host:port/database_name).",
-    )
+    database_name: str
+    instance_name: str
+    host: str
+    port: int
+    url: str
 
 
 class Database(Resource[DatabaseConfig, DatabaseOutputs]):

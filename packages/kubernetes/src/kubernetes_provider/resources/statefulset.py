@@ -51,9 +51,9 @@ class ContainerPortConfig(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    name: str | None = PydanticField(default=None, description="Optional port name for service discovery.")
-    container_port: int = PydanticField(description="Port number exposed by the container.")
-    protocol: Literal["TCP", "UDP"] = PydanticField(default="TCP", description="Network protocol (TCP or UDP).")
+    name: str | None = None
+    container_port: int
+    protocol: Literal["TCP", "UDP"] = "TCP"
 
 
 class EnvVarConfig(BaseModel):
@@ -66,8 +66,8 @@ class EnvVarConfig(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    name: str = PydanticField(description="Environment variable name.")
-    value: str = PydanticField(description="Environment variable value.")
+    name: str
+    value: str
 
 
 class VolumeMountConfig(BaseModel):
@@ -82,10 +82,10 @@ class VolumeMountConfig(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    name: str = PydanticField(description="Name of the volume (must match a volume_claim_template name).")
-    mount_path: str = PydanticField(description="Filesystem path inside the container.")
-    sub_path: str | None = PydanticField(default=None, description="Sub-path within the volume to mount.")
-    read_only: bool = PydanticField(default=False, description="Whether the mount is read-only.")
+    name: str
+    mount_path: str
+    sub_path: str | None = None
+    read_only: bool = False
 
 
 class ResourcesConfig(BaseModel):
@@ -98,12 +98,8 @@ class ResourcesConfig(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    requests: dict[str, str] | None = PydanticField(
-        default=None, description='Resource requests (e.g., {"cpu": "500m", "memory": "1Gi"}).'
-    )
-    limits: dict[str, str] | None = PydanticField(
-        default=None, description='Resource limits (e.g., {"cpu": "2000m", "memory": "4Gi"}).'
-    )
+    requests: dict[str, str] | None = None
+    limits: dict[str, str] | None = None
 
 
 class ProbeConfig(BaseModel):
@@ -119,11 +115,11 @@ class ProbeConfig(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    tcp_socket_port: int | None = PydanticField(default=None, description="Port to probe via TCP connection.")
-    initial_delay_seconds: int = PydanticField(default=10, description="Delay in seconds before the first probe.")
-    period_seconds: int = PydanticField(default=10, description="Interval in seconds between probes.")
-    timeout_seconds: int = PydanticField(default=5, description="Timeout in seconds for each probe attempt.")
-    failure_threshold: int = PydanticField(default=3, description="Consecutive failures before marking unhealthy.")
+    tcp_socket_port: int | None = None
+    initial_delay_seconds: int = 10
+    period_seconds: int = 10
+    timeout_seconds: int = 5
+    failure_threshold: int = 3
 
 
 class ContainerConfig(BaseModel):
@@ -144,26 +140,16 @@ class ContainerConfig(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    name: str = PydanticField(description="Container name (unique within the pod).")
-    image: str = PydanticField(description='Container image including tag (e.g., "postgres:16").')
-    ports: list[ContainerPortConfig] | None = PydanticField(default=None, description="Ports exposed by the container.")
-    env: list[EnvVarConfig] | None = PydanticField(
-        default=None, description="Environment variables as name-value pairs."
-    )
-    volume_mounts: list[VolumeMountConfig] | None = PydanticField(
-        default=None, description="Volume mounts attaching PVCs to container paths."
-    )
-    resources: ResourcesConfig | None = PydanticField(
-        default=None, description="CPU and memory resource requests and limits."
-    )
-    command: list[str] | None = PydanticField(default=None, description="Override the container entrypoint.")
-    args: list[str] | None = PydanticField(default=None, description="Arguments passed to the entrypoint.")
-    liveness_probe: ProbeConfig | None = PydanticField(
-        default=None, description="Probe to detect if the container is alive."
-    )
-    readiness_probe: ProbeConfig | None = PydanticField(
-        default=None, description="Probe to detect if the container is ready for traffic."
-    )
+    name: str
+    image: str
+    ports: list[ContainerPortConfig] | None = None
+    env: list[EnvVarConfig] | None = None
+    volume_mounts: list[VolumeMountConfig] | None = None
+    resources: ResourcesConfig | None = None
+    command: list[str] | None = None
+    args: list[str] | None = None
+    liveness_probe: ProbeConfig | None = None
+    readiness_probe: ProbeConfig | None = None
 
 
 class VolumeClaimTemplateConfig(BaseModel):
@@ -181,14 +167,10 @@ class VolumeClaimTemplateConfig(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    name: str = PydanticField(description="PVC name (referenced by volume_mounts in containers).")
-    storage_class: str | None = PydanticField(
-        default=None, description='Kubernetes StorageClass name (e.g., "premium-rwo").'
-    )
-    access_modes: list[str] = PydanticField(
-        default_factory=lambda: ["ReadWriteOnce"], description="Volume access modes."
-    )
-    storage: str = PydanticField(default="10Gi", description='Storage capacity (e.g., "10Gi", "50Gi").')
+    name: str
+    storage_class: str | None = None
+    access_modes: list[str] = PydanticField(default_factory=lambda: ["ReadWriteOnce"])
+    storage: str = "10Gi"
 
 
 class StatefulSetConfig(Config):

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from pragma_sdk import Config, Dependency, Field, ImmutableField, Outputs, Resource
-from pydantic import Field as PydanticField
 
 from gcp_provider.resources.cloudsql.database_instance import DatabaseInstance
 from gcp_provider.resources.cloudsql.helpers import execute, get_credentials, get_sqladmin_service
@@ -21,12 +20,8 @@ class UserConfig(Config):
     """
 
     instance: Dependency[DatabaseInstance]
-    username: ImmutableField[str] = PydanticField(
-        description="Username for the database user.",
-    )
-    password: Field[str] = PydanticField(
-        description="Password for the database user. Use a $ref to inject from a secret resource.",
-    )
+    username: ImmutableField[str]
+    password: Field[str]
 
 
 class UserOutputs(Outputs):
@@ -38,13 +33,9 @@ class UserOutputs(Outputs):
         host: Host pattern for the user (% for all hosts).
     """
 
-    username: str = PydanticField(description="Username of the created database user.")
-    instance_name: str = PydanticField(
-        description="Name of the Cloud SQL instance hosting this user.",
-    )
-    host: str = PydanticField(
-        description="Host pattern for the user (% means all hosts are allowed).",
-    )
+    username: str
+    instance_name: str
+    host: str
 
 
 class User(Resource[UserConfig, UserOutputs]):

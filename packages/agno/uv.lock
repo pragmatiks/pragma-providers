@@ -1392,7 +1392,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-agno-provider"
-version = "0.90.0"
+version = "0.91.0"
 source = { editable = "." }
 dependencies = [
     { name = "agno", extra = ["anthropic", "openai", "postgres", "qdrant"] },
@@ -1423,7 +1423,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.26.0" },
     { name = "pragmatiks-gcp-provider", specifier = ">=0.77.0" },
     { name = "pragmatiks-kubernetes-provider", specifier = ">=0.100.0" },
-    { name = "pragmatiks-sdk", specifier = ">=0.6.0" },
+    { name = "pragmatiks-sdk", specifier = ">=0.26.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
 ]
@@ -1439,7 +1439,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "0.135.0"
+version = "0.136.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-python-client" },
@@ -1449,14 +1449,14 @@ dependencies = [
     { name = "google-cloud-secret-manager" },
     { name = "pragmatiks-sdk" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/65/30/a9376438696b9159486f8d1ba9684b1d53c2737e5d424f1a3cb7dea7030e/pragmatiks_gcp_provider-0.135.0.tar.gz", hash = "sha256:154f8ea2ce07c1ccb592da8a5fa128b81794ed39bc641cc964abbf9fab809e2c", size = 11968, upload-time = "2026-03-01T17:38:13.776Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/53/86/21c4ace41fc1ff20f2f43e2647bad50aa95b4e5f3fbb55db64a13730ecbb/pragmatiks_gcp_provider-0.136.0.tar.gz", hash = "sha256:5dc0c4336c6e0583fa4759d995fbde38f38b604da866bb108774271e983f7eb1", size = 15977, upload-time = "2026-03-04T16:08:35.81Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ed/73/1d68c559a6d10d27fcf5b81f59a9913c8d02d54d6001e0334542d0f4401f/pragmatiks_gcp_provider-0.135.0-py3-none-any.whl", hash = "sha256:dc5c8a0236593bf4258f7de36718221ded4083d749ab75eaf2694058ec5bbd4c", size = 18355, upload-time = "2026-03-01T17:38:12.628Z" },
+    { url = "https://files.pythonhosted.org/packages/81/ab/6abfeebd3147426ef9f9a90cbf82661294fb9b034fb5ae50968b6af2444e/pragmatiks_gcp_provider-0.136.0-py3-none-any.whl", hash = "sha256:f1ef409a41af573abda30e98358a3f14ef8895a3884841c5d3b63bd373b06391", size = 23103, upload-time = "2026-03-04T16:08:34.616Z" },
 ]
 
 [[package]]
 name = "pragmatiks-kubernetes-provider"
-version = "0.147.0"
+version = "0.148.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-auth" },
@@ -1465,14 +1465,14 @@ dependencies = [
     { name = "pragmatiks-sdk" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bc/38/7a8a12091b788acf39584f07481ace748f4f99f6f4729782daea38ff2852/pragmatiks_kubernetes_provider-0.147.0.tar.gz", hash = "sha256:ea943223e9081222f7ef9e865a1a889bf074eab0e6c937e8dd18a794cd2db0b7", size = 13014, upload-time = "2026-03-01T17:38:59.161Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/a8/2aed7cf68c2ab772667af8088d9ff64a6ef43f63669903955386d177dae5/pragmatiks_kubernetes_provider-0.148.0.tar.gz", hash = "sha256:e529fa2f6a7efb4ae8b51f642669819deeb8d4f1761c30bbdd5c56ab1c83089c", size = 17654, upload-time = "2026-03-04T16:09:15.805Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/60/0a/94ec2af32ef8a5a2b9fac087a8295d086b9af79493b48af13f4b7750c824/pragmatiks_kubernetes_provider-0.147.0-py3-none-any.whl", hash = "sha256:588e41f0e850115a2cd2018c9fb72a06f2d8c699005aa31f4ba07ebfa3aae47d", size = 21893, upload-time = "2026-03-01T17:38:56.615Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/ba/2764bd525e38876768a8ac494edbe0f8f21d6d6baed1e14fd0912c82e352/pragmatiks_kubernetes_provider-0.148.0-py3-none-any.whl", hash = "sha256:cffb9744fecebea306845f6673ac3d7a7fc779d8d94781029d3f37ff77ff172b", size = 27028, upload-time = "2026-03-04T16:09:13.312Z" },
 ]
 
 [[package]]
 name = "pragmatiks-sdk"
-version = "0.23.0"
+version = "0.26.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -1480,9 +1480,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e6/73/8e5e2cfdb8fc226f6067945fed6e26c1cc32ab7d0fdc91343c6ed0630d16/pragmatiks_sdk-0.23.0.tar.gz", hash = "sha256:a111ae25152cb5655d9f3f699d9178d4a61b968e3c11c4ed18d5360b67cf3714", size = 26069, upload-time = "2026-03-01T17:37:57.408Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bb/c8/0e6f2e1b0ed47ad14495dd038e291e023ae1b34e903beeb858d45710d5f7/pragmatiks_sdk-0.26.0.tar.gz", hash = "sha256:96bf7c419be8589a944eae6f224333bf7f248c25b9251910c1792a4ac3d087e9", size = 30143, upload-time = "2026-03-04T17:11:23.985Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/eb/99ea303f7d6f50fa458693b508b823def235e78ae72b55c51be1610cccd5/pragmatiks_sdk-0.23.0-py3-none-any.whl", hash = "sha256:8d1a40b61652317715bf2c306bdda9192e5c8213f629b694942b1c65f25b6b03", size = 33963, upload-time = "2026-03-01T17:37:55.951Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/3b/14d373584229748dff539fcd1aae2e17246805be23f5ff4d6bc4bf8ff159/pragmatiks_sdk-0.26.0-py3-none-any.whl", hash = "sha256:63fffa19127f2d259a9a30556ec7bf84ded2d946ffdd2dfec5ffe1bf4fdb43a9", size = 37937, upload-time = "2026-03-04T17:11:21.031Z" },
 ]
 
 [[package]]

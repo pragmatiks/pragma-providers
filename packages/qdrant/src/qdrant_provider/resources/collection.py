@@ -19,10 +19,8 @@ class VectorConfig(BaseModel):
         distance: Distance metric for similarity search.
     """
 
-    size: int = PydanticField(gt=0, description="Vector dimension (must match your embedding model's output).")
-    distance: Literal["Cosine", "Euclid", "Dot"] = PydanticField(
-        default="Cosine", description="Distance metric for similarity search: Cosine, Euclid, or Dot."
-    )
+    size: int = PydanticField(gt=0)
+    distance: Literal["Cosine", "Euclid", "Dot"] = "Cosine"
 
 
 class CollectionConfig(Config):
@@ -54,12 +52,10 @@ class CollectionOutputs(Outputs):
         status: Collection status (green, yellow, red, or unknown).
     """
 
-    name: str = PydanticField(description="Collection name.")
-    indexed_vectors_count: int = PydanticField(description="Number of indexed vectors in the collection.")
-    points_count: int = PydanticField(description="Total number of points stored in the collection.")
-    status: str = PydanticField(
-        description="Collection status: 'green' (ready), 'yellow' (optimizing), 'red' (error), or 'unknown'."
-    )
+    name: str
+    indexed_vectors_count: int
+    points_count: int
+    status: str
 
 
 class Collection(Resource[CollectionConfig, CollectionOutputs]):

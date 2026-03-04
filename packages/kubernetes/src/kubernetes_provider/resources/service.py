@@ -15,7 +15,6 @@ from lightkube.resources.core_v1 import Endpoints
 from lightkube.resources.core_v1 import Service as K8sService
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import BaseModel
-from pydantic import Field as PydanticField
 
 from kubernetes_provider.client import create_client_from_gke
 
@@ -32,14 +31,10 @@ class PortConfig(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    name: str | None = PydanticField(
-        default=None, description="Optional port name (required when exposing multiple ports)."
-    )
-    port: int = PydanticField(description="Port number exposed by the service.")
-    target_port: int | None = PydanticField(
-        default=None, description="Port on the target pods; defaults to port if not set."
-    )
-    protocol: Literal["TCP", "UDP"] = PydanticField(default="TCP", description="Network protocol (TCP or UDP).")
+    name: str | None = None
+    port: int
+    target_port: int | None = None
+    protocol: Literal["TCP", "UDP"] = "TCP"
 
 
 class ServiceConfig(Config):
