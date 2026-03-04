@@ -1,3 +1,9 @@
+## agno-v0.90.0 (2026-03-04)
+
+### Feat
+
+- migrate provider configs to Field[T] and ImmutableField[T] (PRA-225) (#36)
+
 ## agno-v0.89.0 (2026-03-01)
 
 ### Feat
