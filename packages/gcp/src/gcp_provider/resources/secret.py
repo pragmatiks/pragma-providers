@@ -9,6 +9,7 @@ from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.secretmanager_v1 import SecretManagerServiceAsyncClient
 from google.oauth2 import service_account
 from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
+from pydantic import Field as PydanticField
 
 
 class SecretConfig(Config):
@@ -23,10 +24,19 @@ class SecretConfig(Config):
             Use a pragma/secret resource with a FieldReference to provide credentials.
     """
 
-    project_id: ImmutableField[str]
-    secret_id: ImmutableField[str]
-    data: Field[str]
-    credentials: Field[dict[str, Any] | str]
+    project_id: ImmutableField[str] = PydanticField(
+        description="GCP project ID where the secret will be created.",
+    )
+    secret_id: ImmutableField[str] = PydanticField(
+        description="Identifier for the secret within GCP. Must be unique per project.",
+    )
+    data: Field[str] = PydanticField(
+        description="Secret payload data to store as a UTF-8 string.",
+    )
+    credentials: Field[dict[str, Any] | str] = PydanticField(
+        description="GCP service account credentials as a JSON object or JSON string. "
+        "Required for multi-tenant SaaS -- no ADC fallback.",
+    )
 
 
 class SecretOutputs(Outputs):
@@ -38,21 +48,49 @@ class SecretOutputs(Outputs):
         version_id: The version number as a string.
     """
 
-    resource_name: str
-    version_name: str
-    version_id: str
+    resource_name: str = PydanticField(
+        description="Full GCP resource name (e.g., projects/{project}/secrets/{id}).",
+    )
+    version_name: str = PydanticField(
+        description="Full version resource name including version number "
+        "(e.g., projects/{project}/secrets/{id}/versions/{version}).",
+    )
+    version_id: str = PydanticField(
+        description="The secret version number as a string.",
+    )
 
 
 class Secret(Resource[SecretConfig, SecretOutputs]):
     """GCP Secret Manager secret resource.
 
     Creates and manages secrets in GCP Secret Manager using user-provided
-    service account credentials (multi-tenant SaaS pattern).
+    service account credentials (multi-tenant SaaS pattern). Secrets use
+    automatic replication across GCP regions.
 
     Lifecycle:
-        - on_create: Creates secret and initial version
-        - on_update: Creates new version if data changed
-        - on_delete: Deletes secret and all versions
+        - on_create: Creates the secret and an initial version. Idempotent --
+          if the secret already exists, adds a new version instead.
+        - on_update: Adds a new secret version when ``data`` changes.
+          Previous versions are retained. No-ops if data is unchanged.
+        - on_delete: Deletes the secret and all its versions. Idempotent --
+          succeeds silently if the secret does not exist.
+
+    Required IAM role: ``roles/secretmanager.admin``
+
+    Required API: ``secretmanager.googleapis.com``
+
+    Example::
+
+        resources:
+          - name: api-key
+            provider: gcp
+            type: secret
+            config:
+              project_id: my-project
+              secret_id: api-key
+              data: "sk-secret-value"
+              credentials:
+                $ref: gcp-credentials
     """
 
     provider: ClassVar[str] = "gcp"
