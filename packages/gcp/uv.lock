@@ -593,7 +593,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "0.135.0"
+version = "0.136.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-api-python-client" },
@@ -620,7 +620,7 @@ requires-dist = [
     { name = "google-cloud-container", specifier = ">=2.50.0" },
     { name = "google-cloud-logging", specifier = ">=3.10.0" },
     { name = "google-cloud-secret-manager", specifier = ">=2.20.0" },
-    { name = "pragmatiks-sdk", editable = "../../../pragma-sdk" },
+    { name = "pragmatiks-sdk", specifier = ">=0.17.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -635,35 +635,16 @@ dev = [
 [[package]]
 name = "pragmatiks-sdk"
 version = "0.23.0"
-source = { editable = "../../../pragma-sdk" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "structlog" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "pydantic", specifier = ">=2.11.4" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "structlog", specifier = ">=24.1.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "commitizen", specifier = ">=4.11.0" },
-    { name = "pre-commit", specifier = ">=4.0.0" },
-    { name = "respx", specifier = ">=0.22.0" },
-]
-test = [
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "pytest-asyncio", specifier = ">=1.0.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "pytest-mock", specifier = ">=3.14.0" },
-    { name = "respx", specifier = ">=0.21.1" },
+sdist = { url = "https://files.pythonhosted.org/packages/e6/73/8e5e2cfdb8fc226f6067945fed6e26c1cc32ab7d0fdc91343c6ed0630d16/pragmatiks_sdk-0.23.0.tar.gz", hash = "sha256:a111ae25152cb5655d9f3f699d9178d4a61b968e3c11c4ed18d5360b67cf3714", size = 26069, upload-time = "2026-03-01T17:37:57.408Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/72/eb/99ea303f7d6f50fa458693b508b823def235e78ae72b55c51be1610cccd5/pragmatiks_sdk-0.23.0-py3-none-any.whl", hash = "sha256:8d1a40b61652317715bf2c306bdda9192e5c8213f629b694942b1c65f25b6b03", size = 33963, upload-time = "2026-03-01T17:37:55.951Z" },
 ]
 
 [[package]]

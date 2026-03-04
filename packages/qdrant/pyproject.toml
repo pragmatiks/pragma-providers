@@ -47,10 +47,6 @@ changelog_file = "CHANGELOG.md"
 extend = "../../pyproject.toml"
 line-length = 120
 
-[tool.uv.sources]
-pragmatiks-sdk = { path = "../../../pragma-sdk", editable = true }
-pragmatiks-kubernetes-provider = { path = "../kubernetes", editable = true }
-
 [tool.uv.build-backend]
 module-name = "qdrant_provider"
 

@@ -715,7 +715,7 @@ wheels = [
 [[package]]
 name = "pragmatiks-gcp-provider"
 version = "0.135.0"
-source = { editable = "../gcp" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-python-client" },
     { name = "google-auth" },
@@ -724,30 +724,15 @@ dependencies = [
     { name = "google-cloud-secret-manager" },
     { name = "pragmatiks-sdk" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "google-api-python-client", specifier = ">=2.150.0" },
-    { name = "google-auth", specifier = ">=2.35.0" },
-    { name = "google-cloud-container", specifier = ">=2.50.0" },
-    { name = "google-cloud-logging", specifier = ">=3.10.0" },
-    { name = "google-cloud-secret-manager", specifier = ">=2.20.0" },
-    { name = "pragmatiks-sdk", editable = "../../../pragma-sdk" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "pytest-asyncio", specifier = ">=1.0.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "pytest-mock", specifier = ">=3.14.0" },
-    { name = "ty", specifier = ">=0.0.14" },
+sdist = { url = "https://files.pythonhosted.org/packages/65/30/a9376438696b9159486f8d1ba9684b1d53c2737e5d424f1a3cb7dea7030e/pragmatiks_gcp_provider-0.135.0.tar.gz", hash = "sha256:154f8ea2ce07c1ccb592da8a5fa128b81794ed39bc641cc964abbf9fab809e2c", size = 11968, upload-time = "2026-03-01T17:38:13.776Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ed/73/1d68c559a6d10d27fcf5b81f59a9913c8d02d54d6001e0334542d0f4401f/pragmatiks_gcp_provider-0.135.0-py3-none-any.whl", hash = "sha256:dc5c8a0236593bf4258f7de36718221ded4083d749ab75eaf2694058ec5bbd4c", size = 18355, upload-time = "2026-03-01T17:38:12.628Z" },
 ]
 
 [[package]]
 name = "pragmatiks-kubernetes-provider"
 version = "0.147.0"
-source = { editable = "../kubernetes" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-auth" },
     { name = "lightkube" },
@@ -755,28 +740,14 @@ dependencies = [
     { name = "pragmatiks-sdk" },
     { name = "requests" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "google-auth", specifier = ">=2.30.0" },
-    { name = "lightkube", specifier = ">=0.15.0" },
-    { name = "pragmatiks-gcp-provider", editable = "../gcp" },
-    { name = "pragmatiks-sdk", editable = "../../../pragma-sdk" },
-    { name = "requests", specifier = ">=2.32.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "pytest-asyncio", specifier = ">=1.0.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "pytest-mock", specifier = ">=3.14.0" },
-    { name = "ty", specifier = ">=0.0.14" },
+sdist = { url = "https://files.pythonhosted.org/packages/bc/38/7a8a12091b788acf39584f07481ace748f4f99f6f4729782daea38ff2852/pragmatiks_kubernetes_provider-0.147.0.tar.gz", hash = "sha256:ea943223e9081222f7ef9e865a1a889bf074eab0e6c937e8dd18a794cd2db0b7", size = 13014, upload-time = "2026-03-01T17:38:59.161Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/60/0a/94ec2af32ef8a5a2b9fac087a8295d086b9af79493b48af13f4b7750c824/pragmatiks_kubernetes_provider-0.147.0-py3-none-any.whl", hash = "sha256:588e41f0e850115a2cd2018c9fb72a06f2d8c699005aa31f4ba07ebfa3aae47d", size = 21893, upload-time = "2026-03-01T17:38:56.615Z" },
 ]
 
 [[package]]
 name = "pragmatiks-qdrant-provider"
-version = "0.20.0"
+version = "0.21.0"
 source = { editable = "." }
 dependencies = [
     { name = "pragmatiks-kubernetes-provider" },
@@ -795,8 +766,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "pragmatiks-kubernetes-provider", editable = "../kubernetes" },
-    { name = "pragmatiks-sdk", editable = "../../../pragma-sdk" },
+    { name = "pragmatiks-kubernetes-provider", specifier = ">=0.2.0" },
+    { name = "pragmatiks-sdk", specifier = ">=0.6.0" },
     { name = "qdrant-client", specifier = ">=1.12.0" },
 ]
 
@@ -812,35 +783,16 @@ dev = [
 [[package]]
 name = "pragmatiks-sdk"
 version = "0.23.0"
-source = { editable = "../../../pragma-sdk" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "structlog" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "pydantic", specifier = ">=2.11.4" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "structlog", specifier = ">=24.1.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "commitizen", specifier = ">=4.11.0" },
-    { name = "pre-commit", specifier = ">=4.0.0" },
-    { name = "respx", specifier = ">=0.22.0" },
-]
-test = [
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "pytest-asyncio", specifier = ">=1.0.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "pytest-mock", specifier = ">=3.14.0" },
-    { name = "respx", specifier = ">=0.21.1" },
+sdist = { url = "https://files.pythonhosted.org/packages/e6/73/8e5e2cfdb8fc226f6067945fed6e26c1cc32ab7d0fdc91343c6ed0630d16/pragmatiks_sdk-0.23.0.tar.gz", hash = "sha256:a111ae25152cb5655d9f3f699d9178d4a61b968e3c11c4ed18d5360b67cf3714", size = 26069, upload-time = "2026-03-01T17:37:57.408Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/72/eb/99ea303f7d6f50fa458693b508b823def235e78ae72b55c51be1610cccd5/pragmatiks_sdk-0.23.0-py3-none-any.whl", hash = "sha256:8d1a40b61652317715bf2c306bdda9192e5c8213f629b694942b1c65f25b6b03", size = 33963, upload-time = "2026-03-01T17:37:55.951Z" },
 ]
 
 [[package]]
