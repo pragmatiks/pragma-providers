@@ -128,6 +128,14 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         """Delete database. Idempotent: succeeds if database doesn't exist."""
         await self._delete(self.config)
 
+    @classmethod
+    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
+    @classmethod
+    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
     async def _delete(self, config: DatabaseConfig) -> None:
         """Delete database from instance. Idempotent: succeeds if not found."""
         instance_resource = await config.instance.resolve()

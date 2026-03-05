@@ -242,6 +242,14 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
                 if e.status.code != 404:
                     raise
 
+    @classmethod
+    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
+    @classmethod
+    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
     async def health(self) -> HealthStatus:
         """Check Service health by verifying existence and endpoints.
 

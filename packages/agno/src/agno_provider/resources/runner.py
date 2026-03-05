@@ -523,6 +523,14 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         kubernetes_deployment = self._build_kubernetes_deployment_for_delete(namespace_name)
         await kubernetes_deployment.on_delete()
 
+    @classmethod
+    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
+    @classmethod
+    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
     async def health(self) -> HealthStatus:
         """Check Runner health by delegating to child kubernetes/deployment.
 

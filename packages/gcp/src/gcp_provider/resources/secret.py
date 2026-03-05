@@ -177,3 +177,11 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             await client.delete_secret(name=self._secret_path())
         except NotFound:
             pass
+
+    @classmethod
+    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
+    @classmethod
+    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs

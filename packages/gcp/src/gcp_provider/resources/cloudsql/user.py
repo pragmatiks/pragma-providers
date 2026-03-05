@@ -154,6 +154,14 @@ class User(Resource[UserConfig, UserOutputs]):
         """Delete user. Idempotent: succeeds if user doesn't exist."""
         await self._delete(self.config)
 
+    @classmethod
+    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
+    @classmethod
+    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
     async def _delete(self, config: UserConfig) -> None:
         """Delete user from instance. Idempotent: succeeds if not found."""
         instance_resource = await config.instance.resolve()
