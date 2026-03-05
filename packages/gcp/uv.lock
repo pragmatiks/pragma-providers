@@ -593,7 +593,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "0.137.0"
+version = "0.138.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-api-python-client" },
