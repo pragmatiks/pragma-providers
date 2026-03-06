@@ -227,3 +227,11 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
+
+    @classmethod
+    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
+    @classmethod
+    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs

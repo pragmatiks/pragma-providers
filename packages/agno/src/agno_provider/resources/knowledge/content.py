@@ -233,3 +233,11 @@ class Content(AgnoResource[ContentConfig, ContentOutputs, ContentSpec]):
         """Remove content from the knowledge's vectordb by name."""
         knowledge = await self._resolve_knowledge()
         knowledge.remove_vectors_by_name(self._content_name())
+
+    @classmethod
+    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
+    @classmethod
+    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs

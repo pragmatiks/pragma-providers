@@ -164,6 +164,14 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
                 if e.status.code != 404:
                     raise
 
+    @classmethod
+    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
+    @classmethod
+    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
     async def health(self) -> HealthStatus:
         """Check ConfigMap health by verifying it exists.
 

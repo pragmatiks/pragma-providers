@@ -228,6 +228,14 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         if result is not None:
             await self._wait_for_deletion(service)
 
+    @classmethod
+    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
+    @classmethod
+    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
+        return config, outputs
+
     async def health(self) -> HealthStatus:
         """Check instance health by querying instance status.
 
