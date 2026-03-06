@@ -158,7 +158,10 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
               availability_type: REGIONAL
               backup_enabled: true
               credentials:
-                $ref: gcp-credentials
+                provider: pragma
+                resource: secret
+                name: gcp-credentials
+                field: outputs.credentials_json
     """
 
     provider: ClassVar[str] = "gcp"

@@ -160,7 +160,10 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
               autopilot: true
               release_channel: STABLE
               credentials:
-                $ref: gcp-credentials
+                provider: pragma
+                resource: secret
+                name: gcp-credentials
+                field: outputs.credentials_json
     """
 
     provider: ClassVar[str] = "gcp"

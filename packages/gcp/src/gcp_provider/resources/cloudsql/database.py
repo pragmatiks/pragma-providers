@@ -72,7 +72,9 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             type: cloudsql/database
             config:
               instance:
-                $ref: prod-db-instance
+                provider: gcp
+                resource: cloudsql/database_instance
+                name: prod-db-instance
               database_name: myapp
     """
 
