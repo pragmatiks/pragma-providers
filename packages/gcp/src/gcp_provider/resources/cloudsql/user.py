@@ -62,10 +62,15 @@ class User(Resource[UserConfig, UserOutputs]):
             type: cloudsql/user
             config:
               instance:
-                $ref: prod-db-instance
+                provider: gcp
+                resource: cloudsql/database_instance
+                name: prod-db-instance
               username: app_service
               password:
-                $ref: db-password-secret
+                provider: pragma
+                resource: secret
+                name: db-password-secret
+                field: outputs.password
     """
 
     provider: ClassVar[str] = "gcp"

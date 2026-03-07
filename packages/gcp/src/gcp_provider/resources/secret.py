@@ -73,7 +73,10 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
               secret_id: api-key
               data: "sk-secret-value"
               credentials:
-                $ref: gcp-credentials
+                provider: pragma
+                resource: secret
+                name: gcp-credentials
+                field: outputs.credentials_json
     """
 
     provider: ClassVar[str] = "gcp"
