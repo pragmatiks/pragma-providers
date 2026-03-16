@@ -1,3 +1,16 @@
+## gcp-v0.142.0 (2026-03-16)
+
+### Feat
+
+- add explicit upgrade/downgrade methods to all resources (PRA-226) (#41)
+- migrate provider configs to Field[T] and ImmutableField[T] (PRA-225) (#36)
+
+### Fix
+
+- add PyPI availability polling to update-sdk workflow (#45)
+- **gcp**: replace fake $ref syntax with actual reference format in docstrings (#42)
+- remove editable SDK source overrides from provider pyproject.toml files (#38)
+
 ## gcp-v0.141.0 (2026-03-07)
 
 ### Feat
