@@ -1,3 +1,46 @@
+## agno-v0.96.0 (2026-03-16)
+
+### Feat
+
+- add explicit upgrade/downgrade methods to all resources (PRA-226) (#41)
+- migrate provider configs to Field[T] and ImmutableField[T] (PRA-225) (#36)
+
+### Fix
+
+- add PyPI availability polling to update-sdk workflow (#45)
+- **gcp**: replace fake $ref syntax with actual reference format in docstrings (#42)
+- remove editable SDK source overrides from provider pyproject.toml files (#38)
+
+## agno-v0.88.0 (2026-02-27)
+
+### Feat
+
+- add pragma store publish to CI/CD pipeline (#35)
+- add kubernetes/namespace resource type (PRA-177) (#34)
+- add store metadata and seed script (PRA-211) (#33)
+- add store metadata fields to provider copier template (PRA-193) (#32)
+- **agno**: add knowledge and content resource support (#30)
+
+### Fix
+
+- **gcp**: handle CloudSQL 400 error when deleting non-existent user
+- **agno**: remove wait_ready calls from runner resource application
+- **gcp**: handle HTTP 400 for already-existing CloudSQL databases
+- **agno**: drop --frozen from Dockerfile uv sync (incompatible with --no-sources)
+- **ci**: prevent infinite publish loop on bump commits
+
+## agno-v0.77.0 (2026-02-07)
+
+### Feat
+
+- **agno**: add team resource, runner auth, model discriminators, and memory config (#29)
+
+## agno-v0.66.0 (2026-02-07)
+
+### Feat
+
+- **kubernetes**: add startup probe support and authorized_user credentials (#28)
+
 ## agno-v0.95.0 (2026-03-07)
 
 ### Feat
