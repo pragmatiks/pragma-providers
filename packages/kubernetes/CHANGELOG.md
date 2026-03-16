@@ -1,3 +1,33 @@
+## kubernetes-v0.154.0 (2026-03-16)
+
+### Feat
+
+- add explicit upgrade/downgrade methods to all resources (PRA-226) (#41)
+- migrate provider configs to Field[T] and ImmutableField[T] (PRA-225) (#36)
+- add pragma store publish to CI/CD pipeline (#35)
+- add kubernetes/namespace resource type (PRA-177) (#34)
+- add store metadata and seed script (PRA-211) (#33)
+- add store metadata fields to provider copier template (PRA-193) (#32)
+- **agno**: add knowledge and content resource support (#30)
+- **agno**: add team resource, runner auth, model discriminators, and memory config (#29)
+- **kubernetes**: add startup probe support and authorized_user credentials (#28)
+- **agno**: rebuild agent, add team and deployment resources (#24)
+
+### Fix
+
+- add PyPI availability polling to update-sdk workflow (#45)
+- **gcp**: replace fake $ref syntax with actual reference format in docstrings (#42)
+- remove editable SDK source overrides from provider pyproject.toml files (#38)
+- **gcp**: handle CloudSQL 400 error when deleting non-existent user
+- **agno**: remove wait_ready calls from runner resource application
+- **gcp**: handle HTTP 400 for already-existing CloudSQL databases
+- **agno**: drop --frozen from Dockerfile uv sync (incompatible with --no-sources)
+- **ci**: prevent infinite publish loop on bump commits
+- **agno**: runtime dependencies and import fix (#27)
+- **agno**: rewrite agent tests for current AgentConfig implementation
+- **gcp**: convert db_port to int in CloudSQL database outputs
+- **ci**: use PyPI API for availability check instead of pip index
+
 ## kubernetes-v0.153.0 (2026-03-07)
 
 ### Feat
