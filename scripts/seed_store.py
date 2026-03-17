@@ -99,7 +99,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--surreal-ns",
         default=None,
-        help="SurrealDB namespace (tenant_id). Required for --trust-tier-only or full run.",
+        help="SurrealDB namespace (organization_id). Required for --trust-tier-only or full run.",
     )
     parser.add_argument(
         "--version",
@@ -256,7 +256,7 @@ def set_trust_tier(
         surreal_url: SurrealDB base URL.
         surreal_user: SurrealDB username.
         surreal_pass: SurrealDB password.
-        namespace: SurrealDB namespace (tenant_id).
+        namespace: SurrealDB namespace (organization_id).
         provider_name: Store provider name to update.
     """
     query = "UPDATE store_providers SET trust_tier = 'official' WHERE name = $name"
@@ -296,7 +296,7 @@ def main() -> None:
             sys.exit(1)
 
     if need_surreal and not args.surreal_ns:
-        print("Error: --surreal-ns (tenant namespace) is required for trust tier updates.")
+        print("Error: --surreal-ns (organization namespace) is required for trust tier updates.")
         sys.exit(1)
 
     providers = [load_provider_info(name, args.version) for name in args.providers]
