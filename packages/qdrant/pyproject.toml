@@ -5,7 +5,7 @@ description = "Qdrant provider for Pragmatiks"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk>=0.30.0",
+    "pragmatiks-sdk>=0.32.1",
     "pragmatiks-kubernetes-provider>=0.2.0",
     "qdrant-client>=1.12.0",
 ]
