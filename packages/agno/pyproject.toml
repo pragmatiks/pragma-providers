@@ -5,7 +5,7 @@ description = "Agno agent provider for Pragmatiks"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk>=0.32.1",
+    "pragmatiks-sdk>=0.32.2",
     "pragmatiks-gcp-provider>=0.77.0",
     "pragmatiks-kubernetes-provider>=0.100.0",
     "agno[anthropic,openai,postgres,qdrant]>=2.4.0",
