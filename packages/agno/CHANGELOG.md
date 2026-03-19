@@ -1,3 +1,17 @@
+## agno-v0.99.0 (2026-03-19)
+
+### Feat
+
+- add explicit upgrade/downgrade methods to all resources (PRA-226) (#41)
+- migrate provider configs to Field[T] and ImmutableField[T] (PRA-225) (#36)
+
+### Fix
+
+- use PyPI JSON API for version availability polling (#46)
+- add PyPI availability polling to update-sdk workflow (#45)
+- **gcp**: replace fake $ref syntax with actual reference format in docstrings (#42)
+- remove editable SDK source overrides from provider pyproject.toml files (#38)
+
 ## agno-v0.98.0 (2026-03-17)
 
 ### Feat
