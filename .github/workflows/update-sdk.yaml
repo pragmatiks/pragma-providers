@@ -61,7 +61,13 @@ jobs:
           exit 1
 
       - name: Update lockfiles
-        run: uv sync --all-groups
+        run: |
+          for provider_dir in packages/*/; do
+            echo "Updating lockfile in $provider_dir"
+            cd "$provider_dir"
+            uv lock --upgrade
+            cd ../..
+          done
 
       - name: Commit and push branch
         run: |
