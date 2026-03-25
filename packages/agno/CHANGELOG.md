@@ -1,3 +1,9 @@
+## agno-v0.99.1 (2026-03-25)
+
+### Refactor
+
+- remove provider identity from Python classes (PRA-269)
+
 ## agno-v0.99.0 (2026-03-19)
 
 ### Feat
