@@ -1,3 +1,81 @@
+## agno-v0.102.0 (2026-03-25)
+
+### Fix
+
+- **ci**: update per-provider lockfiles in update-sdk workflow
+- **ci**: pull --rebase before push and fix update-sdk auto-merge
+
+### Refactor
+
+- remove provider identity from Python classes (PRA-269)
+
+## agno-v0.99.0 (2026-03-19)
+
+### Feat
+
+- add explicit upgrade/downgrade methods to all resources (PRA-226) (#41)
+- migrate provider configs to Field[T] and ImmutableField[T] (PRA-225) (#36)
+
+### Fix
+
+- use PyPI JSON API for version availability polling (#46)
+- add PyPI availability polling to update-sdk workflow (#45)
+- **gcp**: replace fake $ref syntax with actual reference format in docstrings (#42)
+- remove editable SDK source overrides from provider pyproject.toml files (#38)
+
+## agno-v0.88.0 (2026-02-27)
+
+### Feat
+
+- add pragma store publish to CI/CD pipeline (#35)
+- add kubernetes/namespace resource type (PRA-177) (#34)
+- add store metadata and seed script (PRA-211) (#33)
+- add store metadata fields to provider copier template (PRA-193) (#32)
+- **agno**: add knowledge and content resource support (#30)
+
+### Fix
+
+- **gcp**: handle CloudSQL 400 error when deleting non-existent user
+- **agno**: remove wait_ready calls from runner resource application
+- **gcp**: handle HTTP 400 for already-existing CloudSQL databases
+- **agno**: drop --frozen from Dockerfile uv sync (incompatible with --no-sources)
+- **ci**: prevent infinite publish loop on bump commits
+
+## agno-v0.77.0 (2026-02-07)
+
+### Feat
+
+- **agno**: add team resource, runner auth, model discriminators, and memory config (#29)
+
+## agno-v0.66.0 (2026-02-07)
+
+### Feat
+
+- **kubernetes**: add startup probe support and authorized_user credentials (#28)
+
+## agno-v0.55.0 (2026-02-05)
+
+### Fix
+
+- **agno**: runtime dependencies and import fix (#27)
+
+## agno-v0.44.0 (2026-02-02)
+
+### Fix
+
+- **agno**: rewrite agent tests for current AgentConfig implementation
+- **gcp**: convert db_port to int in CloudSQL database outputs
+
+## agno-v0.33.0 (2026-02-02)
+
+### Feat
+
+- **agno**: rebuild agent, add team and deployment resources (#24)
+
+### Fix
+
+- **ci**: use PyPI API for availability check instead of pip index
+
 ## agno-v0.101.0 (2026-03-25)
 
 ### Fix
