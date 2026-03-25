@@ -118,7 +118,9 @@ jobs:
           echo "::endgroup::"
 
       - name: Push version bumps and tags
-        run: git push origin main --follow-tags || echo "Nothing to push"
+        run: |
+          git pull --rebase origin main
+          git push origin main --follow-tags
 
       - name: Create GitHub Release
         if: steps.bump.outputs.gcp_version != ''
@@ -250,7 +252,9 @@ jobs:
           fi
 
       - name: Push version bumps and tags
-        run: git push origin main --follow-tags || echo "Nothing to push"
+        run: |
+          git pull --rebase origin main
+          git push origin main --follow-tags
 
       - name: Create GitHub Release for kubernetes
         if: steps.bump.outputs.kubernetes_version != ''
@@ -398,7 +402,9 @@ jobs:
           echo "::endgroup::"
 
       - name: Push version bumps and tags
-        run: git push origin main --follow-tags || echo "Nothing to push"
+        run: |
+          git pull --rebase origin main
+          git push origin main --follow-tags
 
       - name: Create GitHub Release
         if: steps.bump.outputs.agno_version != ''

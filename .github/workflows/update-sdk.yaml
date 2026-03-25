@@ -78,7 +78,7 @@ jobs:
             git push -u origin "$BRANCH"
           fi
 
-      - name: Create PR and enable auto-merge
+      - name: Create and merge PR
         if: env.skip_pr != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -87,4 +87,4 @@ jobs:
           gh pr create \
             --title "chore(deps): update pragmatiks-sdk to v${SDK_VERSION}" \
             --body "Automated SDK version bump to \`v${SDK_VERSION}\`."
-          gh pr merge --squash --auto
+          gh pr merge --squash
