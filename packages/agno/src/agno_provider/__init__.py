@@ -55,7 +55,7 @@ from agno_provider.resources import (
 )
 
 
-agno = Provider(name="agno")
+agno = Provider()
 
 agno.resource("agent")(Agent)
 agno.resource("db/postgres")(DbPostgres)

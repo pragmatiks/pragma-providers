@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, ClassVar
+from typing import Any
 
 from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.secretmanager_v1 import SecretManagerServiceAsyncClient
@@ -78,9 +78,6 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
                 name: gcp-credentials
                 field: outputs.credentials_json
     """
-
-    provider: ClassVar[str] = "gcp"
-    resource: ClassVar[str] = "secret"
 
     def _get_client(self) -> SecretManagerServiceAsyncClient:
         """Get Secret Manager async client with user-provided credentials.

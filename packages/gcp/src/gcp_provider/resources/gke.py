@@ -7,7 +7,7 @@ import json
 import re
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, ClassVar, Literal, Self
+from typing import Any, Literal, Self
 
 from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.container_v1 import ClusterManagerAsyncClient
@@ -165,9 +165,6 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
                 name: gcp-credentials
                 field: outputs.credentials_json
     """
-
-    provider: ClassVar[str] = "gcp"
-    resource: ClassVar[str] = "gke"
 
     def _get_client(self) -> ClusterManagerAsyncClient:
         """Get Cluster Manager async client with user-provided credentials.

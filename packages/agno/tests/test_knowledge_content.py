@@ -135,11 +135,6 @@ def create_content(
     )
 
 
-def test_resource_metadata_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert Content.provider == "agno"
-
-
 def test_resource_metadata_resource_type() -> None:
     """Resource has correct resource type."""
     assert Content.resource == "knowledge/content"

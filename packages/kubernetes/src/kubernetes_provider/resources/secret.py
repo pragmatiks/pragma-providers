@@ -6,7 +6,6 @@ import base64
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import ClassVar
 
 from gcp_provider import GKE
 from lightkube import ApiError
@@ -67,9 +66,6 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         - on_update: Apply updated secret configuration
         - on_delete: Delete the secret (idempotent)
     """
-
-    provider: ClassVar[str] = "kubernetes"
-    resource: ClassVar[str] = "secret"
 
     @asynccontextmanager
     async def _get_client(self):

@@ -223,11 +223,6 @@ async def test_delete_statefulset_idempotent(
     await sts.on_delete()
 
 
-def test_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert StatefulSet.provider == "kubernetes"
-
-
 def test_resource_type() -> None:
     """Resource has correct resource type."""
     assert StatefulSet.resource == "statefulset"

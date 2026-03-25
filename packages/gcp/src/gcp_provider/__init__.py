@@ -25,7 +25,7 @@ from gcp_provider.resources import (
 )
 
 
-gcp = Provider(name="gcp")
+gcp = Provider()
 
 gcp.resource("cloudsql/database_instance")(DatabaseInstance)
 gcp.resource("cloudsql/database")(Database)

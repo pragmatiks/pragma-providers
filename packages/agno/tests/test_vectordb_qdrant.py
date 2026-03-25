@@ -21,11 +21,6 @@ if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
 
-def test_resource_metadata_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert VectordbQdrant.provider == "agno"
-
-
 def test_resource_metadata_resource_type() -> None:
     """Resource has correct resource type."""
     assert VectordbQdrant.resource == "vectordb/qdrant"

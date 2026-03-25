@@ -136,11 +136,6 @@ async def test_delete_secret_idempotent(
     await secret.on_delete()
 
 
-def test_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert Secret.provider == "kubernetes"
-
-
 def test_resource_type() -> None:
     """Resource has correct resource type."""
     assert Secret.resource == "secret"

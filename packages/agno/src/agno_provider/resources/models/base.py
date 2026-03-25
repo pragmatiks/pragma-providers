@@ -7,7 +7,7 @@ so dependent resources can accept any model type.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from pragma_sdk import Config, Field, Outputs
 
@@ -47,8 +47,6 @@ class Model[ModelConfigT: ModelConfig, ModelOutputsT: ModelOutputs, SpecT: AgnoS
         ModelConfigT: The config type for this model resource.
         ModelT: The Agno model type returned by from_spec().
     """
-
-    provider: ClassVar[str] = "agno"
 
     @abstractmethod
     async def on_create(self) -> ModelOutputsT:

@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import ClassVar, Literal
+from typing import Literal
 
 from gcp_provider import GKE
 from lightkube import ApiError
@@ -199,9 +199,6 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         - on_update: Apply updated deployment, wait for all replicas ready
         - on_delete: Delete the deployment (idempotent)
     """
-
-    provider: ClassVar[str] = "kubernetes"
-    resource: ClassVar[str] = "deployment"
 
     @asynccontextmanager
     async def _get_client(self):

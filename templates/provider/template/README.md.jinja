@@ -8,7 +8,6 @@ Define your resources in `src/{{ package_name }}/resources/example.py`:
 
 ```python
 from pragma_sdk import Resource, Config, Outputs, Field
-from typing import ClassVar
 
 class MyResourceConfig(Config):
     name: Field[str]
@@ -19,9 +18,6 @@ class MyResourceOutputs(Outputs):
     created_at: str
 
 class MyResource(Resource[MyResourceConfig, MyResourceOutputs]):
-    provider: ClassVar[str] = "{{ name }}"
-    resource: ClassVar[str] = "my_resource"
-
     async def on_create(self) -> MyResourceOutputs:
         # Create the resource
         return MyResourceOutputs(url="...", created_at="...")

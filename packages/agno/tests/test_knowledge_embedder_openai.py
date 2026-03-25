@@ -50,11 +50,6 @@ def create_embedder_openai(
     )
 
 
-def test_resource_metadata_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert EmbedderOpenAI.provider == "agno"
-
-
 def test_resource_metadata_resource_type() -> None:
     """Resource has correct resource type."""
     assert EmbedderOpenAI.resource == "knowledge/embedder/openai"

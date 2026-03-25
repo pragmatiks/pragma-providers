@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from typing import ClassVar
 
 from pragma_sdk import Config, Field, Outputs
 from pydantic import model_validator
@@ -96,9 +95,6 @@ class Prompt(AgnoResource[PromptConfig, PromptOutputs, PromptSpec]):
         - on_update: Re-render with new config
         - on_delete: No-op (stateless)
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "prompt"
 
     @staticmethod
     def from_spec(spec: PromptSpec) -> str:

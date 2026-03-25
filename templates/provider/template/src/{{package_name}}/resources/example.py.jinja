@@ -4,8 +4,6 @@ This is a starter template - replace with your actual resource implementation.
 """
 
 from datetime import UTC, datetime
-from typing import ClassVar
-
 from pragma_sdk import Config, Field, Outputs, Resource
 
 
@@ -25,9 +23,6 @@ class ExampleOutputs(Outputs):
 
 class ExampleResource(Resource[ExampleConfig, ExampleOutputs]):
     """Example resource - replace with your implementation."""
-
-    provider: ClassVar[str] = "{{ name }}"
-    resource: ClassVar[str] = "example"
 
     async def on_create(self) -> ExampleOutputs:
         """Create the resource."""

@@ -129,11 +129,6 @@ async def test_delete_namespace_idempotent(
     await ns.on_delete()
 
 
-def test_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert Namespace.provider == "kubernetes"
-
-
 def test_resource_type() -> None:
     """Resource has correct resource type."""
     assert Namespace.resource == "namespace"

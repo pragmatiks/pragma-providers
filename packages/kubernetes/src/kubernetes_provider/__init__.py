@@ -29,7 +29,7 @@ from kubernetes_provider.resources import (
 )
 
 
-kubernetes = Provider(name="kubernetes")
+kubernetes = Provider()
 
 kubernetes.resource("deployment")(Deployment)
 kubernetes.resource("service")(Service)

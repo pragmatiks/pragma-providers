@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import ClassVar, Literal
+from typing import Literal
 
 from gcp_provider import GKE
 from lightkube import ApiError
@@ -234,9 +234,6 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
         - on_update: Apply updated statefulset, wait for ready
         - on_delete: Delete statefulset with background cascade
     """
-
-    provider: ClassVar[str] = "kubernetes"
-    resource: ClassVar[str] = "statefulset"
 
     @asynccontextmanager
     async def _get_client(self):

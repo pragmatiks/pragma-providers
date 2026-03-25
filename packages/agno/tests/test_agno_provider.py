@@ -9,18 +9,11 @@ from agno_provider import (
     ModelOutputs,
     OpenAIModel,
     OpenAIModelConfig,
-    agno,
 )
-
-
-def test_provider_name() -> None:
-    """Provider has correct name."""
-    assert agno.name == "agno"
 
 
 def test_agent_registered() -> None:
     """Agent resource is registered with provider."""
-    assert Agent.provider == "agno"
     assert Agent.resource == "agent"
 
 
@@ -36,7 +29,6 @@ def test_agent_outputs_model() -> None:
 
 def test_openai_model_registered() -> None:
     """OpenAI model resource is registered with provider."""
-    assert OpenAIModel.provider == "agno"
     assert OpenAIModel.resource == "models/openai"
 
 

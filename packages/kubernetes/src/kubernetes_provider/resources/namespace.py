@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import ClassVar
 
 from gcp_provider import GKE
 from lightkube import ApiError
@@ -55,9 +54,6 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
         - on_update: Apply updated namespace configuration (labels)
         - on_delete: Delete the namespace (idempotent)
     """
-
-    provider: ClassVar[str] = "kubernetes"
-    resource: ClassVar[str] = "namespace"
 
     @asynccontextmanager
     async def _get_client(self):

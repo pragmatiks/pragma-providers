@@ -321,11 +321,6 @@ async def test_delete_is_noop() -> None:
     await resource.on_delete()
 
 
-def test_provider_name() -> None:
-    """Test provider class variable."""
-    assert OpenAIModel.provider == "agno"
-
-
 def test_resource_type() -> None:
     """Test resource class variable."""
     assert OpenAIModel.resource == "models/openai"

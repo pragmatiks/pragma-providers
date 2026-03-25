@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Literal
 
 from agno.models.anthropic import Claude
 from pragma_sdk import Field
@@ -86,8 +86,6 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         model = AnthropicModel.from_spec(spec)
         ```
     """
-
-    resource: ClassVar[str] = "models/anthropic"
 
     @staticmethod
     def from_spec(spec: AnthropicModelSpec) -> Claude:

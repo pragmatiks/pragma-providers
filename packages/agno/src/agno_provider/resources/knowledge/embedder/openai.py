@@ -6,7 +6,7 @@ by dependent resources at runtime.
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Literal
 
 from agno.knowledge.embedder.openai import OpenAIEmbedder
 from pragma_sdk import Config, Field, Outputs
@@ -90,9 +90,6 @@ class EmbedderOpenAI(AgnoResource[EmbedderOpenAIConfig, EmbedderOpenAIOutputs, E
     Runtime reconstruction via spec:
         embedder = EmbedderOpenAI.from_spec(spec)
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "knowledge/embedder/openai"
 
     @staticmethod
     def from_spec(spec: EmbedderOpenAISpec) -> OpenAIEmbedder:

@@ -196,11 +196,6 @@ def test_config_sse_requires_url() -> None:
     assert any("sse" in str(e) and "url" in str(e) for e in errors)
 
 
-def test_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert ToolsMCP.provider == "agno"
-
-
 def test_resource_type() -> None:
     """Resource has correct resource type."""
     assert ToolsMCP.resource == "tools/mcp"

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any
 
 from pragma_sdk import Config, Dependency, Field, ImmutableField, Outputs, Resource
 
@@ -72,9 +72,6 @@ class User(Resource[UserConfig, UserOutputs]):
                 name: db-password-secret
                 field: outputs.password
     """
-
-    provider: ClassVar[str] = "gcp"
-    resource: ClassVar[str] = "cloudsql/user"
 
     async def on_create(self) -> UserOutputs:
         """Create user in the Cloud SQL instance.

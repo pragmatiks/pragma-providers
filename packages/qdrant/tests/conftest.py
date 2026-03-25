@@ -2,15 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 import pytest
+from pragma_sdk.context import reset_provider_name, set_provider_name
 from pragma_sdk.provider import ProviderHarness
 from qdrant_client.http import models
 
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture, MockType
+
+
+@pytest.fixture(autouse=True)
+def provider_context() -> Iterator[None]:
+    """Set provider name context for tests that call lifecycle methods directly."""
+    token = set_provider_name("qdrant")
+    yield
+    reset_provider_name(token)
 
 
 @pytest.fixture

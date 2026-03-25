@@ -308,11 +308,6 @@ async def test_delete_idempotent(
     mock_qdrant_client.delete_collection.assert_not_called()
 
 
-def test_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert Collection.provider == "qdrant"
-
-
 def test_resource_type() -> None:
     """Resource has correct resource type."""
     assert Collection.resource == "collection"

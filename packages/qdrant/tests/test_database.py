@@ -230,11 +230,6 @@ async def test_delete_removes_child_resources(mocker: MockerFixture) -> None:
     mock_statefulset_delete.assert_called_once()
 
 
-def test_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert Database.provider == "qdrant"
-
-
 def test_resource_type() -> None:
     """Resource has correct resource type."""
     assert Database.resource == "database"

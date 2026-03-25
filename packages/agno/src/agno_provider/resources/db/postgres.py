@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
 from urllib.parse import quote, urlparse, urlunparse
 
 from agno.db.postgres import AsyncPostgresDb
@@ -182,9 +181,6 @@ class DbPostgres(AgnoResource[DbPostgresConfig, DbPostgresOutputs, DbPostgresSpe
         - on_update: Return serializable metadata
         - on_delete: No-op (stateless wrapper)
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "db/postgres"
 
     @staticmethod
     def from_spec(spec: DbPostgresSpec) -> AsyncPostgresDb:

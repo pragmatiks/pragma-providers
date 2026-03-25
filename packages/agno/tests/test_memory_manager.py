@@ -77,11 +77,6 @@ def mock_model_dependency(mocker: MockerFixture, mock_model_resource) -> Depende
     return dep
 
 
-def test_resource_metadata_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert MemoryManager.provider == "agno"
-
-
 def test_resource_metadata_resource_type() -> None:
     """Resource has correct resource type."""
     assert MemoryManager.resource == "memory/manager"

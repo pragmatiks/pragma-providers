@@ -6,7 +6,7 @@ Content manages its own lifecycle in the vectordb through the Knowledge dependen
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from pragma_sdk import Config, Dependency, Field, Outputs
 from pydantic import model_validator
@@ -131,9 +131,6 @@ class Content(AgnoResource[ContentConfig, ContentOutputs, ContentSpec]):
         - on_update: Re-insert content with upsert
         - on_delete: Remove content from vectordb by name
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "knowledge/content"
 
     async def _resolve_knowledge(self) -> AgnoKnowledge:
         """Resolve knowledge dependency and return Agno Knowledge instance.

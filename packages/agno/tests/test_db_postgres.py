@@ -295,11 +295,6 @@ def test_url_building_injects_encoded_credentials(harness: ProviderHarness) -> N
     assert url == "postgresql+psycopg_async://user%40domain:pass%3Aword@localhost:5432/db"
 
 
-def test_resource_metadata_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert DbPostgres.provider == "agno"
-
-
 def test_resource_metadata_resource_type() -> None:
     """Resource has correct resource type."""
     assert DbPostgres.resource == "db/postgres"

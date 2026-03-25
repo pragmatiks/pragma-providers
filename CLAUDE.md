@@ -27,7 +27,7 @@ Each provider implements resource classes using the SDK:
 ```python
 from pragma_sdk import Provider, Resource, Config, Outputs
 
-gcp = Provider(name="gcp")
+gcp = Provider()
 
 @gcp.resource("storage")
 class Bucket(Resource[BucketConfig, BucketOutputs]):

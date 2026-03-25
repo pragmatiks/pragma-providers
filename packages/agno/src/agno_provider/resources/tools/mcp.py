@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from agno.tools.mcp import MCPTools
 from pragma_sdk import Config, Field, Outputs
@@ -121,9 +121,6 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
         - on_update: Reconnect with new config, refresh tool list
         - on_delete: No-op (stateless wrapper)
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "tools/mcp"
 
     @staticmethod
     def from_spec(spec: ToolsMCPSpec) -> MCPTools:

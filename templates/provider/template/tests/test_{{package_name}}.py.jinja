@@ -53,10 +53,6 @@ class TestExampleResource:
 class TestExampleResourceIdentity:
     """Tests for ExampleResource identity."""
 
-    def test_provider_name(self):
-        """Resource has correct provider name."""
-        assert ExampleResource.provider == "{{ name }}"
-
     def test_resource_type(self):
         """Resource has correct resource type."""
         assert ExampleResource.resource == "example"

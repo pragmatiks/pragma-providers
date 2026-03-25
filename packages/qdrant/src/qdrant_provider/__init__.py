@@ -19,7 +19,7 @@ from qdrant_provider.resources import (
 )
 
 
-qdrant = Provider(name="qdrant")
+qdrant = Provider()
 
 qdrant.resource("collection")(Collection)
 qdrant.resource("database")(Database)

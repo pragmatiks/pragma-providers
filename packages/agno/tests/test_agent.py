@@ -262,11 +262,6 @@ def create_prompt_dependency(name: str = "prompt") -> Dependency[Prompt]:
     return dep
 
 
-def test_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert Agent.provider == "agno"
-
-
 def test_resource_type() -> None:
     """Resource has correct resource type."""
     assert Agent.resource == "agent"

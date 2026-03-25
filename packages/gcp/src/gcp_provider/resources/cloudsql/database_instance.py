@@ -7,7 +7,7 @@ import secrets
 import string
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, ClassVar, Literal
+from typing import Any, Literal
 
 from google.cloud.logging_v2 import Client as LoggingClient
 from pragma_sdk import Config, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
@@ -163,9 +163,6 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
                 name: gcp-credentials
                 field: outputs.credentials_json
     """
-
-    provider: ClassVar[str] = "gcp"
-    resource: ClassVar[str] = "cloudsql/database_instance"
 
     async def on_create(self) -> DatabaseInstanceOutputs:
         """Create Cloud SQL instance and wait for RUNNABLE state.

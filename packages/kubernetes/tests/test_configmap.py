@@ -115,11 +115,6 @@ async def test_delete_configmap_idempotent(
     await cm.on_delete()
 
 
-def test_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert ConfigMap.provider == "kubernetes"
-
-
 def test_resource_type() -> None:
     """Resource has correct resource type."""
     assert ConfigMap.resource == "configmap"

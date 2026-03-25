@@ -6,7 +6,7 @@ by dependent resources at runtime.
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Literal
 
 from agno.models.openai import OpenAIChat
 from pragma_sdk import Field
@@ -113,8 +113,6 @@ class OpenAIModel(Model[OpenAIModelConfig, OpenAIModelOutputs, OpenAIModelSpec, 
         model = OpenAIModel.from_spec(spec)
         ```
     """
-
-    resource: ClassVar[str] = "models/openai"
 
     @staticmethod
     def from_spec(spec: OpenAIModelSpec) -> OpenAIChat:

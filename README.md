@@ -147,7 +147,6 @@ Each provider contains:
 - **Lifecycle methods** - `on_create`, `on_update`, `on_delete` implementations
 
 ```python
-from typing import ClassVar
 from pragma_sdk import Resource, Config, Outputs
 
 class SecretConfig(Config):
@@ -160,9 +159,6 @@ class SecretOutputs(Outputs):
     version_id: str
 
 class Secret(Resource[SecretConfig, SecretOutputs]):
-    provider: ClassVar[str] = "gcp"
-    resource: ClassVar[str] = "secret"
-
     async def on_create(self) -> SecretOutputs:
         # Create secret in GCP Secret Manager
         ...

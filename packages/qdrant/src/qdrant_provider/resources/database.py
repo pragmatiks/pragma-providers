@@ -6,7 +6,6 @@ import asyncio
 import secrets
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import ClassVar
 
 from gcp_provider import GKE
 from kubernetes_provider import (
@@ -129,9 +128,6 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         - on_update: Update child resources
         - on_delete: Child resources cascade deleted via owner_references
     """
-
-    provider: ClassVar[str] = "qdrant"
-    resource: ClassVar[str] = "database"
 
     _resolved_api_key: str | None = None
 

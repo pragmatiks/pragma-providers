@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal, cast
+from typing import Literal, cast
 
 from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
 from pydantic import BaseModel
@@ -69,9 +69,6 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         - on_update: Recreate if vector config changes (destructive)
         - on_delete: Delete collection
     """
-
-    provider: ClassVar[str] = "qdrant"
-    resource: ClassVar[str] = "collection"
 
     def _get_client(self) -> AsyncQdrantClient:
         """Get Qdrant async client with configured credentials.

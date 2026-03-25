@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, ClassVar
+from typing import Annotated, Any
 
 from agno.team import Team as AgnoTeam
 from pragma_sdk import Config, Dependency, Field, Outputs
@@ -218,9 +218,6 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
         - on_update: Re-resolve dependencies, return updated outputs
         - on_delete: No-op (stateless wrapper)
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "team"
 
     @staticmethod
     def from_spec(spec: TeamSpec) -> AgnoTeam:

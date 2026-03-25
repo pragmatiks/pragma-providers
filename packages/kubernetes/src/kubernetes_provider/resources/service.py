@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import ClassVar, Literal
+from typing import Literal
 
 from gcp_provider import GKE
 from lightkube import ApiError
@@ -92,9 +92,6 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
         - on_update: Apply updated service configuration
         - on_delete: Delete the service (idempotent)
     """
-
-    provider: ClassVar[str] = "kubernetes"
-    resource: ClassVar[str] = "service"
 
     @asynccontextmanager
     async def _get_client(self):

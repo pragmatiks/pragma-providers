@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, ClassVar
+from typing import Annotated
 
 from agno.memory.manager import MemoryManager as AgnoMemoryManager
 from pragma_sdk import Config, Dependency, Field, Outputs
@@ -108,9 +108,6 @@ class MemoryManager(AgnoResource[MemoryManagerConfig, MemoryManagerOutputs, Memo
         - on_update: Return serializable metadata
         - on_delete: No-op (stateless wrapper)
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "memory/manager"
 
     @staticmethod
     def from_spec(spec: MemoryManagerSpec) -> AgnoMemoryManager:

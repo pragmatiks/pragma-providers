@@ -5,8 +5,6 @@ Provides vector storage configuration for semantic search capabilities.
 
 from __future__ import annotations
 
-from typing import ClassVar
-
 from agno.db.postgres import PostgresDb
 from agno.knowledge.knowledge import Knowledge as AgnoKnowledge
 from pragma_sdk import Config, Dependency, Field, Outputs
@@ -94,9 +92,6 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
         - on_update: Re-resolve dependencies, return updated outputs with spec
         - on_delete: No-op (stateless wrapper)
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "knowledge"
 
     @staticmethod
     def from_spec(spec: KnowledgeSpec) -> AgnoKnowledge:

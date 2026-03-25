@@ -184,11 +184,6 @@ async def test_delete_service_idempotent(
     await svc.on_delete()
 
 
-def test_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert Service.provider == "kubernetes"
-
-
 def test_resource_type() -> None:
     """Resource has correct resource type."""
     assert Service.resource == "service"

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Literal
+from typing import Any, Literal
 
 from agno.vectordb.qdrant import Qdrant, SearchType
 from pragma_sdk import Config, Dependency, Field, Outputs
@@ -114,9 +114,6 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
         - on_update: Return updated metadata
         - on_delete: No-op (stateless wrapper)
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "vectordb/qdrant"
 
     @staticmethod
     def from_spec(spec: VectordbQdrantSpec) -> Qdrant:

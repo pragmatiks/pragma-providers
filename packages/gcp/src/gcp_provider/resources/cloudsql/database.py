@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any
 
 from pragma_sdk import Config, Dependency, ImmutableField, Outputs, Resource
 
@@ -77,9 +77,6 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
                 name: prod-db-instance
               database_name: myapp
     """
-
-    provider: ClassVar[str] = "gcp"
-    resource: ClassVar[str] = "cloudsql/database"
 
     async def on_create(self) -> DatabaseOutputs:
         """Create database in the Cloud SQL instance.

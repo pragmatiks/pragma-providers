@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import ClassVar, Literal
+from typing import Literal
 
 from gcp_provider import GKE
 from kubernetes_provider import (
@@ -173,9 +173,6 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         - on_update: Update child Kubernetes resources, wait for ready
         - on_delete: Child resources cascade deleted via owner_references
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "runner"
 
     def _runner_name(self) -> str:
         """Get Kubernetes deployment name based on resource name.

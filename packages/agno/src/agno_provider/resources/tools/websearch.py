@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Literal
 
 from agno.tools.websearch import WebSearchTools
 from pragma_sdk import Config, Field, Outputs
@@ -88,9 +88,6 @@ class ToolsWebSearch(AgnoResource[ToolsWebSearchConfig, ToolsWebSearchOutputs, T
         - on_update: Re-validate with new config
         - on_delete: No-op (stateless)
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "tools/websearch"
 
     @staticmethod
     def from_spec(spec: ToolsWebSearchSpec) -> WebSearchTools:

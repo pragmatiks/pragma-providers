@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, ClassVar
+from typing import Annotated, Any
 
 from agno.agent import Agent as AgnoAgent
 from pragma_sdk import Config, Dependency, Field, Outputs
@@ -178,9 +178,6 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
         - on_update: Re-resolve dependencies, return updated outputs
         - on_delete: No-op (stateless wrapper)
     """
-
-    provider: ClassVar[str] = "agno"
-    resource: ClassVar[str] = "agent"
 
     @staticmethod
     def from_spec(spec: AgentSpec) -> AgnoAgent:

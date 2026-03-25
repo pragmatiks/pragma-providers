@@ -152,11 +152,6 @@ async def test_delete_success(harness: ProviderHarness) -> None:
     assert result.success
 
 
-def test_provider_name() -> None:
-    """Resource has correct provider name."""
-    assert AnthropicModel.provider == "agno"
-
-
 def test_resource_type() -> None:
     """Resource has correct resource type."""
     assert AnthropicModel.resource == "models/anthropic"
