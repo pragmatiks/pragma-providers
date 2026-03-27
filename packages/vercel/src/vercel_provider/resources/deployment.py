@@ -120,6 +120,8 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             Deployment data dictionary from the API.
 
         Raises:
+            RuntimeError: If the deployment reaches a non-READY terminal state
+                (ERROR or CANCELED).
             TimeoutError: If the deployment does not reach a terminal state in time.
         """
         terminal_states = {"READY", "ERROR", "CANCELED"}
@@ -135,6 +137,10 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
                 ready_state = data.get("readyState", "")
 
                 if ready_state in terminal_states:
+                    if ready_state != "READY":
+                        msg = f"Deployment {deployment_id} reached terminal state {ready_state}"
+                        raise RuntimeError(msg)
+
                     return data
 
             await asyncio.sleep(_POLL_INTERVAL_SECONDS)

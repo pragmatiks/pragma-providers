@@ -203,7 +203,7 @@ async def test_create_deployment_error_state(
     harness: ProviderHarness,
     mock_sleep: MockType,
 ) -> None:
-    """on_create returns outputs with ERROR state when deployment fails."""
+    """on_create fails when deployment reaches ERROR state."""
     error_data = {
         "id": "dpl_abc123def456",
         "url": "my-app-abc123.vercel.app",
@@ -224,9 +224,37 @@ async def test_create_deployment_error_state(
 
         result = await harness.invoke_create(Deployment, name="my-app-deploy", config=config)
 
-    assert result.success
-    assert result.outputs is not None
-    assert result.outputs.ready_state == "ERROR"
+    assert result.failed
+    assert "reached terminal state ERROR" in str(result.error)
+
+
+async def test_create_deployment_canceled_state(
+    harness: ProviderHarness,
+    mock_sleep: MockType,
+) -> None:
+    """on_create fails when deployment reaches CANCELED state."""
+    canceled_data = {
+        "id": "dpl_abc123def456",
+        "url": "my-app-abc123.vercel.app",
+        "state": "CANCELED",
+        "readyState": "CANCELED",
+        "projectId": "prj_abc123def456",
+    }
+
+    with respx.mock(base_url=_BASE_URL) as mock:
+        mock.post("/v13/deployments").respond(200, json=canceled_data)
+        mock.get("/v13/deployments/dpl_abc123def456").respond(200, json=canceled_data)
+
+        config = DeploymentConfig(
+            access_token="test-token",
+            project_id="prj_abc123def456",
+            project_name="my-app",
+        )
+
+        result = await harness.invoke_create(Deployment, name="my-app-deploy", config=config)
+
+    assert result.failed
+    assert "reached terminal state CANCELED" in str(result.error)
 
 
 async def test_update_deployment_triggers_new(

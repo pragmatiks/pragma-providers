@@ -187,8 +187,10 @@ async def _sync_environment_variables(
 ) -> None:
     """Synchronize environment variables on the project.
 
-    Removes all existing environment variables and creates the declared ones.
-    This ensures the project environment matches the declared configuration.
+    Creates the declared variables first, then removes old ones. This order
+    avoids a destructive intermediate state where a failed POST would leave
+    the project with zero environment variables. Brief duplicate overlap
+    during the transition is harmless.
 
     Args:
         client: Authenticated Vercel API client.
@@ -206,6 +208,20 @@ async def _sync_environment_variables(
     existing_data = existing_response.json()
     existing_envs: list[dict[str, Any]] = existing_data.get("envs", [])
 
+    if variables:
+        env_body = [
+            {
+                "key": var.key,
+                "value": var.value,
+                "target": var.target,
+                "type": var.variable_type,
+            }
+            for var in variables
+        ]
+
+        create_response = await client.post(f"/v10/projects/{project_id}/env", params=params, json=env_body)
+        await raise_for_status(create_response)
+
     for env in existing_envs:
         env_id = env["id"]
         delete_response = await client.delete(f"/v9/projects/{project_id}/env/{env_id}", params=params)
@@ -214,22 +230,6 @@ async def _sync_environment_variables(
             continue
 
         await raise_for_status(delete_response)
-
-    if not variables:
-        return
-
-    env_body = [
-        {
-            "key": var.key,
-            "value": var.value,
-            "target": var.target,
-            "type": var.variable_type,
-        }
-        for var in variables
-    ]
-
-    create_response = await client.post(f"/v10/projects/{project_id}/env", params=params, json=env_body)
-    await raise_for_status(create_response)
 
 
 class Project(Resource[ProjectConfig, ProjectOutputs]):

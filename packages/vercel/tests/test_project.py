@@ -177,7 +177,7 @@ async def test_update_project_syncs_env_variables(
     sample_project_data: dict[str, Any],
     sample_env_list_data: dict[str, Any],
 ) -> None:
-    """on_update removes old env vars and creates new ones."""
+    """on_update creates new env vars first, then removes old ones."""
     with respx.mock(base_url=_BASE_URL) as mock:
         mock.get("/v9/projects/prj_abc123def456/env").respond(200, json=sample_env_list_data)
         mock.delete("/v9/projects/prj_abc123def456/env/env_abc123").respond(200, json={})
