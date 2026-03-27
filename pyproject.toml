@@ -51,6 +51,7 @@ extra-paths = [
     "packages/qdrant/src",
     "packages/agno/src",
     "packages/supabase/src",
+    "packages/vercel/src",
 ]
 root = [
     "packages/gcp/src",
@@ -58,6 +59,7 @@ root = [
     "packages/qdrant/src",
     "packages/agno/src",
     "packages/supabase/src",
+    "packages/vercel/src",
 ]
 
 [tool.ty.src]
@@ -67,6 +69,7 @@ include = [
     "packages/qdrant/src",
     "packages/agno/src",
     "packages/supabase/src",
+    "packages/vercel/src",
 ]
 exclude = ["**/tests/**", "**/__pycache__/**"]
 

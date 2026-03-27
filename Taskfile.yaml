@@ -16,6 +16,9 @@ includes:
   supabase:
     taskfile: ./taskfiles/supabase.Taskfile.yaml
     dir: ./packages/supabase
+  vercel:
+    taskfile: ./taskfiles/vercel.Taskfile.yaml
+    dir: ./packages/vercel
 
 tasks:
   default: task --list-all
@@ -32,6 +35,7 @@ tasks:
       - qdrant:test
       - agno:test
       - supabase:test
+      - vercel:test
 
   format:
     desc: Format all Python code
@@ -41,6 +45,7 @@ tasks:
       - qdrant:format
       - agno:format
       - supabase:format
+      - vercel:format
 
   check:
     desc: Run all checks (ruff + type checking)
@@ -50,3 +55,4 @@ tasks:
       - qdrant:check
       - agno:check
       - supabase:check
+      - vercel:check
