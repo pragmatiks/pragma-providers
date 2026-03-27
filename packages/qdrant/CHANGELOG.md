@@ -10,6 +10,16 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v0.36.0 (2026-03-27)
+
+### Feat
+
+- add GitHub provider with Repository, Environment, and Secret resources (#59)
+
+### Fix
+
+- **ci**: update per-provider lockfiles in update-sdk workflow
+
 ## qdrant-v0.35.0 (2026-03-27)
 
 ### Fix
