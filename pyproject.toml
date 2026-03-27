@@ -50,12 +50,14 @@ extra-paths = [
     "packages/kubernetes/src",
     "packages/qdrant/src",
     "packages/agno/src",
+    "packages/supabase/src",
 ]
 root = [
     "packages/gcp/src",
     "packages/kubernetes/src",
     "packages/qdrant/src",
     "packages/agno/src",
+    "packages/supabase/src",
 ]
 
 [tool.ty.src]
@@ -64,6 +66,7 @@ include = [
     "packages/kubernetes/src",
     "packages/qdrant/src",
     "packages/agno/src",
+    "packages/supabase/src",
 ]
 exclude = ["**/tests/**", "**/__pycache__/**"]
 

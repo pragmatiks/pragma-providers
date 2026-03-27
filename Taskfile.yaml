@@ -13,6 +13,9 @@ includes:
   agno:
     taskfile: ./taskfiles/agno.Taskfile.yaml
     dir: ./packages/agno
+  supabase:
+    taskfile: ./taskfiles/supabase.Taskfile.yaml
+    dir: ./packages/supabase
 
 tasks:
   default: task --list-all
@@ -28,6 +31,7 @@ tasks:
       - kubernetes:test
       - qdrant:test
       - agno:test
+      - supabase:test
 
   format:
     desc: Format all Python code
@@ -36,6 +40,7 @@ tasks:
       - kubernetes:format
       - qdrant:format
       - agno:format
+      - supabase:format
 
   check:
     desc: Run all checks (ruff + type checking)
@@ -44,3 +49,4 @@ tasks:
       - kubernetes:check
       - qdrant:check
       - agno:check
+      - supabase:check
