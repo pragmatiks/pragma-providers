@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import respx
 from pragma_sdk.provider import ProviderHarness
 
 from supabase_provider import Auth, AuthConfig, AuthOutputs, ExternalProviderConfig
-
-
-if TYPE_CHECKING:
-    pass
 
 
 _BASE_URL = "https://api.supabase.com/v1"

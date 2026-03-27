@@ -29,6 +29,16 @@ def harness() -> ProviderHarness:
 
 
 @pytest.fixture
+def mock_sleep(mocker: MockerFixture) -> MockType:
+    """Mock asyncio.sleep to avoid real delays in polling tests.
+
+    Returns:
+        AsyncMock that replaces asyncio.sleep.
+    """
+    return mocker.patch("asyncio.sleep", new_callable=mocker.AsyncMock)
+
+
+@pytest.fixture
 def sample_project_data() -> dict[str, Any]:
     """Sample Supabase project API response data."""
     return {
@@ -78,17 +88,3 @@ def sample_auth_config_data() -> dict[str, Any]:
         "EXTERNAL_APPLE_ENABLED": False,
         "URI_ALLOW_LIST": "",
     }
-
-
-@pytest.fixture
-def mock_httpx_client(mocker: MockerFixture) -> MockType:
-    """Mock httpx.AsyncClient for Management API calls."""
-    mock_client = mocker.MagicMock()
-    mock_client.aclose = mocker.AsyncMock(return_value=None)
-
-    mocker.patch(
-        "supabase_provider.client.httpx.AsyncClient",
-        return_value=mock_client,
-    )
-
-    return mock_client

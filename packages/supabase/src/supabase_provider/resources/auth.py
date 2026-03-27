@@ -20,6 +20,8 @@ class ExternalProviderConfig(BaseModel):
         secret: OAuth client secret for the provider.
     """
 
+    model_config = {"extra": "forbid"}
+
     enabled: bool = True
     client_id: str = ""
     secret: str = ""
@@ -204,8 +206,8 @@ class Auth(Resource[AuthConfig, AuthOutputs]):
                 secret: "gh-client-secret"
     """
 
-    async def on_create(self) -> AuthOutputs:
-        """Apply auth configuration to the Supabase project.
+    async def _apply_config(self) -> AuthOutputs:
+        """Patch auth configuration and return current state.
 
         Returns:
             AuthOutputs reflecting the applied configuration.
@@ -227,6 +229,14 @@ class Auth(Resource[AuthConfig, AuthOutputs]):
         finally:
             await client.aclose()
 
+    async def on_create(self) -> AuthOutputs:
+        """Apply auth configuration to the Supabase project.
+
+        Returns:
+            AuthOutputs reflecting the applied configuration.
+        """
+        return await self._apply_config()
+
     async def on_update(self, previous_config: AuthConfig) -> AuthOutputs:
         """Patch auth configuration with changed settings.
 
@@ -236,22 +246,7 @@ class Auth(Resource[AuthConfig, AuthOutputs]):
         Returns:
             AuthOutputs reflecting the updated configuration.
         """
-        client = create_management_client(self.config.access_token)
-
-        try:
-            patch_body = _build_auth_patch(self.config)
-            response = await client.patch(
-                f"/projects/{self.config.project_ref}/config/auth",
-                json=patch_body,
-            )
-            await raise_for_status(response)
-
-            get_response = await client.get(f"/projects/{self.config.project_ref}/config/auth")
-            await raise_for_status(get_response)
-
-            return _build_outputs_from_api(self.config.project_ref, get_response.json())
-        finally:
-            await client.aclose()
+        return await self._apply_config()
 
     async def on_delete(self) -> None:
         """Reset auth configuration to Supabase defaults."""

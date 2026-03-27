@@ -109,10 +109,15 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         """
         for _ in range(_MAX_POLL_ATTEMPTS):
             response = await client.get(f"/projects/{project_ref}/health")
+
+            if response.status_code in {401, 403, 404}:
+                await raise_for_status(response)
+
             if response.is_success:
                 health_data = response.json()
                 services = {item["name"]: item["status"] for item in health_data}
-                if all(status == "ACTIVE_HEALTHY" for status in services.values()):
+
+                if services and all(status == "ACTIVE_HEALTHY" for status in services.values()):
                     project_response = await client.get(f"/projects/{project_ref}")
                     await raise_for_status(project_response)
                     return project_response.json()
