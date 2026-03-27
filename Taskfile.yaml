@@ -19,6 +19,9 @@ includes:
   vercel:
     taskfile: ./taskfiles/vercel.Taskfile.yaml
     dir: ./packages/vercel
+  github:
+    taskfile: ./taskfiles/github.Taskfile.yaml
+    dir: ./packages/github
 
 tasks:
   default: task --list-all
@@ -36,6 +39,7 @@ tasks:
       - agno:test
       - supabase:test
       - vercel:test
+      - github:test
 
   format:
     desc: Format all Python code
@@ -46,6 +50,7 @@ tasks:
       - agno:format
       - supabase:format
       - vercel:format
+      - github:format
 
   check:
     desc: Run all checks (ruff + type checking)
@@ -56,3 +61,4 @@ tasks:
       - agno:check
       - supabase:check
       - vercel:check
+      - github:check
