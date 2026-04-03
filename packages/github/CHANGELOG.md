@@ -1,3 +1,9 @@
+## github-v0.2.1 (2026-04-03)
+
+### Fix
+
+- restructure publish workflow as per-provider DAG with API token auth
+
 ## github-v0.2.0 (2026-04-03)
 
 ### Feat
