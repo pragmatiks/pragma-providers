@@ -1,3 +1,9 @@
+## gcp-v0.155.1 (2026-04-03)
+
+### Fix
+
+- restructure publish workflow as per-provider DAG with API token auth
+
 ## gcp-v0.155.0 (2026-04-03)
 
 ### Feat
