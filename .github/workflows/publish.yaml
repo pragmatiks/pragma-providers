@@ -11,59 +11,13 @@ on:
 # 3. agno (depends on gcp, kubernetes)
 #
 # We publish each tier sequentially to ensure dependencies are available on PyPI.
+# cz bump checks for new conventional commits since the last tag — if there are
+# none, it outputs "No commits found" and the provider is skipped automatically.
 
 jobs:
-  detect-changes:
-    if: "!startsWith(github.event.head_commit.message, 'bump:')"
-    runs-on: ubuntu-latest
-    outputs:
-      gcp: ${{ steps.changes.outputs.gcp }}
-      qdrant: ${{ steps.changes.outputs.qdrant }}
-      kubernetes: ${{ steps.changes.outputs.kubernetes }}
-      agno: ${{ steps.changes.outputs.agno }}
-      supabase: ${{ steps.changes.outputs.supabase }}
-      vercel: ${{ steps.changes.outputs.vercel }}
-      github: ${{ steps.changes.outputs.github }}
-      has_changes: ${{ steps.changes.outputs.has_changes }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed providers
-        id: changes
-        run: |
-          # Get changed files since last provider tag or last commit
-          LAST_TAG=$(git tag -l "*-v*" --sort=-version:refname | head -1 || echo "")
-          if [ -n "$LAST_TAG" ]; then
-            CHANGED_FILES=$(git diff --name-only "$LAST_TAG"..HEAD)
-          else
-            CHANGED_FILES=$(git diff --name-only HEAD~1..HEAD 2>/dev/null || git ls-files)
-          fi
-
-          # Check each provider individually
-          HAS_CHANGES=false
-
-          for provider in gcp qdrant kubernetes agno supabase vercel github; do
-            if echo "$CHANGED_FILES" | grep -q "^packages/$provider/"; then
-              echo "$provider=true" >> $GITHUB_OUTPUT
-              echo "Changed: $provider"
-              HAS_CHANGES=true
-            else
-              echo "$provider=false" >> $GITHUB_OUTPUT
-            fi
-          done
-
-          echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
-
   # Tier 1: Base providers with no internal dependencies
   publish-tier-1:
-    needs: detect-changes
-    if: |
-      needs.detect-changes.outputs.gcp == 'true' ||
-      needs.detect-changes.outputs.supabase == 'true' ||
-      needs.detect-changes.outputs.vercel == 'true' ||
-      needs.detect-changes.outputs.github == 'true'
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -106,11 +60,6 @@ jobs:
 
       - name: Bump and build tier 1 providers
         id: bump
-        env:
-          CHANGED_GCP: ${{ needs.detect-changes.outputs.gcp }}
-          CHANGED_SUPABASE: ${{ needs.detect-changes.outputs.supabase }}
-          CHANGED_VERCEL: ${{ needs.detect-changes.outputs.vercel }}
-          CHANGED_GITHUB: ${{ needs.detect-changes.outputs.github }}
         run: |
           process_provider() {
             local provider=$1
@@ -121,7 +70,7 @@ jobs:
               VERSION=$(cz version --project)
               echo "Bumped $provider to v$VERSION"
               echo "${provider}_version=$VERSION" >> $GITHUB_OUTPUT
-              uv build --package pragmatiks-${provider}-provider --out-dir ../../dist
+              uv build --package pragmatiks-${provider}-provider --out-dir ../../dist-${provider}
             else
               if grep -qE "No commits found|is not a bump" bump_output.txt; then
                 echo "No bump needed for $provider"
@@ -135,21 +84,10 @@ jobs:
             echo "::endgroup::"
           }
 
-          if [ "$CHANGED_GCP" = "true" ]; then
-            process_provider gcp
-          fi
-
-          if [ "$CHANGED_SUPABASE" = "true" ]; then
-            process_provider supabase
-          fi
-
-          if [ "$CHANGED_VERCEL" = "true" ]; then
-            process_provider vercel
-          fi
-
-          if [ "$CHANGED_GITHUB" = "true" ]; then
-            process_provider github
-          fi
+          process_provider gcp
+          process_provider supabase
+          process_provider vercel
+          process_provider github
 
       - name: Push version bumps and tags
         run: |
@@ -165,7 +103,7 @@ jobs:
           gh release create "gcp-v${VERSION}" \
             --title "pragmatiks-gcp-provider v${VERSION}" \
             --generate-notes \
-            dist/pragmatiks_gcp_provider-${VERSION}* || echo "Release may already exist"
+            dist-gcp/pragmatiks_gcp_provider-${VERSION}* || echo "Release may already exist"
 
       - name: Create GitHub Release for supabase
         if: steps.bump.outputs.supabase_version != ''
@@ -176,7 +114,7 @@ jobs:
           gh release create "supabase-v${VERSION}" \
             --title "pragmatiks-supabase-provider v${VERSION}" \
             --generate-notes \
-            dist/pragmatiks_supabase_provider-${VERSION}* || echo "Release may already exist"
+            dist-supabase/pragmatiks_supabase_provider-${VERSION}* || echo "Release may already exist"
 
       - name: Create GitHub Release for vercel
         if: steps.bump.outputs.vercel_version != ''
@@ -187,7 +125,7 @@ jobs:
           gh release create "vercel-v${VERSION}" \
             --title "pragmatiks-vercel-provider v${VERSION}" \
             --generate-notes \
-            dist/pragmatiks_vercel_provider-${VERSION}* || echo "Release may already exist"
+            dist-vercel/pragmatiks_vercel_provider-${VERSION}* || echo "Release may already exist"
 
       - name: Create GitHub Release for github
         if: steps.bump.outputs.github_version != ''
@@ -198,12 +136,34 @@ jobs:
           gh release create "github-v${VERSION}" \
             --title "pragmatiks-github-provider v${VERSION}" \
             --generate-notes \
-            dist/pragmatiks_github_provider-${VERSION}* || echo "Release may already exist"
+            dist-github/pragmatiks_github_provider-${VERSION}* || echo "Release may already exist"
 
-      - name: Publish to PyPI
+      - name: Publish gcp to PyPI
+        if: steps.bump.outputs.gcp_version != ''
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist/
+          packages-dir: dist-gcp/
+          skip-existing: true
+
+      - name: Publish supabase to PyPI
+        if: steps.bump.outputs.supabase_version != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist-supabase/
+          skip-existing: true
+
+      - name: Publish vercel to PyPI
+        if: steps.bump.outputs.vercel_version != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist-vercel/
+          skip-existing: true
+
+      - name: Publish github to PyPI
+        if: steps.bump.outputs.github_version != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist-github/
           skip-existing: true
 
       - name: Publish gcp to pragma store
@@ -240,11 +200,7 @@ jobs:
 
   # Tier 2: Providers that depend on tier 1
   publish-tier-2:
-    needs: [detect-changes, publish-tier-1]
-    if: |
-      always() &&
-      (needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.qdrant == 'true') &&
-      (needs.publish-tier-1.result == 'success' || needs.publish-tier-1.result == 'skipped')
+    needs: publish-tier-1
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -306,9 +262,6 @@ jobs:
 
       - name: Bump and build tier 2 providers
         id: bump
-        env:
-          CHANGED_KUBERNETES: ${{ needs.detect-changes.outputs.kubernetes }}
-          CHANGED_QDRANT: ${{ needs.detect-changes.outputs.qdrant }}
         run: |
           process_provider() {
             local provider=$1
@@ -319,7 +272,7 @@ jobs:
               VERSION=$(cz version --project)
               echo "Bumped $provider to v$VERSION"
               echo "${provider}_version=$VERSION" >> $GITHUB_OUTPUT
-              uv build --package pragmatiks-${provider}-provider --out-dir ../../dist
+              uv build --package pragmatiks-${provider}-provider --out-dir ../../dist-${provider}
             else
               if grep -qE "No commits found|is not a bump" bump_output.txt; then
                 echo "No bump needed for $provider"
@@ -333,13 +286,8 @@ jobs:
             echo "::endgroup::"
           }
 
-          if [ "$CHANGED_KUBERNETES" = "true" ]; then
-            process_provider kubernetes
-          fi
-
-          if [ "$CHANGED_QDRANT" = "true" ]; then
-            process_provider qdrant
-          fi
+          process_provider kubernetes
+          process_provider qdrant
 
       - name: Push version bumps and tags
         run: |
@@ -353,7 +301,7 @@ jobs:
           gh release create "kubernetes-v${VERSION}" \
             --title "pragmatiks-kubernetes-provider v${VERSION}" \
             --generate-notes \
-            dist/pragmatiks_kubernetes_provider-${VERSION}* || echo "Release may already exist"
+            dist-kubernetes/pragmatiks_kubernetes_provider-${VERSION}* || echo "Release may already exist"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -364,14 +312,22 @@ jobs:
           gh release create "qdrant-v${VERSION}" \
             --title "pragmatiks-qdrant-provider v${VERSION}" \
             --generate-notes \
-            dist/pragmatiks_qdrant_provider-${VERSION}* || echo "Release may already exist"
+            dist-qdrant/pragmatiks_qdrant_provider-${VERSION}* || echo "Release may already exist"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to PyPI
+      - name: Publish kubernetes to PyPI
+        if: steps.bump.outputs.kubernetes_version != ''
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist/
+          packages-dir: dist-kubernetes/
+          skip-existing: true
+
+      - name: Publish qdrant to PyPI
+        if: steps.bump.outputs.qdrant_version != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist-qdrant/
           skip-existing: true
 
       - name: Publish kubernetes to pragma store
@@ -392,12 +348,7 @@ jobs:
 
   # Tier 3: Providers that depend on tier 2
   publish-tier-3:
-    needs: [detect-changes, publish-tier-1, publish-tier-2]
-    if: |
-      always() &&
-      needs.detect-changes.outputs.agno == 'true' &&
-      (needs.publish-tier-1.result == 'success' || needs.publish-tier-1.result == 'skipped') &&
-      (needs.publish-tier-2.result == 'success' || needs.publish-tier-2.result == 'skipped')
+    needs: [publish-tier-1, publish-tier-2]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -476,7 +427,7 @@ jobs:
             echo "Bumped agno to v$VERSION"
             echo "agno_version=$VERSION" >> $GITHUB_OUTPUT
 
-            uv build --package pragmatiks-agno-provider --out-dir ../../dist
+            uv build --package pragmatiks-agno-provider --out-dir ../../dist-agno
           else
             if grep -qE "No commits found|is not a bump" bump_output.txt; then
               echo "No bump needed for agno"
@@ -501,15 +452,15 @@ jobs:
           gh release create "agno-v${VERSION}" \
             --title "pragmatiks-agno-provider v${VERSION}" \
             --generate-notes \
-            dist/pragmatiks_agno_provider-${VERSION}* || echo "Release may already exist"
+            dist-agno/pragmatiks_agno_provider-${VERSION}* || echo "Release may already exist"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to PyPI
+      - name: Publish agno to PyPI
         if: steps.bump.outputs.agno_version != ''
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist/
+          packages-dir: dist-agno/
           skip-existing: true
 
       - name: Publish agno to pragma store
