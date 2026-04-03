@@ -44,6 +44,9 @@ jobs:
       - name: Install commitizen
         run: uv tool install commitizen
 
+      - name: Install pragma CLI
+        run: uv tool install pragmatiks-cli
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
@@ -69,8 +72,13 @@ jobs:
 
       - name: Push version bumps and tags
         run: |
-          git pull --rebase origin main
-          git push origin main --follow-tags
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            echo "Push attempt $i failed, retrying in ${i}s..."
+            sleep $i
+          done
+          echo "Failed to push after 5 attempts"
+          exit 1
 
       - name: Create GitHub Release
         if: steps.bump.outputs.version != ''
@@ -98,7 +106,7 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           cd packages/gcp
-          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-supabase:
     if: "!startsWith(github.event.head_commit.message, 'bump:')"
@@ -132,6 +140,9 @@ jobs:
       - name: Install commitizen
         run: uv tool install commitizen
 
+      - name: Install pragma CLI
+        run: uv tool install pragmatiks-cli
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
@@ -157,8 +168,13 @@ jobs:
 
       - name: Push version bumps and tags
         run: |
-          git pull --rebase origin main
-          git push origin main --follow-tags
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            echo "Push attempt $i failed, retrying in ${i}s..."
+            sleep $i
+          done
+          echo "Failed to push after 5 attempts"
+          exit 1
 
       - name: Create GitHub Release
         if: steps.bump.outputs.version != ''
@@ -186,7 +202,7 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           cd packages/supabase
-          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-vercel:
     if: "!startsWith(github.event.head_commit.message, 'bump:')"
@@ -220,6 +236,9 @@ jobs:
       - name: Install commitizen
         run: uv tool install commitizen
 
+      - name: Install pragma CLI
+        run: uv tool install pragmatiks-cli
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
@@ -245,8 +264,13 @@ jobs:
 
       - name: Push version bumps and tags
         run: |
-          git pull --rebase origin main
-          git push origin main --follow-tags
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            echo "Push attempt $i failed, retrying in ${i}s..."
+            sleep $i
+          done
+          echo "Failed to push after 5 attempts"
+          exit 1
 
       - name: Create GitHub Release
         if: steps.bump.outputs.version != ''
@@ -274,7 +298,7 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           cd packages/vercel
-          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-github:
     if: "!startsWith(github.event.head_commit.message, 'bump:')"
@@ -308,6 +332,9 @@ jobs:
       - name: Install commitizen
         run: uv tool install commitizen
 
+      - name: Install pragma CLI
+        run: uv tool install pragmatiks-cli
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
@@ -333,8 +360,13 @@ jobs:
 
       - name: Push version bumps and tags
         run: |
-          git pull --rebase origin main
-          git push origin main --follow-tags
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            echo "Push attempt $i failed, retrying in ${i}s..."
+            sleep $i
+          done
+          echo "Failed to push after 5 attempts"
+          exit 1
 
       - name: Create GitHub Release
         if: steps.bump.outputs.version != ''
@@ -362,7 +394,7 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           cd packages/github
-          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-kubernetes:
     if: "!startsWith(github.event.head_commit.message, 'bump:')"
@@ -399,6 +431,9 @@ jobs:
 
       - name: Install commitizen
         run: uv tool install commitizen
+
+      - name: Install pragma CLI
+        run: uv tool install pragmatiks-cli
 
       - name: Configure git
         run: |
@@ -442,8 +477,13 @@ jobs:
 
       - name: Push version bumps and tags
         run: |
-          git pull --rebase origin main
-          git push origin main --follow-tags
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            echo "Push attempt $i failed, retrying in ${i}s..."
+            sleep $i
+          done
+          echo "Failed to push after 5 attempts"
+          exit 1
 
       - name: Create GitHub Release
         if: steps.bump.outputs.version != ''
@@ -471,7 +511,7 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           cd packages/kubernetes
-          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-qdrant:
     if: "!startsWith(github.event.head_commit.message, 'bump:')"
@@ -508,6 +548,9 @@ jobs:
 
       - name: Install commitizen
         run: uv tool install commitizen
+
+      - name: Install pragma CLI
+        run: uv tool install pragmatiks-cli
 
       - name: Configure git
         run: |
@@ -551,8 +594,13 @@ jobs:
 
       - name: Push version bumps and tags
         run: |
-          git pull --rebase origin main
-          git push origin main --follow-tags
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            echo "Push attempt $i failed, retrying in ${i}s..."
+            sleep $i
+          done
+          echo "Failed to push after 5 attempts"
+          exit 1
 
       - name: Create GitHub Release
         if: steps.bump.outputs.version != ''
@@ -580,7 +628,7 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           cd packages/qdrant
-          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-agno:
     if: "!startsWith(github.event.head_commit.message, 'bump:')"
@@ -617,6 +665,9 @@ jobs:
 
       - name: Install commitizen
         run: uv tool install commitizen
+
+      - name: Install pragma CLI
+        run: uv tool install pragmatiks-cli
 
       - name: Configure git
         run: |
@@ -669,8 +720,13 @@ jobs:
 
       - name: Push version bumps and tags
         run: |
-          git pull --rebase origin main
-          git push origin main --follow-tags
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            echo "Push attempt $i failed, retrying in ${i}s..."
+            sleep $i
+          done
+          echo "Failed to push after 5 attempts"
+          exit 1
 
       - name: Create GitHub Release
         if: steps.bump.outputs.version != ''
@@ -698,4 +754,4 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           cd packages/agno
-          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
