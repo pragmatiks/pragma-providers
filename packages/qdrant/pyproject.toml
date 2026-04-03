@@ -29,6 +29,7 @@ provider = "qdrant"
 package = "qdrant_provider"
 display_name = "Qdrant Vector Database"
 description = "Provision and manage Qdrant vector database instances and collections for similarity search and AI applications."
+icon_url = "https://cdn.simpleicons.org/qdrant"
 tags = ["vector-database", "search", "ai", "embeddings"]
 
 [tool.pytest.ini_options]

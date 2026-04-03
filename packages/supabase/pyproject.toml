@@ -29,6 +29,7 @@ provider = "supabase"
 package = "supabase_provider"
 display_name = "Supabase"
 description = "Manage Supabase projects and configuration through declarative resources using the Management API."
+icon_url = "https://cdn.simpleicons.org/supabase"
 tags = ["supabase", "database", "authentication", "backend-as-a-service"]
 
 [tool.pytest.ini_options]

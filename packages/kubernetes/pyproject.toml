@@ -31,6 +31,7 @@ provider = "kubernetes"
 package = "kubernetes_provider"
 display_name = "Kubernetes"
 description = "Deploy and manage Kubernetes resources including deployments, services, configmaps, secrets, and statefulsets."
+icon_url = "https://cdn.simpleicons.org/kubernetes"
 tags = ["kubernetes", "orchestration", "containers", "infrastructure"]
 
 [tool.pytest.ini_options]

@@ -34,6 +34,7 @@ provider = "agno"
 package = "agno_provider"
 display_name = "Agno AI Agents"
 description = "Build and deploy AI agents, teams, and knowledge bases with models from OpenAI and Anthropic, MCP tools, and vector storage."
+icon_url = "https://cdn.prod.website-files.com/6796d350b8c706e4533e7e32/68a85d04c4b355c4accb0f9f_256.png"
 tags = ["ai", "agents", "llm", "openai", "anthropic", "knowledge-base"]
 
 [tool.pytest.ini_options]

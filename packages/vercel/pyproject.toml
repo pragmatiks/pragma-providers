@@ -29,6 +29,7 @@ provider = "vercel"
 package = "vercel_provider"
 display_name = "Vercel"
 description = "Manage Vercel projects, deployments, and domains through declarative resources using the Vercel REST API."
+icon_url = "https://cdn.simpleicons.org/vercel"
 tags = ["vercel", "hosting", "deployments", "domains", "frontend"]
 
 [tool.pytest.ini_options]
