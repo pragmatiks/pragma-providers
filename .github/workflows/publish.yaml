@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+env:
+  PRAGMA_API_URL: https://api.pragmatiks.io
+
 # Provider dependency DAG:
 #   gcp, supabase, vercel, github  (no internal deps — run in parallel)
 #   kubernetes  (depends on gcp)
