@@ -6,7 +6,7 @@ on:
       - main
 
 # Provider dependency chain (publish in this order):
-# 1. gcp (no internal deps)
+# 1. gcp, supabase, vercel, github (no internal deps)
 # 2. kubernetes (depends on gcp), qdrant (depends on kubernetes)
 # 3. agno (depends on gcp, kubernetes)
 #
@@ -21,6 +21,9 @@ jobs:
       qdrant: ${{ steps.changes.outputs.qdrant }}
       kubernetes: ${{ steps.changes.outputs.kubernetes }}
       agno: ${{ steps.changes.outputs.agno }}
+      supabase: ${{ steps.changes.outputs.supabase }}
+      vercel: ${{ steps.changes.outputs.vercel }}
+      github: ${{ steps.changes.outputs.github }}
       has_changes: ${{ steps.changes.outputs.has_changes }}
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +44,7 @@ jobs:
           # Check each provider individually
           HAS_CHANGES=false
 
-          for provider in gcp qdrant kubernetes agno; do
+          for provider in gcp qdrant kubernetes agno supabase vercel github; do
             if echo "$CHANGED_FILES" | grep -q "^packages/$provider/"; then
               echo "$provider=true" >> $GITHUB_OUTPUT
               echo "Changed: $provider"
@@ -56,7 +59,11 @@ jobs:
   # Tier 1: Base providers with no internal dependencies
   publish-tier-1:
     needs: detect-changes
-    if: needs.detect-changes.outputs.gcp == 'true'
+    if: |
+      needs.detect-changes.outputs.gcp == 'true' ||
+      needs.detect-changes.outputs.supabase == 'true' ||
+      needs.detect-changes.outputs.vercel == 'true' ||
+      needs.detect-changes.outputs.github == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -64,6 +71,9 @@ jobs:
       id-token: write
     outputs:
       gcp_version: ${{ steps.bump.outputs.gcp_version }}
+      supabase_version: ${{ steps.bump.outputs.supabase_version }}
+      vercel_version: ${{ steps.bump.outputs.vercel_version }}
+      github_version: ${{ steps.bump.outputs.github_version }}
 
     steps:
       - name: Generate GitHub App token
@@ -94,35 +104,59 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump and build gcp
+      - name: Bump and build tier 1 providers
         id: bump
+        env:
+          CHANGED_GCP: ${{ needs.detect-changes.outputs.gcp }}
+          CHANGED_SUPABASE: ${{ needs.detect-changes.outputs.supabase }}
+          CHANGED_VERCEL: ${{ needs.detect-changes.outputs.vercel }}
+          CHANGED_GITHUB: ${{ needs.detect-changes.outputs.github }}
         run: |
-          echo "::group::Processing gcp"
-          cd packages/gcp
+          process_provider() {
+            local provider=$1
+            echo "::group::Processing $provider"
+            cd packages/$provider
 
-          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
-            VERSION=$(cz version --project)
-            echo "Bumped gcp to v$VERSION"
-            echo "gcp_version=$VERSION" >> $GITHUB_OUTPUT
-            uv build --package pragmatiks-gcp-provider --out-dir ../../dist
-          else
-            if grep -qE "No commits found|is not a bump" bump_output.txt; then
-              echo "No bump needed for gcp"
+            if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+              VERSION=$(cz version --project)
+              echo "Bumped $provider to v$VERSION"
+              echo "${provider}_version=$VERSION" >> $GITHUB_OUTPUT
+              uv build --package pragmatiks-${provider}-provider --out-dir ../../dist
             else
-              cat bump_output.txt
-              exit 1
+              if grep -qE "No commits found|is not a bump" bump_output.txt; then
+                echo "No bump needed for $provider"
+              else
+                cat bump_output.txt
+                exit 1
+              fi
             fi
+
+            cd ../..
+            echo "::endgroup::"
+          }
+
+          if [ "$CHANGED_GCP" = "true" ]; then
+            process_provider gcp
           fi
 
-          cd ../..
-          echo "::endgroup::"
+          if [ "$CHANGED_SUPABASE" = "true" ]; then
+            process_provider supabase
+          fi
+
+          if [ "$CHANGED_VERCEL" = "true" ]; then
+            process_provider vercel
+          fi
+
+          if [ "$CHANGED_GITHUB" = "true" ]; then
+            process_provider github
+          fi
 
       - name: Push version bumps and tags
         run: |
           git pull --rebase origin main
           git push origin main --follow-tags
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release for gcp
         if: steps.bump.outputs.gcp_version != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -133,6 +167,39 @@ jobs:
             --generate-notes \
             dist/pragmatiks_gcp_provider-${VERSION}* || echo "Release may already exist"
 
+      - name: Create GitHub Release for supabase
+        if: steps.bump.outputs.supabase_version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.supabase_version }}"
+          gh release create "supabase-v${VERSION}" \
+            --title "pragmatiks-supabase-provider v${VERSION}" \
+            --generate-notes \
+            dist/pragmatiks_supabase_provider-${VERSION}* || echo "Release may already exist"
+
+      - name: Create GitHub Release for vercel
+        if: steps.bump.outputs.vercel_version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.vercel_version }}"
+          gh release create "vercel-v${VERSION}" \
+            --title "pragmatiks-vercel-provider v${VERSION}" \
+            --generate-notes \
+            dist/pragmatiks_vercel_provider-${VERSION}* || echo "Release may already exist"
+
+      - name: Create GitHub Release for github
+        if: steps.bump.outputs.github_version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.github_version }}"
+          gh release create "github-v${VERSION}" \
+            --title "pragmatiks-github-provider v${VERSION}" \
+            --generate-notes \
+            dist/pragmatiks_github_provider-${VERSION}* || echo "Release may already exist"
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -141,12 +208,35 @@ jobs:
 
       - name: Publish gcp to pragma store
         if: steps.bump.outputs.gcp_version != ''
-        continue-on-error: true
         env:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           cd packages/gcp
           uv run pragma providers publish --version "${{ steps.bump.outputs.gcp_version }}" --org pragmatiks
+
+      - name: Publish supabase to pragma store
+        if: steps.bump.outputs.supabase_version != ''
+        env:
+          PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
+        run: |
+          cd packages/supabase
+          uv run pragma providers publish --version "${{ steps.bump.outputs.supabase_version }}" --org pragmatiks
+
+      - name: Publish vercel to pragma store
+        if: steps.bump.outputs.vercel_version != ''
+        env:
+          PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
+        run: |
+          cd packages/vercel
+          uv run pragma providers publish --version "${{ steps.bump.outputs.vercel_version }}" --org pragmatiks
+
+      - name: Publish github to pragma store
+        if: steps.bump.outputs.github_version != ''
+        env:
+          PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
+        run: |
+          cd packages/github
+          uv run pragma providers publish --version "${{ steps.bump.outputs.github_version }}" --org pragmatiks
 
   # Tier 2: Providers that depend on tier 1
   publish-tier-2:
@@ -286,7 +376,6 @@ jobs:
 
       - name: Publish kubernetes to pragma store
         if: steps.bump.outputs.kubernetes_version != ''
-        continue-on-error: true
         env:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
@@ -295,7 +384,6 @@ jobs:
 
       - name: Publish qdrant to pragma store
         if: steps.bump.outputs.qdrant_version != ''
-        continue-on-error: true
         env:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
@@ -426,7 +514,6 @@ jobs:
 
       - name: Publish agno to pragma store
         if: steps.bump.outputs.agno_version != ''
-        continue-on-error: true
         env:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |

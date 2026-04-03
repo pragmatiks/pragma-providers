@@ -45,3 +45,15 @@ jobs:
       - name: Test Agno provider
         working-directory: packages/agno
         run: uv run pytest tests/ --cov=agno_provider --cov-report=term-missing
+
+      - name: Test Supabase provider
+        working-directory: packages/supabase
+        run: uv run pytest tests/ --cov=supabase_provider --cov-report=term-missing
+
+      - name: Test Vercel provider
+        working-directory: packages/vercel
+        run: uv run pytest tests/ --cov=vercel_provider --cov-report=term-missing
+
+      - name: Test GitHub provider
+        working-directory: packages/github
+        run: uv run pytest tests/ --cov=github_provider --cov-report=term-missing
