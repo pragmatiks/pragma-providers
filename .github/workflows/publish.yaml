@@ -5,30 +5,21 @@ on:
     branches:
       - main
 
-# Provider dependency chain (publish in this order):
-# 1. gcp, supabase, vercel, github (no internal deps)
-# 2. kubernetes (depends on gcp), qdrant (depends on kubernetes)
-# 3. agno (depends on gcp, kubernetes)
-#
-# We publish each tier sequentially to ensure dependencies are available on PyPI.
-# cz bump checks for new conventional commits since the last tag — if there are
-# none, it outputs "No commits found" and the provider is skipped automatically.
+# Provider dependency DAG:
+#   gcp, supabase, vercel, github  (no internal deps — run in parallel)
+#   kubernetes  (depends on gcp)
+#   qdrant      (depends on kubernetes)
+#   agno        (depends on gcp, kubernetes)
 
 jobs:
-  # Tier 1: Base providers with no internal dependencies
-  publish-tier-1:
+  publish-gcp:
     if: "!startsWith(github.event.head_commit.message, 'bump:')"
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       contents: write
-      id-token: write
     outputs:
-      gcp_version: ${{ steps.bump.outputs.gcp_version }}
-      supabase_version: ${{ steps.bump.outputs.supabase_version }}
-      vercel_version: ${{ steps.bump.outputs.vercel_version }}
-      github_version: ${{ steps.bump.outputs.github_version }}
-
+      version: ${{ steps.bump.outputs.version }}
     steps:
       - name: Generate GitHub App token
         id: app-token
@@ -58,158 +49,65 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump and build tier 1 providers
+      - name: Bump and build
         id: bump
         run: |
-          process_provider() {
-            local provider=$1
-            echo "::group::Processing $provider"
-            cd packages/$provider
-
-            if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
-              VERSION=$(cz version --project)
-              echo "Bumped $provider to v$VERSION"
-              echo "${provider}_version=$VERSION" >> $GITHUB_OUTPUT
-              uv build --package pragmatiks-${provider}-provider --out-dir ../../dist-${provider}
+          cd packages/gcp
+          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+            VERSION=$(cz version --project)
+            echo "Bumped gcp to v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            uv build --package pragmatiks-gcp-provider --out-dir ../../dist
+          else
+            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+              echo "No bump needed for gcp"
             else
-              if grep -qE "No commits found|is not a bump" bump_output.txt; then
-                echo "No bump needed for $provider"
-              else
-                cat bump_output.txt
-                exit 1
-              fi
+              cat bump_output.txt
+              exit 1
             fi
-
-            cd ../..
-            echo "::endgroup::"
-          }
-
-          process_provider gcp
-          process_provider supabase
-          process_provider vercel
-          process_provider github
+          fi
 
       - name: Push version bumps and tags
         run: |
           git pull --rebase origin main
           git push origin main --follow-tags
 
-      - name: Create GitHub Release for gcp
-        if: steps.bump.outputs.gcp_version != ''
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ steps.bump.outputs.gcp_version }}"
+          VERSION="${{ steps.bump.outputs.version }}"
           gh release create "gcp-v${VERSION}" \
             --title "pragmatiks-gcp-provider v${VERSION}" \
             --generate-notes \
-            dist-gcp/pragmatiks_gcp_provider-${VERSION}* || echo "Release may already exist"
+            dist/pragmatiks_gcp_provider-${VERSION}* || echo "Release may already exist"
 
-      - name: Create GitHub Release for supabase
-        if: steps.bump.outputs.supabase_version != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.supabase_version }}"
-          gh release create "supabase-v${VERSION}" \
-            --title "pragmatiks-supabase-provider v${VERSION}" \
-            --generate-notes \
-            dist-supabase/pragmatiks_supabase_provider-${VERSION}* || echo "Release may already exist"
-
-      - name: Create GitHub Release for vercel
-        if: steps.bump.outputs.vercel_version != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.vercel_version }}"
-          gh release create "vercel-v${VERSION}" \
-            --title "pragmatiks-vercel-provider v${VERSION}" \
-            --generate-notes \
-            dist-vercel/pragmatiks_vercel_provider-${VERSION}* || echo "Release may already exist"
-
-      - name: Create GitHub Release for github
-        if: steps.bump.outputs.github_version != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.github_version }}"
-          gh release create "github-v${VERSION}" \
-            --title "pragmatiks-github-provider v${VERSION}" \
-            --generate-notes \
-            dist-github/pragmatiks_github_provider-${VERSION}* || echo "Release may already exist"
-
-      - name: Publish gcp to PyPI
-        if: steps.bump.outputs.gcp_version != ''
+      - name: Publish to PyPI
+        if: steps.bump.outputs.version != ''
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist-gcp/
+          packages-dir: dist/
+          password: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
+          attestations: false
 
-      - name: Publish supabase to PyPI
-        if: steps.bump.outputs.supabase_version != ''
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist-supabase/
-          skip-existing: true
-
-      - name: Publish vercel to PyPI
-        if: steps.bump.outputs.vercel_version != ''
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist-vercel/
-          skip-existing: true
-
-      - name: Publish github to PyPI
-        if: steps.bump.outputs.github_version != ''
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist-github/
-          skip-existing: true
-
-      - name: Publish gcp to pragma store
-        if: steps.bump.outputs.gcp_version != ''
+      - name: Publish to pragma store
+        if: steps.bump.outputs.version != ''
         env:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           cd packages/gcp
-          uv run pragma providers publish --version "${{ steps.bump.outputs.gcp_version }}" --org pragmatiks
+          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
-      - name: Publish supabase to pragma store
-        if: steps.bump.outputs.supabase_version != ''
-        env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
-        run: |
-          cd packages/supabase
-          uv run pragma providers publish --version "${{ steps.bump.outputs.supabase_version }}" --org pragmatiks
-
-      - name: Publish vercel to pragma store
-        if: steps.bump.outputs.vercel_version != ''
-        env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
-        run: |
-          cd packages/vercel
-          uv run pragma providers publish --version "${{ steps.bump.outputs.vercel_version }}" --org pragmatiks
-
-      - name: Publish github to pragma store
-        if: steps.bump.outputs.github_version != ''
-        env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
-        run: |
-          cd packages/github
-          uv run pragma providers publish --version "${{ steps.bump.outputs.github_version }}" --org pragmatiks
-
-  # Tier 2: Providers that depend on tier 1
-  publish-tier-2:
-    needs: publish-tier-1
+  publish-supabase:
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       contents: write
-      id-token: write
     outputs:
-      kubernetes_version: ${{ steps.bump.outputs.kubernetes_version }}
-      qdrant_version: ${{ steps.bump.outputs.qdrant_version }}
-
+      version: ${{ steps.bump.outputs.version }}
     steps:
       - name: Generate GitHub App token
         id: app-token
@@ -221,7 +119,271 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install commitizen
+        run: uv tool install commitizen
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump and build
+        id: bump
+        run: |
+          cd packages/supabase
+          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+            VERSION=$(cz version --project)
+            echo "Bumped supabase to v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            uv build --package pragmatiks-supabase-provider --out-dir ../../dist
+          else
+            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+              echo "No bump needed for supabase"
+            else
+              cat bump_output.txt
+              exit 1
+            fi
+          fi
+
+      - name: Push version bumps and tags
+        run: |
+          git pull --rebase origin main
+          git push origin main --follow-tags
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          gh release create "supabase-v${VERSION}" \
+            --title "pragmatiks-supabase-provider v${VERSION}" \
+            --generate-notes \
+            dist/pragmatiks_supabase_provider-${VERSION}* || echo "Release may already exist"
+
+      - name: Publish to PyPI
+        if: steps.bump.outputs.version != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          password: ${{ secrets.PYPI_TOKEN }}
+          skip-existing: true
+          attestations: false
+
+      - name: Publish to pragma store
+        if: steps.bump.outputs.version != ''
+        env:
+          PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
+        run: |
+          cd packages/supabase
+          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+
+  publish-vercel:
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install commitizen
+        run: uv tool install commitizen
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump and build
+        id: bump
+        run: |
+          cd packages/vercel
+          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+            VERSION=$(cz version --project)
+            echo "Bumped vercel to v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            uv build --package pragmatiks-vercel-provider --out-dir ../../dist
+          else
+            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+              echo "No bump needed for vercel"
+            else
+              cat bump_output.txt
+              exit 1
+            fi
+          fi
+
+      - name: Push version bumps and tags
+        run: |
+          git pull --rebase origin main
+          git push origin main --follow-tags
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          gh release create "vercel-v${VERSION}" \
+            --title "pragmatiks-vercel-provider v${VERSION}" \
+            --generate-notes \
+            dist/pragmatiks_vercel_provider-${VERSION}* || echo "Release may already exist"
+
+      - name: Publish to PyPI
+        if: steps.bump.outputs.version != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          password: ${{ secrets.PYPI_TOKEN }}
+          skip-existing: true
+          attestations: false
+
+      - name: Publish to pragma store
+        if: steps.bump.outputs.version != ''
+        env:
+          PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
+        run: |
+          cd packages/vercel
+          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+
+  publish-github:
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install commitizen
+        run: uv tool install commitizen
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump and build
+        id: bump
+        run: |
+          cd packages/github
+          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+            VERSION=$(cz version --project)
+            echo "Bumped github to v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            uv build --package pragmatiks-github-provider --out-dir ../../dist
+          else
+            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+              echo "No bump needed for github"
+            else
+              cat bump_output.txt
+              exit 1
+            fi
+          fi
+
+      - name: Push version bumps and tags
+        run: |
+          git pull --rebase origin main
+          git push origin main --follow-tags
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          gh release create "github-v${VERSION}" \
+            --title "pragmatiks-github-provider v${VERSION}" \
+            --generate-notes \
+            dist/pragmatiks_github_provider-${VERSION}* || echo "Release may already exist"
+
+      - name: Publish to PyPI
+        if: steps.bump.outputs.version != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          password: ${{ secrets.PYPI_TOKEN }}
+          skip-existing: true
+          attestations: false
+
+      - name: Publish to pragma store
+        if: steps.bump.outputs.version != ''
+        env:
+          PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
+        run: |
+          cd packages/github
+          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+
+  publish-kubernetes:
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    needs: [publish-gcp]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Pull latest changes
@@ -244,10 +406,10 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Wait for PyPI availability
-        if: needs.publish-tier-1.outputs.gcp_version != ''
+        if: needs.publish-gcp.outputs.version != ''
         run: |
           PACKAGE="pragmatiks-gcp-provider"
-          VERSION="${{ needs.publish-tier-1.outputs.gcp_version }}"
+          VERSION="${{ needs.publish-gcp.outputs.version }}"
           echo "Waiting for $PACKAGE v$VERSION on PyPI..."
           for i in {1..30}; do
             if curl -sf "https://pypi.org/pypi/$PACKAGE/$VERSION/json" > /dev/null; then
@@ -260,101 +422,66 @@ jobs:
           echo "Timed out waiting for package on PyPI"
           exit 1
 
-      - name: Bump and build tier 2 providers
+      - name: Bump and build
         id: bump
         run: |
-          process_provider() {
-            local provider=$1
-            echo "::group::Processing $provider"
-            cd packages/$provider
-
-            if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
-              VERSION=$(cz version --project)
-              echo "Bumped $provider to v$VERSION"
-              echo "${provider}_version=$VERSION" >> $GITHUB_OUTPUT
-              uv build --package pragmatiks-${provider}-provider --out-dir ../../dist-${provider}
+          cd packages/kubernetes
+          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+            VERSION=$(cz version --project)
+            echo "Bumped kubernetes to v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            uv build --package pragmatiks-kubernetes-provider --out-dir ../../dist
+          else
+            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+              echo "No bump needed for kubernetes"
             else
-              if grep -qE "No commits found|is not a bump" bump_output.txt; then
-                echo "No bump needed for $provider"
-              else
-                cat bump_output.txt
-                exit 1
-              fi
+              cat bump_output.txt
+              exit 1
             fi
-
-            cd ../..
-            echo "::endgroup::"
-          }
-
-          process_provider kubernetes
-          process_provider qdrant
+          fi
 
       - name: Push version bumps and tags
         run: |
           git pull --rebase origin main
           git push origin main --follow-tags
 
-      - name: Create GitHub Release for kubernetes
-        if: steps.bump.outputs.kubernetes_version != ''
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ steps.bump.outputs.kubernetes_version }}"
+          VERSION="${{ steps.bump.outputs.version }}"
           gh release create "kubernetes-v${VERSION}" \
             --title "pragmatiks-kubernetes-provider v${VERSION}" \
             --generate-notes \
-            dist-kubernetes/pragmatiks_kubernetes_provider-${VERSION}* || echo "Release may already exist"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            dist/pragmatiks_kubernetes_provider-${VERSION}* || echo "Release may already exist"
 
-      - name: Create GitHub Release for qdrant
-        if: steps.bump.outputs.qdrant_version != ''
-        run: |
-          VERSION="${{ steps.bump.outputs.qdrant_version }}"
-          gh release create "qdrant-v${VERSION}" \
-            --title "pragmatiks-qdrant-provider v${VERSION}" \
-            --generate-notes \
-            dist-qdrant/pragmatiks_qdrant_provider-${VERSION}* || echo "Release may already exist"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish kubernetes to PyPI
-        if: steps.bump.outputs.kubernetes_version != ''
+      - name: Publish to PyPI
+        if: steps.bump.outputs.version != ''
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist-kubernetes/
+          packages-dir: dist/
+          password: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
+          attestations: false
 
-      - name: Publish qdrant to PyPI
-        if: steps.bump.outputs.qdrant_version != ''
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist-qdrant/
-          skip-existing: true
-
-      - name: Publish kubernetes to pragma store
-        if: steps.bump.outputs.kubernetes_version != ''
+      - name: Publish to pragma store
+        if: steps.bump.outputs.version != ''
         env:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           cd packages/kubernetes
-          uv run pragma providers publish --version "${{ steps.bump.outputs.kubernetes_version }}" --org pragmatiks
+          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
-      - name: Publish qdrant to pragma store
-        if: steps.bump.outputs.qdrant_version != ''
-        env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
-        run: |
-          cd packages/qdrant
-          uv run pragma providers publish --version "${{ steps.bump.outputs.qdrant_version }}" --org pragmatiks
-
-  # Tier 3: Providers that depend on tier 2
-  publish-tier-3:
-    needs: [publish-tier-1, publish-tier-2]
+  publish-qdrant:
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    needs: [publish-kubernetes]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       contents: write
-      id-token: write
-
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
     steps:
       - name: Generate GitHub App token
         id: app-token
@@ -366,7 +493,115 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Pull latest changes
+        run: git pull origin main
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install commitizen
+        run: uv tool install commitizen
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Wait for PyPI availability
+        if: needs.publish-kubernetes.outputs.version != ''
+        run: |
+          PACKAGE="pragmatiks-kubernetes-provider"
+          VERSION="${{ needs.publish-kubernetes.outputs.version }}"
+          echo "Waiting for $PACKAGE v$VERSION on PyPI..."
+          for i in {1..30}; do
+            if curl -sf "https://pypi.org/pypi/$PACKAGE/$VERSION/json" > /dev/null; then
+              echo "Package available on PyPI"
+              exit 0
+            fi
+            echo "Attempt $i: Package not yet available, waiting 10s..."
+            sleep 10
+          done
+          echo "Timed out waiting for package on PyPI"
+          exit 1
+
+      - name: Bump and build
+        id: bump
+        run: |
+          cd packages/qdrant
+          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+            VERSION=$(cz version --project)
+            echo "Bumped qdrant to v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            uv build --package pragmatiks-qdrant-provider --out-dir ../../dist
+          else
+            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+              echo "No bump needed for qdrant"
+            else
+              cat bump_output.txt
+              exit 1
+            fi
+          fi
+
+      - name: Push version bumps and tags
+        run: |
+          git pull --rebase origin main
+          git push origin main --follow-tags
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          gh release create "qdrant-v${VERSION}" \
+            --title "pragmatiks-qdrant-provider v${VERSION}" \
+            --generate-notes \
+            dist/pragmatiks_qdrant_provider-${VERSION}* || echo "Release may already exist"
+
+      - name: Publish to PyPI
+        if: steps.bump.outputs.version != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          password: ${{ secrets.PYPI_TOKEN }}
+          skip-existing: true
+          attestations: false
+
+      - name: Publish to pragma store
+        if: steps.bump.outputs.version != ''
+        env:
+          PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
+        run: |
+          cd packages/qdrant
+          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+
+  publish-agno:
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    needs: [publish-gcp, publish-kubernetes]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Pull latest changes
@@ -406,28 +641,23 @@ jobs:
             return 1
           }
 
-          # Wait for kubernetes if it was just published
-          if [ -n "${{ needs.publish-tier-2.outputs.kubernetes_version }}" ]; then
-            wait_for_package pragmatiks-kubernetes-provider "${{ needs.publish-tier-2.outputs.kubernetes_version }}"
+          if [ -n "${{ needs.publish-gcp.outputs.version }}" ]; then
+            wait_for_package pragmatiks-gcp-provider "${{ needs.publish-gcp.outputs.version }}"
           fi
 
-          # Wait for gcp if it was just published
-          if [ -n "${{ needs.publish-tier-1.outputs.gcp_version }}" ]; then
-            wait_for_package pragmatiks-gcp-provider "${{ needs.publish-tier-1.outputs.gcp_version }}"
+          if [ -n "${{ needs.publish-kubernetes.outputs.version }}" ]; then
+            wait_for_package pragmatiks-kubernetes-provider "${{ needs.publish-kubernetes.outputs.version }}"
           fi
 
-      - name: Bump and build agno
+      - name: Bump and build
         id: bump
         run: |
-          echo "::group::Processing agno"
           cd packages/agno
-
           if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped agno to v$VERSION"
-            echo "agno_version=$VERSION" >> $GITHUB_OUTPUT
-
-            uv build --package pragmatiks-agno-provider --out-dir ../../dist-agno
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            uv build --package pragmatiks-agno-provider --out-dir ../../dist
           else
             if grep -qE "No commits found|is not a bump" bump_output.txt; then
               echo "No bump needed for agno"
@@ -437,36 +667,35 @@ jobs:
             fi
           fi
 
-          cd ../..
-          echo "::endgroup::"
-
       - name: Push version bumps and tags
         run: |
           git pull --rebase origin main
           git push origin main --follow-tags
 
       - name: Create GitHub Release
-        if: steps.bump.outputs.agno_version != ''
+        if: steps.bump.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ steps.bump.outputs.agno_version }}"
+          VERSION="${{ steps.bump.outputs.version }}"
           gh release create "agno-v${VERSION}" \
             --title "pragmatiks-agno-provider v${VERSION}" \
             --generate-notes \
-            dist-agno/pragmatiks_agno_provider-${VERSION}* || echo "Release may already exist"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            dist/pragmatiks_agno_provider-${VERSION}* || echo "Release may already exist"
 
-      - name: Publish agno to PyPI
-        if: steps.bump.outputs.agno_version != ''
+      - name: Publish to PyPI
+        if: steps.bump.outputs.version != ''
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist-agno/
+          packages-dir: dist/
+          password: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
+          attestations: false
 
-      - name: Publish agno to pragma store
-        if: steps.bump.outputs.agno_version != ''
+      - name: Publish to pragma store
+        if: steps.bump.outputs.version != ''
         env:
           PRAGMA_AUTH_TOKEN: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
           cd packages/agno
-          uv run pragma providers publish --version "${{ steps.bump.outputs.agno_version }}" --org pragmatiks
+          uv run pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
