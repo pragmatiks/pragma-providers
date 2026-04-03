@@ -10,6 +10,22 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v0.37.0 (2026-04-03)
+
+### Feat
+
+- add GitHub provider with Repository, Environment, and Secret resources (#59)
+
+### Fix
+
+- use PRAGMA_AUTH_TOKEN secret instead of CLERK_SECRET_KEY for store publish
+- set PRAGMA_API_URL in publish workflow for pragma store
+- install pragma CLI and add git push retry to publish workflow
+- restructure publish workflow as per-provider DAG with API token auth
+- simplify publish workflow - remove change detection, isolate PyPI uploads
+- add supabase, vercel, github to publish and CI workflows
+- **ci**: update per-provider lockfiles in update-sdk workflow
+
 ## qdrant-v0.36.0 (2026-03-27)
 
 ### Feat
