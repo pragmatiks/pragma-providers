@@ -1,3 +1,10 @@
+## gcp-v0.156.0 (2026-04-03)
+
+### Fix
+
+- install pragma CLI and add git push retry to publish workflow
+- restructure publish workflow as per-provider DAG with API token auth
+
 ## gcp-v0.155.1 (2026-04-03)
 
 ### Fix
