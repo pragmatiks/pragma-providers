@@ -1,3 +1,10 @@
+## github-v0.3.0 (2026-04-03)
+
+### Fix
+
+- install pragma CLI and add git push retry to publish workflow
+- restructure publish workflow as per-provider DAG with API token auth
+
 ## github-v0.2.1 (2026-04-03)
 
 ### Fix
