@@ -1,3 +1,11 @@
+## vercel-v0.3.0 (2026-04-03)
+
+### Fix
+
+- set PRAGMA_API_URL in publish workflow for pragma store
+- install pragma CLI and add git push retry to publish workflow
+- restructure publish workflow as per-provider DAG with API token auth
+
 ## vercel-v0.2.1 (2026-04-03)
 
 ### Fix
