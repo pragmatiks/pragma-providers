@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 # Provider dependency DAG:
 #   gcp, supabase, vercel, github  (no internal deps — run in parallel)
@@ -13,7 +14,7 @@ on:
 
 jobs:
   publish-gcp:
-    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -109,7 +110,7 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-supabase:
-    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -205,7 +206,7 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-vercel:
-    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -301,7 +302,7 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-github:
-    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -397,7 +398,7 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-kubernetes:
-    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
     needs: [publish-gcp]
     runs-on: ubuntu-latest
     environment: pypi
@@ -514,7 +515,7 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-qdrant:
-    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
     needs: [publish-kubernetes]
     runs-on: ubuntu-latest
     environment: pypi
@@ -631,7 +632,7 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-agno:
-    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
     needs: [publish-gcp, publish-kubernetes]
     runs-on: ubuntu-latest
     environment: pypi
