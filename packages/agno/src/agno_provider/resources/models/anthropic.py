@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from agno.models.anthropic import Claude
-from pragma_sdk import Field
+from pragma_sdk import Field, SensitiveField
 
 from agno_provider.resources.base import AgnoSpec
 from agno_provider.resources.models.base import Model, ModelConfig, ModelOutputs
@@ -52,7 +52,7 @@ class AnthropicModelConfig(ModelConfig):
         stop_sequences: Stop sequences to end generation. Optional.
     """
 
-    api_key: Field[str]
+    api_key: SensitiveField[str]
     max_tokens: Field[int] = 8192
     temperature: Field[float] | None = None
     top_p: Field[float] | None = None
