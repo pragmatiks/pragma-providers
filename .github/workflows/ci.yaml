@@ -7,9 +7,59 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  detect-changes:
     runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      gcp: ${{ steps.filter.outputs.gcp }}
+      kubernetes: ${{ steps.filter.outputs.kubernetes }}
+      qdrant: ${{ steps.filter.outputs.qdrant }}
+      agno: ${{ steps.filter.outputs.agno }}
+      supabase: ${{ steps.filter.outputs.supabase }}
+      vercel: ${{ steps.filter.outputs.vercel }}
+      github: ${{ steps.filter.outputs.github }}
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared:
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/**'
+              - 'scripts/**'
+              - 'Taskfile.yaml'
+              - 'taskfiles/**'
+            gcp:
+              - 'packages/gcp/**'
+            kubernetes:
+              - 'packages/kubernetes/**'
+            qdrant:
+              - 'packages/qdrant/**'
+            agno:
+              - 'packages/agno/**'
+            supabase:
+              - 'packages/supabase/**'
+            vercel:
+              - 'packages/vercel/**'
+            github:
+              - 'packages/github/**'
+
+  lint:
+    needs: [detect-changes]
+    if: >-
+      needs.detect-changes.outputs.shared == 'true' ||
+      needs.detect-changes.outputs.gcp == 'true' ||
+      needs.detect-changes.outputs.kubernetes == 'true' ||
+      needs.detect-changes.outputs.qdrant == 'true' ||
+      needs.detect-changes.outputs.agno == 'true' ||
+      needs.detect-changes.outputs.supabase == 'true' ||
+      needs.detect-changes.outputs.vercel == 'true' ||
+      needs.detect-changes.outputs.github == 'true'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -30,29 +80,155 @@ jobs:
       - name: Format check
         run: uv run ruff format --check .
 
+  test-gcp:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.gcp == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
       - name: Test GCP provider
         working-directory: packages/gcp
         run: uv run pytest tests/ --cov=gcp_provider --cov-report=term-missing
+
+  test-kubernetes:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.gcp == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-groups
 
       - name: Test Kubernetes provider
         working-directory: packages/kubernetes
         run: uv run pytest tests/ --cov=kubernetes_provider --cov-report=term-missing
 
+  test-qdrant:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.qdrant == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.gcp == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
       - name: Test Qdrant provider
         working-directory: packages/qdrant
         run: uv run pytest tests/ --cov=qdrant_provider --cov-report=term-missing
+
+  test-agno:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.agno == 'true' || needs.detect-changes.outputs.gcp == 'true' || needs.detect-changes.outputs.kubernetes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-groups
 
       - name: Test Agno provider
         working-directory: packages/agno
         run: uv run pytest tests/ --cov=agno_provider --cov-report=term-missing
 
+  test-supabase:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.supabase == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
       - name: Test Supabase provider
         working-directory: packages/supabase
         run: uv run pytest tests/ --cov=supabase_provider --cov-report=term-missing
 
+  test-vercel:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.vercel == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
       - name: Test Vercel provider
         working-directory: packages/vercel
         run: uv run pytest tests/ --cov=vercel_provider --cov-report=term-missing
+
+  test-github:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.github == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-groups
 
       - name: Test GitHub provider
         working-directory: packages/github

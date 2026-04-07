@@ -11,10 +11,65 @@ on:
 #   kubernetes  (depends on gcp)
 #   qdrant      (depends on kubernetes)
 #   agno        (depends on gcp, kubernetes)
+#
+# Change propagation:
+#   gcp changed      → gcp, kubernetes, qdrant, agno
+#   kubernetes changed → kubernetes, qdrant, agno
+#   supabase changed → supabase
+#   vercel changed   → vercel
+#   github changed   → github
+#   shared changed   → all providers
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      gcp: ${{ steps.filter.outputs.gcp }}
+      kubernetes: ${{ steps.filter.outputs.kubernetes }}
+      qdrant: ${{ steps.filter.outputs.qdrant }}
+      agno: ${{ steps.filter.outputs.agno }}
+      supabase: ${{ steps.filter.outputs.supabase }}
+      vercel: ${{ steps.filter.outputs.vercel }}
+      github: ${{ steps.filter.outputs.github }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared:
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/**'
+              - 'scripts/**'
+              - 'Taskfile.yaml'
+              - 'taskfiles/**'
+            gcp:
+              - 'packages/gcp/**'
+            kubernetes:
+              - 'packages/kubernetes/**'
+            qdrant:
+              - 'packages/qdrant/**'
+            agno:
+              - 'packages/agno/**'
+            supabase:
+              - 'packages/supabase/**'
+            vercel:
+              - 'packages/vercel/**'
+            github:
+              - 'packages/github/**'
+
   publish-gcp:
-    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
+    needs: [detect-changes]
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        !startsWith(github.event.head_commit.message, 'bump:') &&
+        (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.gcp == 'true')
+      )
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -110,7 +165,13 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-supabase:
-    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
+    needs: [detect-changes]
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        !startsWith(github.event.head_commit.message, 'bump:') &&
+        (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.supabase == 'true')
+      )
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -206,7 +267,13 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-vercel:
-    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
+    needs: [detect-changes]
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        !startsWith(github.event.head_commit.message, 'bump:') &&
+        (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.vercel == 'true')
+      )
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -302,7 +369,13 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-github:
-    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
+    needs: [detect-changes]
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        !startsWith(github.event.head_commit.message, 'bump:') &&
+        (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.github == 'true')
+      )
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -398,8 +471,25 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-kubernetes:
-    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
-    needs: [publish-gcp]
+    needs: [detect-changes, publish-gcp]
+    # Runs if kubernetes or gcp changed (DAG propagation), or shared files changed.
+    # Uses always() because publish-gcp may be skipped (no gcp changes), and we still
+    # need kubernetes to run if only kubernetes files changed.
+    if: >-
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      (needs.publish-gcp.result == 'success' || needs.publish-gcp.result == 'skipped') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          !startsWith(github.event.head_commit.message, 'bump:') &&
+          (
+            needs.detect-changes.outputs.shared == 'true' ||
+            needs.detect-changes.outputs.kubernetes == 'true' ||
+            needs.detect-changes.outputs.gcp == 'true'
+          )
+        )
+      )
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -515,8 +605,24 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-qdrant:
-    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
-    needs: [publish-kubernetes]
+    needs: [detect-changes, publish-kubernetes]
+    # Runs if qdrant, kubernetes, or gcp changed (full DAG propagation), or shared files changed.
+    if: >-
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      (needs.publish-kubernetes.result == 'success' || needs.publish-kubernetes.result == 'skipped') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          !startsWith(github.event.head_commit.message, 'bump:') &&
+          (
+            needs.detect-changes.outputs.shared == 'true' ||
+            needs.detect-changes.outputs.qdrant == 'true' ||
+            needs.detect-changes.outputs.kubernetes == 'true' ||
+            needs.detect-changes.outputs.gcp == 'true'
+          )
+        )
+      )
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -632,8 +738,25 @@ jobs:
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-agno:
-    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'bump:')
-    needs: [publish-gcp, publish-kubernetes]
+    needs: [detect-changes, publish-gcp, publish-kubernetes]
+    # Runs if agno, gcp, or kubernetes changed (DAG propagation), or shared files changed.
+    if: >-
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      (needs.publish-gcp.result == 'success' || needs.publish-gcp.result == 'skipped') &&
+      (needs.publish-kubernetes.result == 'success' || needs.publish-kubernetes.result == 'skipped') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          !startsWith(github.event.head_commit.message, 'bump:') &&
+          (
+            needs.detect-changes.outputs.shared == 'true' ||
+            needs.detect-changes.outputs.agno == 'true' ||
+            needs.detect-changes.outputs.gcp == 'true' ||
+            needs.detect-changes.outputs.kubernetes == 'true'
+          )
+        )
+      )
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
