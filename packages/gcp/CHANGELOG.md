@@ -1,3 +1,61 @@
+## gcp-v0.162.0 (2026-04-07)
+
+### Feat
+
+- **ci**: skip builds for unchanged providers
+- accept workflow_dispatch trigger for CLI cascade
+- add icon_url to all provider pyproject.toml
+
+### Fix
+
+- remove redundant PRAGMA_API_URL env var from publish workflow
+- use PRAGMA_AUTH_TOKEN secret instead of CLERK_SECRET_KEY for store publish
+- set PRAGMA_API_URL in publish workflow for pragma store
+- install pragma CLI and add git push retry to publish workflow
+- restructure publish workflow as per-provider DAG with API token auth
+
+## gcp-v0.155.0 (2026-04-03)
+
+### Feat
+
+- add GitHub provider with Repository, Environment, and Secret resources (#59)
+- add explicit upgrade/downgrade methods to all resources (PRA-226) (#41)
+- migrate provider configs to Field[T] and ImmutableField[T] (PRA-225) (#36)
+
+### Fix
+
+- simplify publish workflow - remove change detection, isolate PyPI uploads
+- add supabase, vercel, github to publish and CI workflows
+- **ci**: update per-provider lockfiles in update-sdk workflow
+- **ci**: pull --rebase before push and fix update-sdk auto-merge
+- use PyPI JSON API for version availability polling (#46)
+- add PyPI availability polling to update-sdk workflow (#45)
+- **gcp**: replace fake $ref syntax with actual reference format in docstrings (#42)
+- remove editable SDK source overrides from provider pyproject.toml files (#38)
+
+### Refactor
+
+- remove provider identity from Python classes (PRA-269)
+
+## gcp-v0.134.0 (2026-02-27)
+
+### Feat
+
+- add pragma store publish to CI/CD pipeline (#35)
+- add kubernetes/namespace resource type (PRA-177) (#34)
+- add store metadata and seed script (PRA-211) (#33)
+- add store metadata fields to provider copier template (PRA-193) (#32)
+- **agno**: add knowledge and content resource support (#30)
+- **agno**: add team resource, runner auth, model discriminators, and memory config (#29)
+
+### Fix
+
+- **gcp**: handle CloudSQL 400 error when deleting non-existent user
+- **agno**: remove wait_ready calls from runner resource application
+- **gcp**: handle HTTP 400 for already-existing CloudSQL databases
+- **agno**: drop --frozen from Dockerfile uv sync (incompatible with --no-sources)
+- **ci**: prevent infinite publish loop on bump commits
+
 ## gcp-v0.161.0 (2026-04-04)
 
 ### Feat
