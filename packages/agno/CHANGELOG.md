@@ -1,3 +1,9 @@
+## agno-v0.112.0 (2026-04-11)
+
+### Feat
+
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+
 ## agno-v0.111.0 (2026-04-07)
 
 ### Feat
