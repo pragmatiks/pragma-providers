@@ -31,6 +31,8 @@ class ToolsMCPSpec(AgnoSpec):
         args: Arguments to pass to the command.
         env: Environment variables.
         transport: Transport type (stdio, sse, streamable-http).
+        requires_confirmation_tools: Tool names that require user confirmation.
+        external_execution_tools: Tool names that require external execution.
     """
 
     url: str | None = None
@@ -38,6 +40,8 @@ class ToolsMCPSpec(AgnoSpec):
     args: list[str] | None = None
     env: dict[str, str] | None = None
     transport: Literal["sse", "stdio", "streamable-http"]
+    requires_confirmation_tools: list[str] | None = None
+    external_execution_tools: list[str] | None = None
 
 
 class ToolsMCPConfig(Config):
@@ -54,6 +58,8 @@ class ToolsMCPConfig(Config):
         include_tools: Only include these tool names (optional filter).
         exclude_tools: Exclude these tool names (optional filter).
         tool_name_prefix: Prefix to add to all tool names (avoids collisions).
+        requires_confirmation_tools: Tool names that require user confirmation before execution.
+        external_execution_tools: Tool names that require external execution approval.
     """
 
     command: Field[str] | None = None
@@ -66,6 +72,8 @@ class ToolsMCPConfig(Config):
     include_tools: Field[list[str]] | None = None
     exclude_tools: Field[list[str]] | None = None
     tool_name_prefix: Field[str] | None = None
+    requires_confirmation_tools: Field[list[str]] | None = None
+    external_execution_tools: Field[list[str]] | None = None
 
     @model_validator(mode="after")
     def validate_transport_config(self) -> ToolsMCPConfig:
@@ -132,7 +140,13 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
         Returns:
             Configured MCPTools instance (not yet connected).
         """
-        return MCPTools(**spec.model_dump(exclude_none=True))
+        kwargs = spec.model_dump(exclude_none=True)
+
+        external_execution_tools = kwargs.pop("external_execution_tools", None)
+        if external_execution_tools is not None:
+            kwargs["external_execution_required_tools"] = external_execution_tools
+
+        return MCPTools(**kwargs)
 
     def _build_spec(self) -> ToolsMCPSpec:
         """Build spec from current config.
@@ -163,6 +177,8 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
             args=args,
             env=env,
             transport=self._infer_transport(),
+            requires_confirmation_tools=self.config.requires_confirmation_tools,
+            external_execution_tools=self.config.external_execution_tools,
         )
 
     def _build_outputs(self) -> ToolsMCPOutputs:
@@ -273,6 +289,12 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
 
         if self.config.tool_name_prefix:
             kwargs["tool_name_prefix"] = self.config.tool_name_prefix
+
+        if self.config.requires_confirmation_tools:
+            kwargs["requires_confirmation_tools"] = self.config.requires_confirmation_tools
+
+        if self.config.external_execution_tools:
+            kwargs["external_execution_required_tools"] = self.config.external_execution_tools
 
         header_provider = self._build_header_provider()
         if header_provider:

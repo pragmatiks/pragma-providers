@@ -27,6 +27,7 @@ class DbPostgresSpec(AgnoSpec):
         db_schema: Database schema for Agno tables.
         session_table: Custom table name for sessions.
         memory_table: Custom table name for memories.
+        approvals_table: Custom table name for HITL approvals.
     """
 
     connection_url: str | None = None
@@ -38,6 +39,7 @@ class DbPostgresSpec(AgnoSpec):
     db_schema: str = "ai"
     session_table: str | None = None
     memory_table: str | None = None
+    approvals_table: str | None = None
 
     @computed_field
     @property
@@ -116,6 +118,7 @@ class DbPostgresConfig(Config):
         db_schema: Database schema for Agno tables. Defaults to "ai".
         session_table: Custom table name for sessions.
         memory_table: Custom table name for memories.
+        approvals_table: Custom table name for HITL approvals.
     """
 
     connection_url: Field[str] | None = None
@@ -130,6 +133,7 @@ class DbPostgresConfig(Config):
     db_schema: Field[str] = "ai"
     session_table: Field[str] | None = None
     memory_table: Field[str] | None = None
+    approvals_table: Field[str] | None = None
 
     @model_validator(mode="after")
     def validate_connection_config(self) -> DbPostgresConfig:
@@ -203,6 +207,9 @@ class DbPostgres(AgnoResource[DbPostgresConfig, DbPostgresOutputs, DbPostgresSpe
         if spec.memory_table:
             kwargs["memory_table"] = spec.memory_table
 
+        if spec.approvals_table:
+            kwargs["approvals_table"] = spec.approvals_table
+
         return AsyncPostgresDb(**kwargs)
 
     def _build_spec(self) -> DbPostgresSpec:
@@ -244,6 +251,7 @@ class DbPostgres(AgnoResource[DbPostgresConfig, DbPostgresOutputs, DbPostgresSpe
             db_schema=self.config.db_schema,
             session_table=self.config.session_table,
             memory_table=self.config.memory_table,
+            approvals_table=self.config.approvals_table,
         )
 
     def _build_outputs(self) -> DbPostgresOutputs:
