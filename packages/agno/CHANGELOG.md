@@ -1,3 +1,10 @@
+## agno-v0.113.0 (2026-04-12)
+
+### Feat
+
+- **agno**: add output_schema for structured agent responses
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+
 ## agno-v0.112.0 (2026-04-11)
 
 ### Feat
