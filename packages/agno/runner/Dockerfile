@@ -5,6 +5,11 @@
 #
 # Build from agno package root:
 #   docker build -f runner/Dockerfile -t ghcr.io/pragmatiks/agno-runner:latest .
+#
+# Optional: pass the current provider version so it is recorded as an image label:
+#   docker build -f runner/Dockerfile \
+#     --build-arg PROVIDER_VERSION="$(cz version --project)" \
+#     -t ghcr.io/pragmatiks/agno-runner:latest .
 
 FROM python:3.13-slim AS builder
 
@@ -26,6 +31,14 @@ RUN uv sync --no-sources --no-dev --no-editable
 
 # --- Final image ---
 FROM python:3.13-slim
+
+ARG PROVIDER_VERSION=dev
+
+LABEL org.opencontainers.image.title="pragma-agno-runner"
+LABEL org.opencontainers.image.description="Runtime container for Pragma agno agents and teams."
+LABEL org.opencontainers.image.source="https://github.com/pragmatiks/pragma-providers"
+LABEL org.opencontainers.image.version="${PROVIDER_VERSION}"
+LABEL ai.pragmatiks.agno-runner.features="output_schema"
 
 # Node.js is needed for MCP tools that use npx
 RUN apt-get update && \

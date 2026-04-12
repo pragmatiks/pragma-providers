@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Any
 
 from agno.agent import Agent as AgnoAgent
 from pragma_sdk import Config, Dependency, Field, Outputs
+from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
@@ -28,6 +30,9 @@ from agno_provider.resources.tools.mcp import ToolsMCP, ToolsMCPOutputs, ToolsMC
 from agno_provider.resources.tools.websearch import ToolsWebSearch, ToolsWebSearchOutputs, ToolsWebSearchSpec
 
 
+logger = logging.getLogger(__name__)
+
+
 class AgentSpec(AgnoSpec):
     """Specification for reconstructing an Agno Agent at runtime.
 
@@ -46,6 +51,13 @@ class AgentSpec(AgnoSpec):
         memory_spec: Nested memory manager specification.
         db_spec: Nested PostgreSQL database specification.
         prompt_spec: Nested prompt template specification.
+        output_schema: JSON schema describing the structured output the agent
+            must produce. When set, the runner converts it to a Pydantic class
+            at agent construction time so runs return typed objects instead of
+            raw strings. Must be a valid JSON schema with ``type: object`` at
+            the top level. Non-object top-level types are unsupported by
+            agno's ``json_schema_to_pydantic_model`` helper. When absent, the
+            agent produces unstructured string output.
         markdown: Whether the agent formats responses in Markdown.
         add_datetime_to_context: Include current date/time in context.
         read_chat_history: Read chat history from the database.
@@ -67,6 +79,7 @@ class AgentSpec(AgnoSpec):
     memory_spec: MemoryManagerSpec | None = None
     db_spec: DbPostgresSpec | None = None
     prompt_spec: PromptSpec | None = None
+    output_schema: dict[str, Any] | None = None
     markdown: bool = False
     add_datetime_to_context: bool = False
     read_chat_history: bool | None = None
@@ -92,6 +105,12 @@ class AgentConfig(Config):
         knowledge: Knowledge base dependency for semantic search (RAG).
         db: PostgreSQL database dependency for session and chat history storage.
         memory: Memory manager dependency for persistent agent memory.
+        output_schema: Optional JSON schema for typed, structured responses.
+            The runner turns the schema into a Pydantic class at agent
+            construction time. Must be a valid JSON schema with ``type: object``
+            at the top level; non-object top-level types are unsupported by
+            agno's ``json_schema_to_pydantic_model``. When absent, the agent
+            returns plain string output.
         markdown: Whether the agent should format responses in Markdown.
         add_datetime_to_context: Include current date/time in the agent's context.
         read_chat_history: Read chat history from the database. Defaults to True when db is set.
@@ -120,6 +139,8 @@ class AgentConfig(Config):
 
     memory: Dependency[MemoryManager] | None = None
 
+    output_schema: Field[dict[str, Any]] | None = None
+
     markdown: Field[bool] = False
     add_datetime_to_context: Field[bool] = False
     read_chat_history: Field[bool] | None = None
@@ -141,6 +162,71 @@ class AgentOutputs(Outputs):
 
     spec: AgentSpec
     pip_dependencies: list[str]
+
+
+def _build_output_schema_class(
+    agent_name: str,
+    output_schema: dict[str, Any] | None,
+) -> type[BaseModel] | None:
+    """Convert a JSON schema to a Pydantic class for agno's output_schema.
+
+    Delegates to agno's ``json_schema_to_pydantic_model`` helper, which only
+    supports top-level ``type: object`` schemas. A broken or unsupported
+    schema must not take down the runner, so this function logs a warning
+    and returns None on any failure. Callers can then fall back to
+    unstructured string output.
+
+    The Pydantic model's class name comes from ``schema["title"]`` when set;
+    otherwise the agent's resource name is injected as the title so the
+    generated class has a stable, meaningful identifier.
+
+    Args:
+        agent_name: Resource name used as a fallback title for the dynamic
+            Pydantic class when the schema has no ``title``.
+        output_schema: JSON schema dict with ``type: object`` at the top
+            level, or None.
+
+    Returns:
+        Dynamically created Pydantic BaseModel class, or None if no schema
+        was provided, the schema is malformed, or conversion failed.
+    """
+    if output_schema is None:
+        return None
+
+    if not isinstance(output_schema, dict):
+        logger.warning(
+            "output_schema for agent %r must be a dict, got %s; falling back to unstructured output.",
+            agent_name,
+            type(output_schema).__name__,
+        )
+        return None
+
+    top_level_type = output_schema.get("type")
+    if top_level_type != "object":
+        logger.warning(
+            "output_schema for agent %r must have top-level type 'object', got %r; "
+            "agno.os.utils.json_schema_to_pydantic_model only supports object schemas. "
+            "Falling back to unstructured output.",
+            agent_name,
+            top_level_type,
+        )
+        return None
+
+    schema_with_title = output_schema
+    if "title" not in output_schema:
+        schema_with_title = {"title": agent_name, **output_schema}
+
+    from agno.os.utils import json_schema_to_pydantic_model  # noqa: PLC0415
+
+    try:
+        return json_schema_to_pydantic_model(schema_with_title)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Failed to build output_schema Pydantic class for agent %r: %s. Falling back to unstructured output.",
+            agent_name,
+            exc,
+        )
+        return None
 
 
 class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
@@ -225,6 +311,8 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
         if add_history_to_context is None:
             add_history_to_context = db is not None
 
+        output_schema = _build_output_schema_class(spec.name, spec.output_schema)
+
         return AgnoAgent(
             name=spec.name,
             description=spec.description,
@@ -235,6 +323,7 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
             db=db,
             tools=tools if tools else None,
             instructions=instructions,
+            output_schema=output_schema,
             markdown=spec.markdown,
             add_datetime_to_context=spec.add_datetime_to_context,
             read_chat_history=read_chat_history,
@@ -321,6 +410,7 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
             memory_spec=memory_spec,
             db_spec=db_spec,
             prompt_spec=prompt_spec,
+            output_schema=self.config.output_schema,
             markdown=self.config.markdown,
             add_datetime_to_context=self.config.add_datetime_to_context,
             read_chat_history=self.config.read_chat_history,
