@@ -1,10 +1,10 @@
-"""Agno Runner resource - deploys agents or teams to Kubernetes."""
+"""Agno Runner resource - deploys agents, teams, and workflows to Kubernetes."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Literal
+from typing import Any
 
 from kubernetes_provider import (
     Deployment as KubernetesDeployment,
@@ -47,14 +47,15 @@ from agno_provider.resources.team import Team, TeamOutputs, TeamSpec
 class RunnerSpec(AgnoSpec):
     """Specification for reconstructing a Runner configuration.
 
-    Contains all runner configuration including the nested agent or team spec.
-    Used for tracking what was deployed.
+    Contains all runner configuration including the nested agent, team, and
+    workflow specs. Used for tracking what was deployed.
 
     Attributes:
         name: Runner name (Kubernetes deployment name).
         namespace: Kubernetes namespace where the runner is deployed.
-        agent_spec: Nested agent spec if deploying a single agent.
-        team_spec: Nested team spec if deploying a team.
+        agent_specs: Nested agent specs deployed on this runner.
+        team_specs: Nested team specs deployed on this runner.
+        workflow_specs: Nested workflow specs deployed on this runner.
         replicas: Number of pod replicas.
         image: Container image used for the runner pods.
         cpu: CPU resource request.
@@ -64,8 +65,9 @@ class RunnerSpec(AgnoSpec):
 
     name: str
     namespace: str
-    agent_spec: AgentSpec | None = None
-    team_spec: TeamSpec | None = None
+    agent_specs: list[AgentSpec] = []
+    team_specs: list[TeamSpec] = []
+    workflow_specs: list[Any] = []
     replicas: int
     image: str
     cpu: str
@@ -74,17 +76,20 @@ class RunnerSpec(AgnoSpec):
 
 
 class RunnerConfig(Config):
-    """Configuration for deploying an Agno agent or team to Kubernetes.
+    """Configuration for deploying Agno agents, teams, and workflows to Kubernetes.
 
-    Exactly one of agent or team must be provided.
+    A single runner can host multiple agents, teams, and workflows in one
+    AgentOS instance. At least one entity across the three lists is required.
 
     Attributes:
-        agent: Agent dependency to deploy. Mutually exclusive with team.
-        team: Team dependency to deploy. Mutually exclusive with agent.
+        agents: Agent dependencies to deploy on this runner.
+        teams: Team dependencies to deploy on this runner.
+        workflows: Workflow dependencies to deploy on this runner. Must be empty
+            in v1; reserved for when the Workflow resource type is introduced.
         config: Kubernetes config dependency providing cluster access.
         namespace: Kubernetes namespace dependency for the runner pods.
         replicas: Number of pod replicas. Defaults to 1.
-        image: Container image for running the agent/team.
+        image: Container image for running the agents/teams/workflows.
         security_key: Bearer token for AgentOS basic auth (dev environments).
         jwt_verification_key: Public key for JWT/RBAC auth (production environments).
         public: Expose the service via LoadBalancer instead of ClusterIP. Defaults to False.
@@ -92,8 +97,9 @@ class RunnerConfig(Config):
         memory: Memory resource request and limit (e.g., "1Gi", "2Gi"). Defaults to "1Gi".
     """
 
-    agent: Dependency[Agent] | None = None
-    team: Dependency[Team] | None = None
+    agents: list[Dependency[Agent]] = []
+    teams: list[Dependency[Team]] = []
+    workflows: list[Any] = []
 
     config: ImmutableDependency[KubernetesConfig]
     namespace: Dependency[Namespace]
@@ -107,24 +113,26 @@ class RunnerConfig(Config):
     memory: Field[str] = "1Gi"
 
     @model_validator(mode="after")
-    def validate_exactly_one_target(self) -> RunnerConfig:
-        """Validate that exactly one of agent or team is provided.
+    def validate_at_least_one_entity(self) -> RunnerConfig:
+        """Validate that at least one agent, team, or workflow is provided.
 
         Returns:
             Self after validation.
 
         Raises:
-            ValueError: If neither or both of agent and team are provided.
+            ValueError: If no entities are provided, or if workflows is non-empty
+                (the Workflow resource type is not yet implemented).
         """
-        has_agent = self.agent is not None
-        has_team = self.team is not None
-
-        if not has_agent and not has_team:
-            msg = "Either agent or team must be provided"
+        if self.workflows:
+            msg = (
+                "workflows is reserved for a future release; pass an empty "
+                "list until the Workflow resource type is introduced"
+            )
             raise ValueError(msg)
 
-        if has_agent and has_team:
-            msg = "Only one of agent or team can be provided, not both"
+        total = len(self.agents) + len(self.teams) + len(self.workflows)
+        if total < 1:
+            msg = "At least one agent, team, or workflow must be provided"
             raise ValueError(msg)
 
         return self
@@ -145,27 +153,26 @@ class RunnerOutputs(Outputs):
 
 
 class Runner(Resource[RunnerConfig, RunnerOutputs]):
-    """Agno agent/team runner on Kubernetes.
+    """Agno multi-entity runner on Kubernetes.
 
     This is the ONLY agno resource that creates infrastructure. It deploys
-    either an agent or a team as a Kubernetes Deployment + Service using
-    child kubernetes provider resources.
+    one or more agents, teams, and workflows into a single AgentOS instance
+    served by a Kubernetes Deployment + Service using child kubernetes
+    provider resources.
 
-    The container receives the agent/team spec as JSON environment variables:
-    - AGNO_SPEC_TYPE: "agent" or "team"
-    - AGNO_SPEC_JSON: JSON-serialized AgentSpec or TeamSpec
-
-    The container image uses these to reconstruct the agent/team at startup.
+    The container receives entity specs as JSON environment variables. The
+    transport contract is versioned with the container image; see the runner
+    package for the current wire format.
 
     Example YAML:
         provider: agno
         resource: runner
         name: my-agent-runner
         config:
-          agent:
-            provider: agno
-            resource: agent
-            name: my-agent
+          agents:
+            - provider: agno
+              resource: agent
+              name: my-agent
           config:
             provider: kubernetes
             resource: config
@@ -231,60 +238,72 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
 
         return ns.outputs.name
 
-    async def _get_spec_info(self) -> tuple[Literal["agent", "team"], AgentSpec | TeamSpec]:
-        """Get spec type and spec from resolved dependency.
+    async def _resolve_entity_specs(self) -> tuple[list[AgentSpec], list[TeamSpec]]:
+        """Resolve every agent and team dependency into their specs.
 
         Returns:
-            Tuple of (spec_type, spec).
+            Tuple of (agent_specs, team_specs) in declaration order.
 
         Raises:
-            RuntimeError: If dependency outputs are not available.
+            RuntimeError: If any dependency outputs are not available.
         """
-        if self.config.agent is not None:
-            agent = await self.config.agent.resolve()
+        agent_specs: list[AgentSpec] = []
+        for agent_dep in self.config.agents:
+            agent = await agent_dep.resolve()
 
             if agent.outputs is None:
                 msg = "Agent dependency outputs not available"
                 raise RuntimeError(msg)
 
             assert isinstance(agent.outputs, AgentOutputs)
-            return ("agent", agent.outputs.spec)
+            agent_specs.append(agent.outputs.spec)
 
-        if self.config.team is not None:
-            team = await self.config.team.resolve()
+        team_specs: list[TeamSpec] = []
+        for team_dep in self.config.teams:
+            team = await team_dep.resolve()
 
             if team.outputs is None:
                 msg = "Team dependency outputs not available"
                 raise RuntimeError(msg)
 
             assert isinstance(team.outputs, TeamOutputs)
-            return ("team", team.outputs.spec)
+            team_specs.append(team.outputs.spec)
 
-        msg = "Neither agent nor team dependency is set"
-        raise RuntimeError(msg)
+        return agent_specs, team_specs
 
     def _build_kubernetes_deployment(
         self,
         namespace_name: str,
-        spec_type: Literal["agent", "team"],
-        spec: AgentSpec | TeamSpec,
+        agent_specs: list[AgentSpec],
+        team_specs: list[TeamSpec],
     ) -> KubernetesDeployment:
         """Build kubernetes/deployment child resource.
 
         Args:
             namespace_name: Resolved namespace name string.
-            spec_type: Type of spec ("agent" or "team").
-            spec: The agent or team spec to deploy.
+            agent_specs: Agent specs to deploy on this runner.
+            team_specs: Team specs to deploy on this runner.
 
         Returns:
             Kubernetes Deployment resource ready to apply.
+
+        Raises:
+            RuntimeError: If both agent_specs and team_specs are empty.
         """
         labels = self._labels()
-        spec_json = spec.model_dump_json()
+
+        primary_spec: AgentSpec | TeamSpec | None = (
+            agent_specs[0] if agent_specs else (team_specs[0] if team_specs else None)
+        )
+        primary_type = "agent" if agent_specs else "team"
+
+        if primary_spec is None:
+            msg = "Runner requires at least one agent or team spec"
+            raise RuntimeError(msg)
 
         env = {
-            "AGNO_SPEC_TYPE": spec_type,
-            "AGNO_SPEC_JSON": spec_json,
+            "AGNO_SPEC_TYPE": primary_type,
+            "AGNO_SPEC_JSON": primary_spec.model_dump_json(),
         }
 
         if self.config.security_key:
@@ -414,14 +433,16 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
     def _build_outputs(
         self,
         namespace_name: str,
-        spec: AgentSpec | TeamSpec,
+        agent_specs: list[AgentSpec],
+        team_specs: list[TeamSpec],
         ready: bool,
     ) -> RunnerOutputs:
         """Build runner outputs.
 
         Args:
             namespace_name: Resolved namespace name string.
-            spec: The agent or team spec deployed.
+            agent_specs: Agent specs deployed on this runner.
+            team_specs: Team specs deployed on this runner.
             ready: Whether runner is ready.
 
         Returns:
@@ -430,8 +451,9 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         runner_spec = RunnerSpec(
             name=self._runner_name(),
             namespace=namespace_name,
-            agent_spec=spec if isinstance(spec, AgentSpec) else None,
-            team_spec=spec if isinstance(spec, TeamSpec) else None,
+            agent_specs=agent_specs,
+            team_specs=team_specs,
+            workflow_specs=[],
             replicas=self.config.replicas,
             image=self.config.image,
             cpu=self.config.cpu,
@@ -448,17 +470,17 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
     async def _apply_kubernetes_resources(
         self,
         namespace_name: str,
-        spec_type: Literal["agent", "team"],
-        spec: AgentSpec | TeamSpec,
+        agent_specs: list[AgentSpec],
+        team_specs: list[TeamSpec],
     ) -> None:
         """Apply kubernetes deployment and service as child resources.
 
         Args:
             namespace_name: Resolved namespace name string.
-            spec_type: Type of spec ("agent" or "team").
-            spec: The agent or team spec to deploy.
+            agent_specs: Agent specs to deploy on this runner.
+            team_specs: Team specs to deploy on this runner.
         """
-        kubernetes_deployment = self._build_kubernetes_deployment(namespace_name, spec_type, spec)
+        kubernetes_deployment = self._build_kubernetes_deployment(namespace_name, agent_specs, team_specs)
         await kubernetes_deployment.apply()
 
         kubernetes_service = self._build_kubernetes_service(namespace_name)
@@ -468,12 +490,12 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         """Get kubernetes deployment resource for current spec.
 
         Returns:
-            Kubernetes Deployment resource configured for current agent/team.
+            Kubernetes Deployment resource configured for current entities.
         """
         namespace_name = await self._resolve_namespace_name()
-        spec_type, spec = await self._get_spec_info()
+        agent_specs, team_specs = await self._resolve_entity_specs()
 
-        return self._build_kubernetes_deployment(namespace_name, spec_type, spec)
+        return self._build_kubernetes_deployment(namespace_name, agent_specs, team_specs)
 
     async def on_create(self) -> RunnerOutputs:
         """Create Kubernetes Deployment + Service.
@@ -482,11 +504,11 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             RunnerOutputs with runner details.
         """
         namespace_name = await self._resolve_namespace_name()
-        spec_type, spec = await self._get_spec_info()
+        agent_specs, team_specs = await self._resolve_entity_specs()
 
-        await self._apply_kubernetes_resources(namespace_name, spec_type, spec)
+        await self._apply_kubernetes_resources(namespace_name, agent_specs, team_specs)
 
-        return self._build_outputs(namespace_name, spec, ready=True)
+        return self._build_outputs(namespace_name, agent_specs, team_specs, ready=True)
 
     async def on_update(self, previous_config: RunnerConfig) -> RunnerOutputs:
         """Update Kubernetes Deployment + Service.
@@ -509,11 +531,11 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             raise ValueError(msg)
 
         namespace_name = await self._resolve_namespace_name()
-        spec_type, spec = await self._get_spec_info()
+        agent_specs, team_specs = await self._resolve_entity_specs()
 
-        await self._apply_kubernetes_resources(namespace_name, spec_type, spec)
+        await self._apply_kubernetes_resources(namespace_name, agent_specs, team_specs)
 
-        return self._build_outputs(namespace_name, spec, ready=True)
+        return self._build_outputs(namespace_name, agent_specs, team_specs, ready=True)
 
     async def on_delete(self) -> None:
         """Delete Kubernetes Deployment + Service.
