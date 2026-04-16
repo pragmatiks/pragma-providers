@@ -6,7 +6,6 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Literal
 
-from gcp_provider import GKE
 from kubernetes_provider import (
     Deployment as KubernetesDeployment,
 )
@@ -14,6 +13,7 @@ from kubernetes_provider import (
     DeploymentConfig as KubernetesDeploymentConfig,
 )
 from kubernetes_provider import (
+    KubernetesConfig,
     Namespace,
     NamespaceOutputs,
     Service,
@@ -27,7 +27,16 @@ from kubernetes_provider.resources.deployment import (
     ResourceRequirementsConfig,
 )
 from kubernetes_provider.resources.service import PortConfig
-from pragma_sdk import Config, Dependency, Field, HealthStatus, LogEntry, Outputs, Resource
+from pragma_sdk import (
+    Config,
+    Dependency,
+    Field,
+    HealthStatus,
+    ImmutableDependency,
+    LogEntry,
+    Outputs,
+    Resource,
+)
 from pydantic import model_validator
 
 from agno_provider.resources.agent import Agent, AgentOutputs, AgentSpec
@@ -72,7 +81,7 @@ class RunnerConfig(Config):
     Attributes:
         agent: Agent dependency to deploy. Mutually exclusive with team.
         team: Team dependency to deploy. Mutually exclusive with agent.
-        cluster: GKE cluster dependency providing Kubernetes credentials.
+        config: Kubernetes config dependency providing cluster access.
         namespace: Kubernetes namespace dependency for the runner pods.
         replicas: Number of pod replicas. Defaults to 1.
         image: Container image for running the agent/team.
@@ -86,7 +95,7 @@ class RunnerConfig(Config):
     agent: Dependency[Agent] | None = None
     team: Dependency[Team] | None = None
 
-    cluster: Dependency[GKE]
+    config: ImmutableDependency[KubernetesConfig]
     namespace: Dependency[Namespace]
     replicas: Field[int] = 1
     image: Field[str] = "ghcr.io/pragmatiks/agno-runner:latest"
@@ -157,10 +166,10 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             provider: agno
             resource: agent
             name: my-agent
-          cluster:
-            provider: gcp
-            resource: gke
-            name: my-cluster
+          config:
+            provider: kubernetes
+            resource: config
+            name: my-kubernetes-config
           namespace:
             provider: kubernetes
             resource: namespace
@@ -316,7 +325,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         )
 
         config = KubernetesDeploymentConfig(
-            cluster=self.config.cluster,
+            config=self.config.config,
             namespace=namespace_name,
             replicas=self.config.replicas,
             selector=labels,
@@ -345,7 +354,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         service_type = "LoadBalancer" if self.config.public else "ClusterIP"
 
         config = ServiceConfig(
-            cluster=self.config.cluster,
+            config=self.config.config,
             namespace=namespace_name,
             type=service_type,
             selector=labels,
@@ -379,7 +388,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         )
 
         config = KubernetesDeploymentConfig(
-            cluster=self.config.cluster,
+            config=self.config.config,
             namespace=namespace_name,
             replicas=1,
             selector=labels,
@@ -491,8 +500,8 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         Raises:
             ValueError: If immutable fields changed.
         """
-        if previous_config.cluster.id != self.config.cluster.id:
-            msg = "Cannot change cluster; delete and recreate resource"
+        if previous_config.config.id != self.config.config.id:
+            msg = "Cannot change config; delete and recreate resource"
             raise ValueError(msg)
 
         if previous_config.namespace.id != self.config.namespace.id:
