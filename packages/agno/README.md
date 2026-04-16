@@ -28,8 +28,8 @@ namespace (kubernetes) ─────┘
 
 1. Configuration resources (models, tools, knowledge, etc.) resolve their dependencies and produce a serializable `Spec`
 2. The `agent` or `team` resource aggregates all specs from its dependencies into a single `AgentSpec` or `TeamSpec`
-3. The `runner` resource deploys the agent/team to Kubernetes by passing the spec as JSON environment variables
-4. The container image reconstructs the full agent/team from the spec at startup using `from_spec()` factory methods
+3. The `runner` resource deploys one or more agents and teams to Kubernetes by passing the combined specs as a JSON environment variable
+4. The container image reconstructs every agent/team from the spec payload at startup using `from_spec()` factory methods and registers them with a single AgentOS instance
 5. When any dependency changes (e.g., a model API key rotates), Pragma propagates the change through the dependency graph and redeploys automatically
 
 ## Prerequisites
@@ -37,7 +37,7 @@ namespace (kubernetes) ─────┘
 - A `kubernetes/config` resource providing cluster access (in-cluster, a GKE cluster, or an external kubeconfig)
 - A Kubernetes namespace managed by the `kubernetes` provider
 - API keys for your chosen model provider (OpenAI, Anthropic)
-- An Agno runner container image (default: `ghcr.io/pragmatiks/agno-runner:latest`)
+- An Agno runner container image (default: `ghcr.io/pragmatiks/agno-runner:v2`)
 - For knowledge/RAG: a Qdrant vector database instance
 - For memory/sessions: a PostgreSQL database instance
 
@@ -53,7 +53,7 @@ pragma providers install agno
 |----------|-----------|-------------|
 | Agent | `agent` | AI agent definition with model, tools, knowledge, and memory |
 | Team | `team` | Coordinated group of agents with shared resources |
-| Runner | `runner` | Deploys an agent or team to Kubernetes as a Deployment + Service |
+| Runner | `runner` | Deploys one or more agents/teams to Kubernetes as a Deployment + Service |
 | Prompt | `prompt` | Reusable instruction template with variable interpolation |
 | OpenAI Model | `models/openai` | OpenAI model configuration (GPT-4o, etc.) |
 | Anthropic Model | `models/anthropic` | Anthropic model configuration (Claude, etc.) |
@@ -218,8 +218,8 @@ provider: agno
 resource: runner
 name: support-agent
 config:
-  agent:
-    ref: agno/agent/support-agent
+  agents:
+    - ref: agno/agent/support-agent
   config:
     ref: kubernetes/config/main-cluster
   namespace:
@@ -278,8 +278,8 @@ provider: agno
 resource: runner
 name: content-team
 config:
-  team:
-    ref: agno/team/content-team
+  teams:
+    - ref: agno/team/content-team
   config:
     ref: kubernetes/config/main-cluster
   namespace:

@@ -105,7 +105,7 @@ class RunnerConfig(Config):
     config: ImmutableDependency[KubernetesConfig]
     namespace: Dependency[Namespace]
     replicas: Field[int] = 1
-    image: Field[str] = "ghcr.io/pragmatiks/agno-runner:latest"
+    image: Field[str] = "ghcr.io/pragmatiks/agno-runner:v2"
     security_key: Field[str] | None = None
     jwt_verification_key: Field[str] | None = None
     public: Field[bool] = False

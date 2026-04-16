@@ -1,14 +1,23 @@
 # Agno runner container image.
 #
-# Serves an Agno agent or team as an HTTP API using AgentOS.
-# The agent/team is reconstructed from spec JSON passed via environment variables.
+# Serves one or more Agno agents, teams, and workflows as an HTTP API using
+# a single AgentOS instance. Entities are reconstructed at startup from the
+# AGNO_SPECS_JSON environment variable.
+#
+# This image is tagged with a major version (v2, v3, ...) that matches the
+# transport contract expected by the agno provider's Runner resource. The
+# wire format is otherwise unversioned -- bump the tag whenever the env-var
+# contract changes and update the Runner default image in lockstep.
 #
 # Build from agno package root:
-#   docker build -f runner/Dockerfile -t ghcr.io/pragmatiks/agno-runner:latest .
+#   docker build -f runner/Dockerfile \
+#     -t ghcr.io/pragmatiks/agno-runner:v2 \
+#     -t ghcr.io/pragmatiks/agno-runner:latest .
 #
 # Optional: pass the current provider version so it is recorded as an image label:
 #   docker build -f runner/Dockerfile \
 #     --build-arg PROVIDER_VERSION="$(cz version --project)" \
+#     -t ghcr.io/pragmatiks/agno-runner:v2 \
 #     -t ghcr.io/pragmatiks/agno-runner:latest .
 
 FROM python:3.13-slim AS builder
@@ -38,7 +47,8 @@ LABEL org.opencontainers.image.title="pragma-agno-runner"
 LABEL org.opencontainers.image.description="Runtime container for Pragma agno agents and teams."
 LABEL org.opencontainers.image.source="https://github.com/pragmatiks/pragma-providers"
 LABEL org.opencontainers.image.version="${PROVIDER_VERSION}"
-LABEL ai.pragmatiks.agno-runner.features="output_schema"
+LABEL ai.pragmatiks.agno-runner.features="output_schema,multi_entity"
+LABEL ai.pragmatiks.agno-runner.transport="v2"
 
 # Node.js is needed for MCP tools that use npx
 RUN apt-get update && \
