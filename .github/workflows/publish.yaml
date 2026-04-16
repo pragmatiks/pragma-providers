@@ -761,6 +761,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      packages: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -879,3 +880,49 @@ jobs:
         run: |
           cd packages/agno
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+
+      - name: Read runner transport version
+        id: runner-transport
+        run: |
+          TRANSPORT=$(grep -E '^LABEL ai\.pragmatiks\.agno-runner\.transport=' packages/agno/runner/Dockerfile \
+            | sed -E 's/.*transport="([^"]+)".*/\1/')
+          if [ -z "$TRANSPORT" ]; then
+            echo "Failed to parse agno-runner transport version from Dockerfile"
+            exit 1
+          fi
+          echo "transport=$TRANSPORT" >> "$GITHUB_OUTPUT"
+          echo "Runner transport version: $TRANSPORT"
+
+      - name: Resolve provider version for image label
+        id: runner-provider-version
+        run: |
+          cd packages/agno
+          VERSION="${{ steps.bump.outputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION=$(cz version --project)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Provider version for image: $VERSION"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push agno runner image
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/agno
+          file: packages/agno/runner/Dockerfile
+          push: true
+          platforms: linux/amd64
+          build-args: |
+            PROVIDER_VERSION=${{ steps.runner-provider-version.outputs.version }}
+          tags: |
+            ghcr.io/pragmatiks/agno-runner:${{ steps.runner-transport.outputs.transport }}
+            ghcr.io/pragmatiks/agno-runner:latest
