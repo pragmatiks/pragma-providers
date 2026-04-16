@@ -1,17 +1,17 @@
 # Qdrant Provider
 
-Manage [Qdrant](https://qdrant.tech) vector database deployments and collections through the Pragmatiks platform. Deploy self-hosted Qdrant instances to GKE, or manage collections on existing Qdrant Cloud or local instances.
+Manage [Qdrant](https://qdrant.tech) vector database deployments and collections through the Pragmatiks platform. Deploy self-hosted Qdrant instances to any Kubernetes cluster, or manage collections on existing Qdrant Cloud or local instances.
 
 ## Resources
 
 | Resource | Type Slug | Description |
 |----------|-----------|-------------|
-| [Database](#database-qdrantdatabase) | `qdrant/database` | Self-hosted Qdrant deployment on GKE with persistent storage and LoadBalancer access |
+| [Database](#database-qdrantdatabase) | `qdrant/database` | Self-hosted Qdrant deployment with persistent storage and LoadBalancer access |
 | [Collection](#collection-qdrantcollection) | `qdrant/collection` | Vector collection for similarity search on any Qdrant instance |
 
 ## Prerequisites
 
-- **For Database resources:** A GKE cluster managed by the `gcp` provider (`gcp/gke` resource). The cluster must support LoadBalancer services for external access.
+- **For Database resources:** A `kubernetes/config` resource pointing at the target cluster. The cluster must support LoadBalancer services for external access.
 - **For Collection resources:** A running Qdrant instance -- either a Database resource from this provider, a [Qdrant Cloud](https://cloud.qdrant.io) cluster, or any self-hosted Qdrant server accessible via HTTP.
 - **API key** (optional): Required for Qdrant Cloud. For self-hosted, can be generated automatically or provided explicitly.
 
@@ -25,13 +25,13 @@ pragma providers install qdrant
 
 ## Database (`qdrant/database`)
 
-Deploys a Qdrant vector database to a GKE cluster as a Kubernetes StatefulSet with persistent storage. Creates a headless Service for pod DNS, a StatefulSet with configurable replicas and storage, and a LoadBalancer Service for external HTTP and gRPC access.
+Deploys a Qdrant vector database to a Kubernetes cluster as a StatefulSet with persistent storage. Creates a headless Service for pod DNS, a StatefulSet with configurable replicas and storage, and a LoadBalancer Service for external HTTP and gRPC access.
 
 **Config:**
 
 | Field | Type | Required | Mutable | Default | Description |
 |-------|------|----------|---------|---------|-------------|
-| `cluster` | dependency | yes | no | -- | GKE cluster to deploy to (`gcp/gke` resource) |
+| `config` | dependency | yes | no | -- | `kubernetes/config` resource for cluster access |
 | `replicas` | int | no | yes | `1` | Number of Qdrant StatefulSet pods |
 | `image` | string | no | yes | `"qdrant/qdrant:latest"` | Qdrant Docker image |
 | `api_key` | string | no | yes | -- | Explicit API key for authentication (mutually exclusive with `generate_api_key`) |
@@ -63,8 +63,8 @@ resources:
     provider: qdrant
     type: database
     config:
-      cluster:
-        $ref: my-gke-cluster
+      config:
+        $ref: my-kubernetes-config
       replicas: 1
       generate_api_key: true
       storage:
@@ -77,7 +77,7 @@ resources:
 
 **Behavior:**
 - Create: Deploys headless Service, StatefulSet, and LoadBalancer Service sequentially. Waits for each to be ready and for the LoadBalancer to receive an external IP (up to 5 minutes).
-- Update: Reapplies all child Kubernetes resources with updated configuration. Skips reapply if config is unchanged. Cluster changes require delete and recreate.
+- Update: Reapplies all child Kubernetes resources with updated configuration. Skips reapply if config is unchanged. Changing the `config` dependency requires delete and recreate.
 - Delete: Explicitly removes child Kubernetes resources (LoadBalancer Service, StatefulSet, headless Service).
 - Health: Delegates to the underlying StatefulSet health check.
 - Logs: Streams pod logs from the underlying StatefulSet.
@@ -167,13 +167,22 @@ resources:
       credentials:
         $ref: gcp-credentials
 
-  # 2. Self-hosted Qdrant database
+  # 2. Kubernetes config authenticating against the GKE cluster
+  - name: my-kubernetes-config
+    provider: kubernetes
+    type: config
+    config:
+      mode: gke_cluster
+      cluster:
+        $ref: my-cluster
+
+  # 3. Self-hosted Qdrant database
   - name: vector-db
     provider: qdrant
     type: database
     config:
-      cluster:
-        $ref: my-cluster
+      config:
+        $ref: my-kubernetes-config
       generate_api_key: true
       storage:
         size: 50Gi
