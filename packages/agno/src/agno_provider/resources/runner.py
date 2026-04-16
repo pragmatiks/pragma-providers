@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
@@ -43,6 +44,30 @@ from pydantic import model_validator
 from agno_provider.resources.agent import Agent, AgentOutputs, AgentSpec
 from agno_provider.resources.base import AgnoSpec
 from agno_provider.resources.team import Team, TeamOutputs, TeamSpec
+
+
+logger = logging.getLogger(__name__)
+
+
+def _find_duplicates(names: list[str]) -> list[str]:
+    """Return names that appear more than once, in order of first repeat.
+
+    Args:
+        names: Candidate names to scan for duplicates.
+
+    Returns:
+        Sorted list of names that appear two or more times.
+    """
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+
+    for name in names:
+        if name in seen:
+            duplicates.add(name)
+        else:
+            seen.add(name)
+
+    return sorted(duplicates)
 
 
 class RunnerSpec(AgnoSpec):
@@ -115,7 +140,7 @@ class RunnerConfig(Config):
 
     @model_validator(mode="after")
     def validate_at_least_one_entity(self) -> RunnerConfig:
-        """Validate that at least one agent, team, or workflow is provided.
+        """Validate that at least one agent or team is provided.
 
         Returns:
             Self after validation.
@@ -131,10 +156,46 @@ class RunnerConfig(Config):
             )
             raise ValueError(msg)
 
-        total = len(self.agents) + len(self.teams) + len(self.workflows)
+        total = len(self.agents) + len(self.teams)
         if total < 1:
-            msg = "At least one agent, team, or workflow must be provided"
+            msg = "At least one agent or team must be provided"
             raise ValueError(msg)
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_entity_names(self) -> RunnerConfig:
+        """Validate that agent and team names are unique within their own list.
+
+        Two agents or two teams sharing the same name cause AgentOS to raise a
+        ValueError at startup. An agent sharing a name with a team is merely
+        confusing in routing and is warned about, not rejected.
+
+        Returns:
+            Self after validation.
+
+        Raises:
+            ValueError: If two agents or two teams share a name.
+        """
+        agent_names = [dep.name for dep in self.agents]
+        team_names = [dep.name for dep in self.teams]
+
+        duplicate_agents = _find_duplicates(agent_names)
+        if duplicate_agents:
+            msg = f"Duplicate agent names on runner: {', '.join(duplicate_agents)}"
+            raise ValueError(msg)
+
+        duplicate_teams = _find_duplicates(team_names)
+        if duplicate_teams:
+            msg = f"Duplicate team names on runner: {', '.join(duplicate_teams)}"
+            raise ValueError(msg)
+
+        shared = sorted(set(agent_names) & set(team_names))
+        if shared:
+            logger.warning(
+                "Runner has entities sharing names across agents and teams: %s",
+                ", ".join(shared),
+            )
 
         return self
 
