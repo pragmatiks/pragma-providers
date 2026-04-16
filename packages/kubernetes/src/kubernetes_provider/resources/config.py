@@ -25,7 +25,6 @@ from lightkube import AsyncClient, KubeConfig
 from lightkube.core.exceptions import ConfigError
 from pragma_sdk import (
     Config,
-    Field,
     HealthStatus,
     ImmutableDependency,
     ImmutableField,
@@ -39,6 +38,52 @@ from kubernetes_provider.client import build_kubeconfig_from_gke
 
 
 _SERVICE_ACCOUNT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount"
+_KUBECONFIG_ALLOWED_ROOT = Path("/etc/pragma-kubeconfig")
+
+
+def _validate_kubeconfig_path(raw_path: str) -> Path:
+    """Validate a kubeconfig file path against the allowed root.
+
+    Kubeconfig files must live under :data:`_KUBECONFIG_ALLOWED_ROOT` to
+    prevent the config resource from reading arbitrary files on disk (for
+    example, user-level kubeconfigs or tokens mounted for other workloads).
+    Symlinks are rejected outright: they could traverse outside the
+    allowed root even if :meth:`Path.resolve` maps them back inside.
+
+    Args:
+        raw_path: User-supplied kubeconfig path from the resource config.
+
+    Returns:
+        Resolved absolute path to the kubeconfig file.
+
+    Raises:
+        ValueError: If the path is relative, symlinked, or outside the
+            allowed root.
+        FileNotFoundError: If the resolved path does not exist.
+    """
+    path = Path(raw_path)
+
+    if not path.is_absolute():
+        msg = f"kubeconfig_path must be absolute and live under {_KUBECONFIG_ALLOWED_ROOT}: {raw_path}"
+        raise ValueError(msg)
+
+    if path.is_symlink():
+        msg = f"kubeconfig_path must not be a symlink: {raw_path}"
+        raise ValueError(msg)
+
+    resolved = path.resolve()
+
+    try:
+        resolved.relative_to(_KUBECONFIG_ALLOWED_ROOT)
+    except ValueError as exc:
+        msg = f"kubeconfig_path must live under {_KUBECONFIG_ALLOWED_ROOT}: {raw_path}"
+        raise ValueError(msg) from exc
+
+    if not resolved.is_file():
+        msg = f"kubeconfig file not found: {resolved}"
+        raise FileNotFoundError(msg)
+
+    return resolved
 
 
 class ConfigConfig(Config):
@@ -48,32 +93,53 @@ class ConfigConfig(Config):
         mode: Authentication mode. One of ``in_cluster``, ``gke_cluster``,
             or ``kubeconfig_file``. Immutable after creation.
         cluster: GKE cluster dependency. Required when ``mode=gke_cluster``,
-            ignored otherwise.
-        kubeconfig_path: Path to a kubeconfig YAML file. Required when
-            ``mode=kubeconfig_file``, ignored otherwise.
+            must be absent for other modes.
+        kubeconfig_path: Absolute path to a kubeconfig YAML file under
+            ``/etc/pragma-kubeconfig``. Required when ``mode=kubeconfig_file``,
+            must be absent for other modes. Immutable after creation.
     """
 
     mode: ImmutableField[Literal["in_cluster", "gke_cluster", "kubeconfig_file"]]
     cluster: ImmutableDependency[GKE] | None = None
-    kubeconfig_path: Field[str] | None = None
+    kubeconfig_path: ImmutableField[str] | None = None
 
     @model_validator(mode="after")
     def validate_mode_fields(self) -> ConfigConfig:
-        """Validate that the mode-specific fields are present.
+        """Validate that only the mode's fields are present.
 
         Returns:
             Self after validation.
 
         Raises:
-            ValueError: If required field for the chosen mode is missing.
+            ValueError: If a required field for the chosen mode is missing
+                or an irrelevant field for the chosen mode is set.
         """
-        if self.mode == "gke_cluster" and self.cluster is None:
-            msg = "cluster is required when mode=gke_cluster"
-            raise ValueError(msg)
+        if self.mode == "in_cluster":
+            if self.cluster is not None:
+                msg = "cluster must not be set when mode=in_cluster"
+                raise ValueError(msg)
 
-        if self.mode == "kubeconfig_file" and not self.kubeconfig_path:
-            msg = "kubeconfig_path is required when mode=kubeconfig_file"
-            raise ValueError(msg)
+            if self.kubeconfig_path is not None:
+                msg = "kubeconfig_path must not be set when mode=in_cluster"
+                raise ValueError(msg)
+
+        if self.mode == "gke_cluster":
+            if self.cluster is None:
+                msg = "cluster is required when mode=gke_cluster"
+                raise ValueError(msg)
+
+            if self.kubeconfig_path is not None:
+                msg = "kubeconfig_path must not be set when mode=gke_cluster"
+                raise ValueError(msg)
+
+        if self.mode == "kubeconfig_file":
+            if not self.kubeconfig_path:
+                msg = "kubeconfig_path is required when mode=kubeconfig_file"
+                raise ValueError(msg)
+
+            if self.cluster is not None:
+                msg = "cluster must not be set when mode=kubeconfig_file"
+                raise ValueError(msg)
 
         return self
 
@@ -112,7 +178,6 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
         Raises:
             RuntimeError: If GKE dependency outputs are unavailable or the
                 pod is not running with a service account (in_cluster mode).
-            FileNotFoundError: If kubeconfig_path does not exist.
         """
         if self.config.mode == "in_cluster":
             try:
@@ -136,13 +201,9 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
 
         if self.config.mode == "kubeconfig_file":
             assert self.config.kubeconfig_path is not None
-            path = Path(self.config.kubeconfig_path)
+            resolved = _validate_kubeconfig_path(self.config.kubeconfig_path)
 
-            if not path.is_file():
-                msg = f"kubeconfig file not found: {path}"
-                raise FileNotFoundError(msg)
-
-            KubeConfig.from_file(str(path))
+            KubeConfig.from_file(str(resolved))
             return
 
     async def create_client(self) -> AsyncClient:
@@ -184,7 +245,8 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
 
         if self.config.mode == "kubeconfig_file":
             assert self.config.kubeconfig_path is not None
-            kubeconfig = KubeConfig.from_file(self.config.kubeconfig_path)
+            resolved = _validate_kubeconfig_path(self.config.kubeconfig_path)
+            kubeconfig = KubeConfig.from_file(str(resolved))
             return AsyncClient(config=kubeconfig)
 
         msg = f"Unknown mode: {self.config.mode}"
