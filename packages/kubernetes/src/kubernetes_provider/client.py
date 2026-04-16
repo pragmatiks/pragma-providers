@@ -53,21 +53,22 @@ def _get_access_token(credentials: dict[str, Any] | str) -> str:
     return creds.token
 
 
-def create_client_from_gke(
+def build_kubeconfig_from_gke(
     outputs: GKEOutputs,
     credentials: dict[str, Any] | str,
-) -> AsyncClient:
-    """Create a lightkube AsyncClient from GKE cluster outputs.
+) -> KubeConfig:
+    """Build a lightkube KubeConfig from GKE cluster outputs.
 
-    Builds a kubeconfig from the GKE cluster endpoint and CA certificate,
-    authenticates using a bearer token obtained from the GCP credentials.
+    Assembles a kubeconfig structure from the GKE cluster endpoint and CA
+    certificate, authenticating via a bearer token obtained from the GCP
+    credentials.
 
     Args:
         outputs: GKE cluster outputs containing endpoint and CA certificate.
         credentials: GCP service account credentials for token acquisition.
 
     Returns:
-        Configured lightkube AsyncClient.
+        Configured lightkube KubeConfig.
     """
     token = _get_access_token(credentials)
 
@@ -103,7 +104,26 @@ def create_client_from_gke(
         ],
     }
 
-    config = KubeConfig.from_dict(kubeconfig)
+    return KubeConfig.from_dict(kubeconfig)
+
+
+def create_client_from_gke(
+    outputs: GKEOutputs,
+    credentials: dict[str, Any] | str,
+) -> AsyncClient:
+    """Create a lightkube AsyncClient from GKE cluster outputs.
+
+    Builds a kubeconfig from the GKE cluster endpoint and CA certificate,
+    authenticates using a bearer token obtained from the GCP credentials.
+
+    Args:
+        outputs: GKE cluster outputs containing endpoint and CA certificate.
+        credentials: GCP service account credentials for token acquisition.
+
+    Returns:
+        Configured lightkube AsyncClient.
+    """
+    config = build_kubeconfig_from_gke(outputs, credentials)
 
     return AsyncClient(config=config)
 

@@ -1,19 +1,23 @@
 """Kubernetes provider for Pragmatiks.
 
 Provides generic Kubernetes resources using lightkube for managing
-workloads in GKE clusters using user-provided credentials.
+workloads against any cluster reachable through a ``kubernetes/config``
+resource.
 """
 
 from pragma_sdk import Provider
 
-from kubernetes_provider.client import create_client_from_gke
+from kubernetes_provider.client import build_kubeconfig_from_gke, create_client_from_gke
 from kubernetes_provider.resources import (
+    ConfigConfig,
     ConfigMap,
     ConfigMapConfig,
     ConfigMapOutputs,
+    ConfigOutputs,
     Deployment,
     DeploymentConfig,
     DeploymentOutputs,
+    KubernetesConfig,
     Namespace,
     NamespaceConfig,
     NamespaceOutputs,
@@ -31,6 +35,7 @@ from kubernetes_provider.resources import (
 
 kubernetes = Provider()
 
+kubernetes.resource("config")(KubernetesConfig)
 kubernetes.resource("deployment")(Deployment)
 kubernetes.resource("service")(Service)
 kubernetes.resource("configmap")(ConfigMap)
@@ -39,14 +44,15 @@ kubernetes.resource("statefulset")(StatefulSet)
 kubernetes.resource("namespace")(Namespace)
 
 __all__ = [
-    "kubernetes",
-    "create_client_from_gke",
+    "ConfigConfig",
     "ConfigMap",
     "ConfigMapConfig",
     "ConfigMapOutputs",
+    "ConfigOutputs",
     "Deployment",
     "DeploymentConfig",
     "DeploymentOutputs",
+    "KubernetesConfig",
     "Namespace",
     "NamespaceConfig",
     "NamespaceOutputs",
@@ -59,4 +65,7 @@ __all__ = [
     "StatefulSet",
     "StatefulSetConfig",
     "StatefulSetOutputs",
+    "build_kubeconfig_from_gke",
+    "create_client_from_gke",
+    "kubernetes",
 ]
