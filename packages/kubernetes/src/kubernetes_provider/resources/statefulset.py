@@ -236,18 +236,15 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
 
     @asynccontextmanager
     async def _get_client(self):
-        """Get lightkube client from the kubernetes config dependency.
+        """Yield lightkube client from the kubernetes config dependency.
 
         Yields:
             Lightkube async client configured for the target cluster.
         """
         cluster_config = await self.config.config.resolve()
-        client = await cluster_config.create_client()
 
-        try:
+        async with cluster_config.build_client() as client:
             yield client
-        finally:
-            await client.close()
 
     def _build_probe(self, config: ProbeConfig) -> Probe | None:
         """Build probe from config.

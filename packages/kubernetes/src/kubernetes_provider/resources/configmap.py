@@ -60,18 +60,15 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
 
     @asynccontextmanager
     async def _get_client(self):
-        """Get lightkube client from the kubernetes config dependency.
+        """Yield lightkube client from the kubernetes config dependency.
 
         Yields:
             Lightkube async client configured for the target cluster.
         """
         cluster_config = await self.config.config.resolve()
-        client = await cluster_config.create_client()
 
-        try:
+        async with cluster_config.build_client() as client:
             yield client
-        finally:
-            await client.close()
 
     def _build_configmap(self) -> K8sConfigMap:
         """Build Kubernetes ConfigMap object from config.

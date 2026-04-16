@@ -16,6 +16,7 @@ all downstream kubernetes resources. Supports three authentication modes:
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
@@ -72,9 +73,10 @@ def _validate_kubeconfig_path(raw_path: str) -> Path:
         raise ValueError(msg)
 
     resolved = path.resolve()
+    resolved_root = _KUBECONFIG_ALLOWED_ROOT.resolve()
 
     try:
-        resolved.relative_to(_KUBECONFIG_ALLOWED_ROOT)
+        resolved.relative_to(resolved_root)
     except ValueError as exc:
         msg = f"kubeconfig_path must live under {_KUBECONFIG_ALLOWED_ROOT}: {raw_path}"
         raise ValueError(msg) from exc
@@ -252,6 +254,25 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
         msg = f"Unknown mode: {self.config.mode}"
         raise RuntimeError(msg)
 
+    @asynccontextmanager
+    async def build_client(self) -> AsyncIterator[AsyncClient]:
+        """Yield a lightkube AsyncClient for the configured auth mode.
+
+        Downstream kubernetes resources should prefer this over
+        :meth:`create_client` so the client is always closed at the end of
+        the block. Resolves the caller from this resource via
+        ``await self.config.config.resolve()``.
+
+        Yields:
+            Configured lightkube async client, closed on exit.
+        """
+        client = await self.create_client()
+
+        try:
+            yield client
+        finally:
+            await client.close()
+
     async def on_create(self) -> ConfigOutputs:
         """Validate the cluster config.
 
@@ -294,8 +315,8 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
             HealthStatus indicating whether the config can produce a client.
         """
         try:
-            client = await self.create_client()
-            await client.close()
+            async with self.build_client():
+                pass
         except Exception as exc:  # noqa: BLE001
             return HealthStatus(
                 status="unhealthy",
