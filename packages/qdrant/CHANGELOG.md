@@ -10,6 +10,29 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v0.44.0 (2026-04-16)
+
+### Feat
+
+- **agno**: add output_schema for structured agent responses
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+- **ci**: skip builds for unchanged providers
+- accept workflow_dispatch trigger for CLI cascade
+- add icon_url to all provider pyproject.toml
+- add GitHub provider with Repository, Environment, and Secret resources (#59)
+
+### Fix
+
+- **agno**: mark api_key fields as SensitiveField for API response redaction (#61)
+- remove redundant PRAGMA_API_URL env var from publish workflow
+- use PRAGMA_AUTH_TOKEN secret instead of CLERK_SECRET_KEY for store publish
+- set PRAGMA_API_URL in publish workflow for pragma store
+- install pragma CLI and add git push retry to publish workflow
+- restructure publish workflow as per-provider DAG with API token auth
+- simplify publish workflow - remove change detection, isolate PyPI uploads
+- add supabase, vercel, github to publish and CI workflows
+- **ci**: update per-provider lockfiles in update-sdk workflow
+
 ## qdrant-v0.43.0 (2026-04-16)
 
 ### Feat
