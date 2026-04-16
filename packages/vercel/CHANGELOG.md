@@ -1,3 +1,10 @@
+## vercel-v0.11.0 (2026-04-16)
+
+### Feat
+
+- **agno**: multi-entity AgentOS support on runner (#65)
+- **kubernetes**: config resource with multi-cluster auth modes (#64)
+
 ## vercel-v0.10.0 (2026-04-16)
 
 ### Feat
