@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import secrets
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 from kubernetes_provider import (
@@ -195,15 +196,17 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             "app.kubernetes.io/instance": self.name,
         }
 
+    @asynccontextmanager
     async def _get_client(self):
-        """Get lightkube client from the kubernetes config dependency.
+        """Yield lightkube client from the kubernetes config dependency.
 
-        Returns:
-            Configured lightkube AsyncClient.
+        Yields:
+            Lightkube async client, closed on exit.
         """
         cluster_config = await self.config.config.resolve()
 
-        return await cluster_config.create_client()
+        async with cluster_config.build_client() as client:
+            yield client
 
     async def _wait_for_load_balancer_ip(self, timeout: float = 300.0) -> str:
         """Wait for LoadBalancer external IP to be assigned.
@@ -217,24 +220,24 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         Raises:
             TimeoutError: If IP not assigned within timeout.
         """
-        client = await self._get_client()
         namespace = self._namespace()
         service_name = self._client_service_name()
         max_attempts = int(timeout / _LB_POLL_INTERVAL_SECONDS)
 
-        for _ in range(max_attempts):
-            svc = await client.get(K8sService, name=service_name, namespace=namespace)
+        async with self._get_client() as client:
+            for _ in range(max_attempts):
+                svc = await client.get(K8sService, name=service_name, namespace=namespace)
 
-            if svc.status and svc.status.loadBalancer and svc.status.loadBalancer.ingress:
-                ingress = svc.status.loadBalancer.ingress[0]
+                if svc.status and svc.status.loadBalancer and svc.status.loadBalancer.ingress:
+                    ingress = svc.status.loadBalancer.ingress[0]
 
-                if ingress.ip:
-                    return ingress.ip
+                    if ingress.ip:
+                        return ingress.ip
 
-                if ingress.hostname:
-                    return ingress.hostname
+                    if ingress.hostname:
+                        return ingress.hostname
 
-            await asyncio.sleep(_LB_POLL_INTERVAL_SECONDS)
+                await asyncio.sleep(_LB_POLL_INTERVAL_SECONDS)
 
         msg = f"LoadBalancer {service_name} did not receive external IP within {timeout}s"
         raise TimeoutError(msg)
