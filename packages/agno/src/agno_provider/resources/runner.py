@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
@@ -160,9 +161,13 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
     served by a Kubernetes Deployment + Service using child kubernetes
     provider resources.
 
-    The container receives entity specs as JSON environment variables. The
-    transport contract is versioned with the container image; see the runner
-    package for the current wire format.
+    The container receives the combined entity specs as a single JSON
+    environment variable:
+
+    - AGNO_SPECS_JSON: ``{"agents": [<AgentSpec>...], "teams": [<TeamSpec>...], "workflows": []}``
+
+    The container image uses the payload to reconstruct each entity at startup
+    and register all of them with a single AgentOS instance.
 
     Example YAML:
         provider: agno
@@ -292,18 +297,18 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         """
         labels = self._labels()
 
-        primary_spec: AgentSpec | TeamSpec | None = (
-            agent_specs[0] if agent_specs else (team_specs[0] if team_specs else None)
-        )
-        primary_type = "agent" if agent_specs else "team"
-
-        if primary_spec is None:
+        if not agent_specs and not team_specs:
             msg = "Runner requires at least one agent or team spec"
             raise RuntimeError(msg)
 
+        specs_payload = {
+            "agents": [spec.model_dump(mode="json") for spec in agent_specs],
+            "teams": [spec.model_dump(mode="json") for spec in team_specs],
+            "workflows": [],
+        }
+
         env = {
-            "AGNO_SPEC_TYPE": primary_type,
-            "AGNO_SPEC_JSON": primary_spec.model_dump_json(),
+            "AGNO_SPECS_JSON": json.dumps(specs_payload),
         }
 
         if self.config.security_key:
