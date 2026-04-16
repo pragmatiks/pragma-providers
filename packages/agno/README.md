@@ -20,8 +20,8 @@ memory/manager ─┤       │
 db/postgres ────┤       │
 prompt ─────────┘       │
                         │
-cluster (gcp/gke) ──────┘
-namespace (k8s) ────────┘
+config (kubernetes/config) ─┘
+namespace (kubernetes) ─────┘
 ```
 
 **How it works:**
@@ -34,7 +34,7 @@ namespace (k8s) ────────┘
 
 ## Prerequisites
 
-- A Kubernetes cluster managed by the `gcp` provider (`gcp/gke` resource)
+- A `kubernetes/config` resource providing cluster access (in-cluster, a GKE cluster, or an external kubeconfig)
 - A Kubernetes namespace managed by the `kubernetes` provider
 - API keys for your chosen model provider (OpenAI, Anthropic)
 - An Agno runner container image (default: `ghcr.io/pragmatiks/agno-runner:latest`)
@@ -220,8 +220,8 @@ name: support-agent
 config:
   agent:
     ref: agno/agent/support-agent
-  cluster:
-    ref: gcp/gke/main-cluster
+  config:
+    ref: kubernetes/config/main-cluster
   namespace:
     ref: kubernetes/namespace/agents
   replicas: 2
@@ -280,8 +280,8 @@ name: content-team
 config:
   team:
     ref: agno/team/content-team
-  cluster:
-    ref: gcp/gke/main-cluster
+  config:
+    ref: kubernetes/config/main-cluster
   namespace:
     ref: kubernetes/namespace/agents
 ```
