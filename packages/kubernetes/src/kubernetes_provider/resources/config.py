@@ -22,6 +22,7 @@ from typing import Literal
 
 from gcp_provider import GKE
 from lightkube import AsyncClient, KubeConfig
+from lightkube.core.exceptions import ConfigError
 from pragma_sdk import (
     Config,
     Field,
@@ -35,6 +36,9 @@ from pragma_sdk import (
 from pydantic import model_validator
 
 from kubernetes_provider.client import build_kubeconfig_from_gke
+
+
+_SERVICE_ACCOUNT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount"
 
 
 class ConfigConfig(Config):
@@ -106,10 +110,19 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
         """Validate that the configured mode can produce a client.
 
         Raises:
-            RuntimeError: If GKE dependency outputs are unavailable.
+            RuntimeError: If GKE dependency outputs are unavailable or the
+                pod is not running with a service account (in_cluster mode).
             FileNotFoundError: If kubeconfig_path does not exist.
         """
         if self.config.mode == "in_cluster":
+            try:
+                KubeConfig.from_service_account()
+            except ConfigError as exc:
+                msg = (
+                    "in_cluster mode requires a pod-mounted service account at "
+                    f"{_SERVICE_ACCOUNT_PATH}; no credentials found"
+                )
+                raise RuntimeError(msg) from exc
             return
 
         if self.config.mode == "gke_cluster":
@@ -144,10 +157,19 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
 
         Raises:
             RuntimeError: If the mode requires a dependency or file that
-                is not available.
+                is not available, or if in_cluster mode is selected but no
+                pod service account credentials are mounted.
         """
         if self.config.mode == "in_cluster":
-            return AsyncClient()
+            try:
+                kubeconfig = KubeConfig.from_service_account()
+            except ConfigError as exc:
+                msg = (
+                    "in_cluster mode requires a pod-mounted service account at "
+                    f"{_SERVICE_ACCOUNT_PATH}; no credentials found"
+                )
+                raise RuntimeError(msg) from exc
+            return AsyncClient(config=kubeconfig)
 
         if self.config.mode == "gke_cluster":
             assert self.config.cluster is not None
