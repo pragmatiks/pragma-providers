@@ -1,3 +1,12 @@
+## agno-v0.115.0 (2026-04-16)
+
+### Feat
+
+- **agno**: multi-entity AgentOS support on runner (#65)
+- **kubernetes**: config resource with multi-cluster auth modes (#64)
+- **agno**: add output_schema for structured agent responses
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+
 ## agno-v0.114.0 (2026-04-16)
 
 ### Feat
