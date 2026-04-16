@@ -1,3 +1,45 @@
+## gcp-v0.164.0 (2026-04-16)
+
+### Feat
+
+- **agno**: add output_schema for structured agent responses
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+- **ci**: skip builds for unchanged providers
+- accept workflow_dispatch trigger for CLI cascade
+- add icon_url to all provider pyproject.toml
+
+### Fix
+
+- **agno**: mark api_key fields as SensitiveField for API response redaction (#61)
+- remove redundant PRAGMA_API_URL env var from publish workflow
+- use PRAGMA_AUTH_TOKEN secret instead of CLERK_SECRET_KEY for store publish
+- set PRAGMA_API_URL in publish workflow for pragma store
+- install pragma CLI and add git push retry to publish workflow
+- restructure publish workflow as per-provider DAG with API token auth
+
+## gcp-v0.155.0 (2026-04-03)
+
+### Feat
+
+- add GitHub provider with Repository, Environment, and Secret resources (#59)
+- add explicit upgrade/downgrade methods to all resources (PRA-226) (#41)
+- migrate provider configs to Field[T] and ImmutableField[T] (PRA-225) (#36)
+
+### Fix
+
+- simplify publish workflow - remove change detection, isolate PyPI uploads
+- add supabase, vercel, github to publish and CI workflows
+- **ci**: update per-provider lockfiles in update-sdk workflow
+- **ci**: pull --rebase before push and fix update-sdk auto-merge
+- use PyPI JSON API for version availability polling (#46)
+- add PyPI availability polling to update-sdk workflow (#45)
+- **gcp**: replace fake $ref syntax with actual reference format in docstrings (#42)
+- remove editable SDK source overrides from provider pyproject.toml files (#38)
+
+### Refactor
+
+- remove provider identity from Python classes (PRA-269)
+
 ## gcp-v0.163.0 (2026-04-13)
 
 ### Feat
