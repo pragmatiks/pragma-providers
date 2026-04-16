@@ -7,27 +7,26 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from gcp_provider import GKE
 from lightkube import ApiError
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Secret as K8sSecret
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 
-from kubernetes_provider.client import create_client_from_gke
+from kubernetes_provider.resources.config import KubernetesConfig
 
 
 class SecretConfig(Config):
     """Configuration for a Kubernetes Secret.
 
     Attributes:
-        cluster: GKE cluster dependency providing Kubernetes credentials.
+        config: Kubernetes config dependency providing cluster access.
         namespace: Kubernetes namespace for the secret (immutable after creation).
         type: Secret type (e.g., ``Opaque``, ``kubernetes.io/tls``).
         data: Key-value pairs that will be base64-encoded before storage.
         string_data: Plain-text key-value pairs (Kubernetes base64-encodes them on the server).
     """
 
-    cluster: ImmutableDependency[GKE]
+    config: ImmutableDependency[KubernetesConfig]
     namespace: ImmutableField[str] = "default"
     type: Field[str] = "Opaque"
     data: Field[dict[str, str]] | None = None
@@ -69,23 +68,13 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
     @asynccontextmanager
     async def _get_client(self):
-        """Get lightkube client from GKE cluster credentials.
+        """Get lightkube client from the kubernetes config dependency.
 
         Yields:
-            Lightkube async client configured for the GKE cluster.
-
-        Raises:
-            RuntimeError: If GKE cluster outputs are not available.
+            Lightkube async client configured for the target cluster.
         """
-        cluster = await self.config.cluster.resolve()
-        outputs = cluster.outputs
-
-        if outputs is None:
-            msg = "GKE cluster outputs not available"
-            raise RuntimeError(msg)
-
-        creds = cluster.config.credentials
-        client = create_client_from_gke(outputs, creds)
+        cluster_config = await self.config.config.resolve()
+        client = await cluster_config.create_client()
 
         try:
             yield client

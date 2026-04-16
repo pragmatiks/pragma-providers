@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Literal
 
-from gcp_provider import GKE
 from lightkube import ApiError
 from lightkube.models.core_v1 import ServicePort, ServiceSpec
 from lightkube.models.meta_v1 import ObjectMeta
@@ -16,7 +15,7 @@ from lightkube.resources.core_v1 import Service as K8sService
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import BaseModel
 
-from kubernetes_provider.client import create_client_from_gke
+from kubernetes_provider.resources.config import KubernetesConfig
 
 
 class PortConfig(BaseModel):
@@ -41,7 +40,7 @@ class ServiceConfig(Config):
     """Configuration for a Kubernetes Service.
 
     Attributes:
-        cluster: GKE cluster dependency providing Kubernetes credentials.
+        config: Kubernetes config dependency providing cluster access.
         namespace: Kubernetes namespace for the service (immutable after creation).
         type: Service type (ClusterIP, NodePort, LoadBalancer, or Headless).
         selector: Label selector matching the target pods.
@@ -49,7 +48,7 @@ class ServiceConfig(Config):
         cluster_ip: Explicit cluster IP; use ``"None"`` for headless services.
     """
 
-    cluster: ImmutableDependency[GKE]
+    config: ImmutableDependency[KubernetesConfig]
     namespace: ImmutableField[str] = "default"
     type: Field[Literal["ClusterIP", "NodePort", "LoadBalancer", "Headless"]] = "ClusterIP"
     selector: Field[dict[str, str]]
@@ -95,23 +94,13 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
 
     @asynccontextmanager
     async def _get_client(self):
-        """Get lightkube client from GKE cluster credentials.
+        """Get lightkube client from the kubernetes config dependency.
 
         Yields:
-            Lightkube async client configured for the GKE cluster.
-
-        Raises:
-            RuntimeError: If GKE cluster outputs are not available.
+            Lightkube async client configured for the target cluster.
         """
-        cluster = await self.config.cluster.resolve()
-        outputs = cluster.outputs
-
-        if outputs is None:
-            msg = "GKE cluster outputs not available"
-            raise RuntimeError(msg)
-
-        creds = cluster.config.credentials
-        client = create_client_from_gke(outputs, creds)
+        cluster_config = await self.config.config.resolve()
+        client = await cluster_config.create_client()
 
         try:
             yield client
