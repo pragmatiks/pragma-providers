@@ -1,4 +1,9 @@
-"""Agno Runner resource - deploys agents, teams, and workflows to Kubernetes."""
+"""Agno Runner resource - deploys agents and teams to Kubernetes.
+
+A Runner hosts one or more agents and teams on a single AgentOS instance.
+The ``workflows`` field is reserved; it will be populated once a dedicated
+Workflow resource type ships and must stay empty in the meantime.
+"""
 
 from __future__ import annotations
 
@@ -73,15 +78,17 @@ def _find_duplicates(names: list[str]) -> list[str]:
 class RunnerSpec(AgnoSpec):
     """Specification for reconstructing a Runner configuration.
 
-    Contains all runner configuration including the nested agent, team, and
-    workflow specs. Used for tracking what was deployed.
+    Contains all runner configuration including the nested agent and team
+    specs. Used for tracking what was deployed.
 
     Attributes:
         name: Runner name (Kubernetes deployment name).
         namespace: Kubernetes namespace where the runner is deployed.
         agent_specs: Nested agent specs deployed on this runner.
         team_specs: Nested team specs deployed on this runner.
-        workflow_specs: Nested workflow specs deployed on this runner.
+        workflow_specs: Reserved for a future Workflow resource type. Kept in
+            the spec schema for forward compatibility and always serialized as
+            an empty list today.
         replicas: Number of pod replicas.
         image: Container image used for the runner pods.
         cpu: CPU resource request.
@@ -102,20 +109,22 @@ class RunnerSpec(AgnoSpec):
 
 
 class RunnerConfig(Config):
-    """Configuration for deploying Agno agents, teams, and workflows to Kubernetes.
+    """Configuration for deploying Agno agents and teams to Kubernetes.
 
-    A single runner can host multiple agents, teams, and workflows in one
-    AgentOS instance. At least one entity across the three lists is required.
+    A single runner can host multiple agents and teams in one AgentOS
+    instance. At least one agent or team is required. The ``workflows``
+    field is reserved and must be left empty until the Workflow resource
+    type ships; runtime validation rejects any non-empty value.
 
     Attributes:
         agents: Agent dependencies to deploy on this runner.
         teams: Team dependencies to deploy on this runner.
-        workflows: Workflow dependencies to deploy on this runner. Must be empty
-            in v1; reserved for when the Workflow resource type is introduced.
+        workflows: Reserved for a future Workflow resource type. Must be
+            empty; populating it is rejected by the config validator.
         config: Kubernetes config dependency providing cluster access.
         namespace: Kubernetes namespace dependency for the runner pods.
         replicas: Number of pod replicas. Defaults to 1.
-        image: Container image for running the agents/teams/workflows.
+        image: Container image for running the agents and teams.
         security_key: Bearer token for AgentOS basic auth (dev environments).
         jwt_verification_key: Public key for JWT/RBAC auth (production environments).
         public: Expose the service via LoadBalancer instead of ClusterIP. Defaults to False.
@@ -218,14 +227,17 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
     """Agno multi-entity runner on Kubernetes.
 
     This is the ONLY agno resource that creates infrastructure. It deploys
-    one or more agents, teams, and workflows into a single AgentOS instance
-    served by a Kubernetes Deployment + Service using child kubernetes
-    provider resources.
+    one or more agents and teams into a single AgentOS instance served by a
+    Kubernetes Deployment + Service using child kubernetes provider
+    resources.
 
     The container receives the combined entity specs as a single JSON
     environment variable:
 
     - AGNO_SPECS_JSON: ``{"agents": [<AgentSpec>...], "teams": [<TeamSpec>...], "workflows": []}``
+
+    The ``workflows`` key is always emitted as an empty list until a
+    dedicated Workflow resource type ships.
 
     The container image uses the payload to reconstruct each entity at startup
     and register all of them with a single AgentOS instance.
