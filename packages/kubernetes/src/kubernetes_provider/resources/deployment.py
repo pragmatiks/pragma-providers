@@ -8,7 +8,6 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Literal
 
-from gcp_provider import GKE
 from lightkube import ApiError
 from lightkube.models.apps_v1 import DeploymentSpec, DeploymentStrategy, RollingUpdateDeployment
 from lightkube.models.core_v1 import (
@@ -29,7 +28,7 @@ from lightkube.resources.core_v1 import Pod
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import BaseModel
 
-from kubernetes_provider.client import create_client_from_gke
+from kubernetes_provider.resources.config import KubernetesConfig
 
 
 _POLL_INTERVAL_SECONDS = 5.0
@@ -144,7 +143,7 @@ class DeploymentConfig(Config):
     """Configuration for a Kubernetes Deployment.
 
     Attributes:
-        cluster: GKE cluster dependency providing Kubernetes credentials.
+        config: Kubernetes config dependency providing cluster access.
         namespace: Kubernetes namespace for the deployment (immutable after creation).
         replicas: Number of pod replicas to maintain.
         selector: Label selector for identifying managed pods (immutable after creation).
@@ -153,7 +152,7 @@ class DeploymentConfig(Config):
         strategy: Deployment update strategy (RollingUpdate or Recreate).
     """
 
-    cluster: ImmutableDependency[GKE]
+    config: ImmutableDependency[KubernetesConfig]
     namespace: ImmutableField[str] = "default"
     replicas: Field[int] = 1
     selector: ImmutableField[dict[str, str]]
@@ -202,28 +201,15 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
     @asynccontextmanager
     async def _get_client(self):
-        """Get lightkube client from GKE cluster credentials.
+        """Yield lightkube client from the kubernetes config dependency.
 
         Yields:
-            Lightkube async client configured for the GKE cluster.
-
-        Raises:
-            RuntimeError: If GKE cluster outputs are not available.
+            Lightkube async client configured for the target cluster.
         """
-        cluster = await self.config.cluster.resolve()
-        outputs = cluster.outputs
+        cluster_config = await self.config.config.resolve()
 
-        if outputs is None:
-            msg = "GKE cluster outputs not available"
-            raise RuntimeError(msg)
-
-        creds = cluster.config.credentials
-        client = create_client_from_gke(outputs, creds)
-
-        try:
+        async with cluster_config.build_client() as client:
             yield client
-        finally:
-            await client.close()
 
     def _build_probe(self, config: ProbeConfig) -> Probe | None:
         """Build probe from config.

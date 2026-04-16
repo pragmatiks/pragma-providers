@@ -3,6 +3,11 @@
 Import and export your Resource classes here for discovery by the runtime.
 """
 
+from kubernetes_provider.resources.config import (
+    ConfigConfig,
+    ConfigOutputs,
+    KubernetesConfig,
+)
 from kubernetes_provider.resources.configmap import (
     ConfigMap,
     ConfigMapConfig,
@@ -36,12 +41,15 @@ from kubernetes_provider.resources.statefulset import (
 
 
 __all__ = [
+    "ConfigConfig",
     "ConfigMap",
     "ConfigMapConfig",
     "ConfigMapOutputs",
+    "ConfigOutputs",
     "Deployment",
     "DeploymentConfig",
     "DeploymentOutputs",
+    "KubernetesConfig",
     "Namespace",
     "NamespaceConfig",
     "NamespaceOutputs",

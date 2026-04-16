@@ -8,7 +8,6 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Literal
 
-from gcp_provider import GKE
 from lightkube import ApiError
 from lightkube.core.client import CascadeType
 from lightkube.models.apps_v1 import StatefulSetSpec
@@ -33,7 +32,7 @@ from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, Immutab
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
-from kubernetes_provider.client import create_client_from_gke
+from kubernetes_provider.resources.config import KubernetesConfig
 
 
 _POLL_INTERVAL_SECONDS = 5
@@ -177,7 +176,7 @@ class StatefulSetConfig(Config):
     """Configuration for a Kubernetes StatefulSet.
 
     Attributes:
-        cluster: GKE cluster dependency providing Kubernetes credentials.
+        config: Kubernetes config dependency providing cluster access.
         namespace: Kubernetes namespace (immutable after creation).
         replicas: Number of pod replicas to maintain.
         service_name: Name of the headless service for stable pod DNS (immutable after creation).
@@ -186,7 +185,7 @@ class StatefulSetConfig(Config):
         volume_claim_templates: PVC templates for persistent storage per replica.
     """
 
-    cluster: ImmutableDependency[GKE]
+    config: ImmutableDependency[KubernetesConfig]
     namespace: ImmutableField[str] = "default"
     replicas: Field[int] = 1
     service_name: ImmutableField[str]
@@ -237,28 +236,15 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
 
     @asynccontextmanager
     async def _get_client(self):
-        """Get lightkube client from GKE cluster credentials.
+        """Yield lightkube client from the kubernetes config dependency.
 
         Yields:
-            Lightkube async client configured for the GKE cluster.
-
-        Raises:
-            RuntimeError: If GKE cluster outputs are not available.
+            Lightkube async client configured for the target cluster.
         """
-        cluster = await self.config.cluster.resolve()
-        outputs = cluster.outputs
+        cluster_config = await self.config.config.resolve()
 
-        if outputs is None:
-            msg = "GKE cluster outputs not available"
-            raise RuntimeError(msg)
-
-        creds = cluster.config.credentials
-        client = create_client_from_gke(outputs, creds)
-
-        try:
+        async with cluster_config.build_client() as client:
             yield client
-        finally:
-            await client.close()
 
     def _build_probe(self, config: ProbeConfig) -> Probe | None:
         """Build probe from config.

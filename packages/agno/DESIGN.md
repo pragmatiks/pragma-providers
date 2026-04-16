@@ -83,8 +83,8 @@ config:
   enable_agentic_memory: true
 
   # Deployment
-  cluster:
-    $ref: gcp/gke/main
+  config:
+    $ref: kubernetes/config/main
   replicas: 1
 ```
 
@@ -124,8 +124,8 @@ config:
     $ref: agno/models/anthropic/claude-sonnet
 
   # Deployment
-  cluster:
-    $ref: gcp/gke/main
+  config:
+    $ref: kubernetes/config/main
 ```
 
 **Collaboration Modes:**
@@ -592,8 +592,8 @@ config:
   db:
     $ref: agno/db/postgres/storage
   enable_agentic_memory: true
-  cluster:
-    $ref: gcp/gke/main
+  config:
+    $ref: kubernetes/config/main
 
 ---
 provider: agno
@@ -608,8 +608,8 @@ config:
     $ref: agno/prompt/writer
   db:
     $ref: agno/db/postgres/storage
-  cluster:
-    $ref: gcp/gke/main
+  config:
+    $ref: kubernetes/config/main
 
 ---
 # === Team ===
@@ -626,8 +626,8 @@ config:
   instructions:
     - "Researcher gathers information first"
     - "Writer creates content based on research"
-  cluster:
-    $ref: gcp/gke/main
+  config:
+    $ref: kubernetes/config/main
 ```
 
 ---

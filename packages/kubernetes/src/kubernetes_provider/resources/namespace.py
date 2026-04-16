@@ -6,13 +6,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from gcp_provider import GKE
 from lightkube import ApiError
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Namespace as K8sNamespace
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
 
-from kubernetes_provider.client import create_client_from_gke
+from kubernetes_provider.resources.config import KubernetesConfig
 
 
 class NamespaceConfig(Config):
@@ -21,11 +20,11 @@ class NamespaceConfig(Config):
     Namespaces are cluster-scoped resources (no namespace field).
 
     Attributes:
-        cluster: GKE cluster dependency providing Kubernetes credentials.
+        config: Kubernetes config dependency providing cluster access.
         labels: Optional labels to apply to the namespace.
     """
 
-    cluster: ImmutableDependency[GKE]
+    config: ImmutableDependency[KubernetesConfig]
     labels: Field[dict[str, str]] | None = None
 
 
@@ -57,28 +56,15 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
 
     @asynccontextmanager
     async def _get_client(self):
-        """Get lightkube client from GKE cluster credentials.
+        """Yield lightkube client from the kubernetes config dependency.
 
         Yields:
-            Lightkube async client configured for the GKE cluster.
-
-        Raises:
-            RuntimeError: If GKE cluster outputs are not available.
+            Lightkube async client configured for the target cluster.
         """
-        cluster = await self.config.cluster.resolve()
-        outputs = cluster.outputs
+        cluster_config = await self.config.config.resolve()
 
-        if outputs is None:
-            msg = "GKE cluster outputs not available"
-            raise RuntimeError(msg)
-
-        creds = cluster.config.credentials
-        client = create_client_from_gke(outputs, creds)
-
-        try:
+        async with cluster_config.build_client() as client:
             yield client
-        finally:
-            await client.close()
 
     def _build_namespace(self) -> K8sNamespace:
         """Build Kubernetes Namespace object from config.

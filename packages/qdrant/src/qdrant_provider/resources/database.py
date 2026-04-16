@@ -1,20 +1,20 @@
-"""Qdrant Database resource - deploys Qdrant to GKE using Kubernetes resources."""
+"""Qdrant Database resource - deploys Qdrant to Kubernetes using Kubernetes resources."""
 
 from __future__ import annotations
 
 import asyncio
 import secrets
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import datetime
 
-from gcp_provider import GKE
 from kubernetes_provider import (
+    KubernetesConfig,
     Service,
     ServiceConfig,
     StatefulSet,
     StatefulSetConfig,
 )
-from kubernetes_provider.client import create_client_from_gke
 from kubernetes_provider.resources.service import PortConfig
 from kubernetes_provider.resources.statefulset import (
     ContainerConfig,
@@ -65,7 +65,7 @@ class DatabaseConfig(Config):
     """Configuration for a Qdrant database deployment.
 
     Attributes:
-        cluster: GKE cluster dependency providing Kubernetes credentials.
+        config: Kubernetes config dependency providing cluster access.
         replicas: Number of Qdrant replicas (StatefulSet pods).
         image: Docker image for Qdrant (default: qdrant/qdrant:latest).
         storage: Persistent storage configuration.
@@ -74,7 +74,7 @@ class DatabaseConfig(Config):
         generate_api_key: If True and api_key is None, generates a secure 32-char key.
     """
 
-    cluster: ImmutableDependency[GKE]
+    config: ImmutableDependency[KubernetesConfig]
     replicas: Field[int] = 1
     image: Field[str] = "qdrant/qdrant:latest"
     storage: Field[StorageConfig] | None = None
@@ -116,7 +116,7 @@ class DatabaseOutputs(Outputs):
 
 
 class Database(Resource[DatabaseConfig, DatabaseOutputs]):
-    """Qdrant database deployed to GKE using Kubernetes resources.
+    """Qdrant database deployed to Kubernetes via child resources.
 
     Creates child resources:
     - Headless Service for pod DNS
@@ -196,25 +196,17 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             "app.kubernetes.io/instance": self.name,
         }
 
+    @asynccontextmanager
     async def _get_client(self):
-        """Get lightkube client from GKE cluster credentials.
+        """Yield lightkube client from the kubernetes config dependency.
 
-        Returns:
-            Configured lightkube AsyncClient.
-
-        Raises:
-            RuntimeError: If GKE cluster outputs are not available.
+        Yields:
+            Lightkube async client, closed on exit.
         """
-        cluster = await self.config.cluster.resolve()
-        outputs = cluster.outputs
+        cluster_config = await self.config.config.resolve()
 
-        if outputs is None:
-            msg = "GKE cluster outputs not available"
-            raise RuntimeError(msg)
-
-        creds = cluster.config.credentials
-
-        return create_client_from_gke(outputs, creds)
+        async with cluster_config.build_client() as client:
+            yield client
 
     async def _wait_for_load_balancer_ip(self, timeout: float = 300.0) -> str:
         """Wait for LoadBalancer external IP to be assigned.
@@ -228,24 +220,24 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         Raises:
             TimeoutError: If IP not assigned within timeout.
         """
-        client = await self._get_client()
         namespace = self._namespace()
         service_name = self._client_service_name()
         max_attempts = int(timeout / _LB_POLL_INTERVAL_SECONDS)
 
-        for _ in range(max_attempts):
-            svc = await client.get(K8sService, name=service_name, namespace=namespace)
+        async with self._get_client() as client:
+            for _ in range(max_attempts):
+                svc = await client.get(K8sService, name=service_name, namespace=namespace)
 
-            if svc.status and svc.status.loadBalancer and svc.status.loadBalancer.ingress:
-                ingress = svc.status.loadBalancer.ingress[0]
+                if svc.status and svc.status.loadBalancer and svc.status.loadBalancer.ingress:
+                    ingress = svc.status.loadBalancer.ingress[0]
 
-                if ingress.ip:
-                    return ingress.ip
+                    if ingress.ip:
+                        return ingress.ip
 
-                if ingress.hostname:
-                    return ingress.hostname
+                    if ingress.hostname:
+                        return ingress.hostname
 
-            await asyncio.sleep(_LB_POLL_INTERVAL_SECONDS)
+                await asyncio.sleep(_LB_POLL_INTERVAL_SECONDS)
 
         msg = f"LoadBalancer {service_name} did not receive external IP within {timeout}s"
         raise TimeoutError(msg)
@@ -257,7 +249,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             Configured Service resource.
         """
         config = ServiceConfig(
-            cluster=self.config.cluster,
+            config=self.config.config,
             namespace=self._namespace(),
             type="Headless",
             selector=self._labels(),
@@ -279,7 +271,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             Configured Service resource.
         """
         config = ServiceConfig(
-            cluster=self.config.cluster,
+            config=self.config.config,
             namespace=self._namespace(),
             type="LoadBalancer",
             selector=self._labels(),
@@ -354,7 +346,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         )
 
         config = StatefulSetConfig(
-            cluster=self.config.cluster,
+            config=self.config.config,
             namespace=self._namespace(),
             replicas=self.config.replicas,
             service_name=self._headless_service_name(),
@@ -387,7 +379,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         )
 
     async def on_create(self) -> DatabaseOutputs:
-        """Deploy Qdrant to GKE using child Kubernetes resources.
+        """Deploy Qdrant using child Kubernetes resources.
 
         Creates headless service (for pod DNS), StatefulSet, and client service.
         Waits for all resources to be ready and LoadBalancer IP to be assigned.
@@ -422,15 +414,15 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             DatabaseOutputs with external LoadBalancer URLs.
 
         Raises:
-            ValueError: If cluster changed (requires delete + create).
+            ValueError: If config changed (requires delete + create).
         """
-        if previous_config.cluster.id != self.config.cluster.id:
-            msg = "Cannot change cluster; delete and recreate resource"
+        if previous_config.config.id != self.config.config.id:
+            msg = "Cannot change config; delete and recreate resource"
             raise ValueError(msg)
 
         if self.outputs is not None:
-            previous_dict = previous_config.model_dump(exclude={"cluster"})
-            current_dict = self.config.model_dump(exclude={"cluster"})
+            previous_dict = previous_config.model_dump(exclude={"config"})
+            current_dict = self.config.model_dump(exclude={"config"})
 
             if previous_dict == current_dict:
                 return self.outputs
