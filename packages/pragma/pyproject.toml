@@ -1,0 +1,54 @@
+[project]
+name = "pragmatiks-pragma-provider"
+version = "1.0.0"
+description = "Built-in platform provider for Pragmatiks"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pragmatiks-sdk>=0.34.0",
+    "obstore>=0.5.0",
+]
+
+authors = [
+    { name = "Pragmatiks", email = "team@pragmatiks.io" },
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.0.0",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.14.0",
+    "ty>=0.0.14",
+]
+
+[tool.pragma]
+provider = "pragma"
+package = "pragma_provider"
+display_name = "Pragma Platform"
+description = "Manage platform-native secrets, configuration, and file storage declaratively through Pragmatiks."
+icon_url = "https://pragmatiks.io/icon.svg"
+tags = ["platform", "secrets", "configuration", "files"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "1.0.0"
+version_files = ["pyproject.toml:^version"]
+tag_format = "pragma-v$version"
+update_changelog_on_bump = true
+changelog_file = "CHANGELOG.md"
+
+[tool.ruff]
+extend = "../../pyproject.toml"
+line-length = 120
+
+[tool.uv.build-backend]
+module-name = "pragma_provider"
+
+[build-system]
+requires = ["uv_build>=0.9.8,<0.10.0"]
+build-backend = "uv_build"

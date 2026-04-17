@@ -1,0 +1,403 @@
+## pragma-provider-v1.0.0 (2026-03-17)
+
+### BREAKING CHANGE
+
+- surrealdb.auth.password must be set via --set or values
+- Async operations now require AsyncPragmaClient instead of PragmaClient
+
+### Feat
+
+- expose resource ID as provider/resource/name in API (#62)
+- replace pragma provider startup stubs with real package imports (#61)
+- wire PRAGMA_PROVIDER_IMAGE_URL through Helm chart (#56)
+- extract pragma provider to NATS-based service (#54)
+- add organization picker to CLI auth callback
+- auto-finalize provider builds via background task
+- provider version migration framework (PRA-226) (#50)
+- validate provider is installed at resource apply time (PRA-176) (#49)
+- **api**: refactor reactive engine — ResourceEngine, optimistic concurrency (PRA-216, PRA-31) (#48)
+- sensitive field masking, reveal endpoint, and UI indicators (PRA-227) (#47)
+- immutable field enforcement, Cloud Build optimization, Taskfile refactor (#45)
+- **web**: UI cleanup and component normalization (PRA-142) (#44)
+- org validation, auto-create on publish, and local dev infra (#41)
+- **web**: portless migration, UI polish, and cleanup
+- **api**: auto-rebuild and auto-upgrade workers (M6) (#38)
+- **web**: M5 Provider Store Web UI (#37)
+- **store**: M3 Store API & Install (#36)
+- **store**: M2 Publishing & Build Pipeline (#35)
+- **store**: M1 Foundation — store version, installed provider, and runtime version models (#34)
+- store provider metadata model and storage service (PRA-183) (#33)
+- bounded retries for stuck resources (#32)
+- frontend support for WAITING and DELETING lifecycle states (#31)
+- centralized lifecycle state machine with WAITING/DELETING states (#30)
+- **web**: edge modal edit/disconnect + propagation animations
+- real-time resource deletion via SSE
+- **infra**: split monolithic Helm chart into three
+- **infra**: add pragma app-only Helm chart
+- **infra**: add NATS wrapper Helm chart
+- **infra**: add standalone SurrealDB Helm chart
+- add provider heartbeat mechanism for stuck resource detection
+- add 3-layer defense for NATS event loss during deploys
+- **web**: customize Clerk auth pages to match dark design system
+- reactive dependency resolution, SSE event streaming, and NATS reconnection (#28)
+- support union types in dependency resolution (#27)
+- **api**: add config/resolved_config separation for cleaner data model
+- **api**: add signed URL support for file downloads
+- **api**: implement pragma/file resource for managed file storage (#24)
+- implement automatic owner_references and cascading deletes (#25)
+- **api**: add NATS handler for pragma.apply.* subject (#22)
+- add service account auth for image pull secrets and fix dependency resolution
+- secret outputs + SDK automation (#21)
+- **api**: add resource logs and health proxy endpoints (#19)
+- **web**: UI refinements and app shell improvements (#18)
+- **web**: grid distortion background and UI refinements (#17)
+- **web**: redesign landing page with Figma design system
+- **web**: improve sidebar hover interaction
+- add query components, platform providers, and graph utilities
+- **api**: block READY to DRAFT lifecycle transition
+- **web**: improve ResourceNode UI with buttons, tags, and delete flow
+- **web**: add dark mode support with theme toggle
+- **web**: enhance landing page with scroll button and polish
+- **web**: redesign landing page with monochrome theme
+- **infra**: add GCP authentication for local Kubernetes development
+- **web**: add API client with Clerk authentication
+- **web**: implement saved filters persistence
+- **web**: implement global undo/redo
+- **web**: implement multi-select operations
+- **web**: implement error handling and loading states
+- **web**: implement keyboard shortcuts
+- **web**: build dashboard home page
+- **web,infra**: add favicon, domain routing, and landing page
+- **web,api**: complete M3 graph editor features
+- **web**: add validation errors for resource nodes
+- **web**: add resource palette and schema-driven node handles
+- **web**: add graph canvas with React Flow
+- **mcp**: migrate to FastMCP 2.0+ from_fastapi()
+- **api**: add MCP tools for Resource operations (#8)
+- **web**: add Zustand stores for graph state management (#7)
+- add authenticated route layout with Clerk auth guard
+- **web**: add app shell layout with header, sidebar, and main content
+- add FastAPI-MCP dependency and configure server
+- install dependencies for node graph editor
+- **api,runtime**: implement Phase 3 Subresources
+- **skaffold**: add Cloudflare Tunnel env vars to prod profile
+- **k8s**: add Cloudflare Tunnel helm templates
+- **cli**: update submodule - add --output flag
+- **api**: implement idempotent propagation for reactive updates
+- **api,runtime**: make FieldReferences reactive using markers
+- **api**: implement reactive propagation on resource READY
+- **e2e**: redesign tests as self-contained scenarios with GCP verification
+- **runtime**: instantiate typed dependencies from resolved data
+- **api**: add dependency resolution for Dependency[T] markers
+- Add resource types endpoint and improve CLI UX
+- **web**: implement NERV design system and improve dev workflow
+- add autocompletion for deploy command
+- hide internal K8s details from provider status
+- use MISE_ENV for dev vs production environments
+- add Skaffold profiles for dev and prod deployments
+- provider deployment architecture redesign
+- add PP Supply Mono font to web app
+- **api**: extract resource schemas during build process
+- **api**: add /auth/me endpoint for user information
+- add code-simplifier skill
+- add E2E test infrastructure and provider CLI commands
+- **api**: add build history and rollback support with CalVer versioning
+- **api**: add provider delete endpoint with full lifecycle cleanup
+- **web**: use CLI JWT template for extended token lifetime
+- **runtime**: add git to base image for uv dependency resolution
+- **api**: add Cloud Build dependencies
+- **api**: migrate to Cloud Build and fix outbox namespace
+- add OpenAPI spec generation task and CI workflow
+- **cli**: default API URL to production endpoint
+- **api**: add security headers middleware
+- **k8s**: switch to Cloudflare Origin CA for TLS
+- **k8s**: add GKE ingress with managed TLS certificates
+- **infra**: GKE deployment improvements and CI/CD
+- **api**: cleanup build artifacts after successful build
+- **cli**: add file reference handling for secrets
+- **api**: mount ProviderConfig secrets to provider deployments
+- **sdk**: export platform resource types for type hints
+- **api**: add inline execution path for platform resources
+- **api**: add PlatformProvider service for inline resource execution
+- **platform-provider**: add Secret and ProviderConfig resources
+- **cli**: rewrite push command to use SDK/API
+- **sdk**: add provider push/build/deploy methods
+- **skills**: add greptile-pr skill for PR review workflow
+- **api**: add configurable build job retry limit
+- **security**: add tenant isolation and resource limits for provider builds
+- **nats**: implement tenant isolation via subject restructuring
+- **skills**: enable fork context for research and implementation skills
+- **nats**: enforce mandatory NATS authentication across system
+- **runtime**: add health endpoints with FastAPI lifespan
+- migrate workflow commands to bd-centric coordination
+- **api**: add provider API endpoints for build and deployment
+- **api**: add provider deployment service for Kubernetes
+- **api**: add NATS credential provisioning service
+- **api**: migrate build service from Kaniko to BuildKit
+- **api**: add Kaniko build service for provider containers
+- **api**: add Dockerfile generation service for provider builds
+- **api**: add code storage for provider builds
+- **k8s**: add build infrastructure (registry + Kaniko RBAC)
+- **runtime**: add base Docker image for provider containers
+- add runtime entrypoint that reads pyproject.toml
+- add staff engineer mindset behaviors and replace /retrospective with /reflect
+- add beads-ui tasks for viewing issues
+- Provider Service E2E and SDK Consolidation (#4)
+- implement multi-tenancy with Clerk authentication (#3)
+- **operator**: add format, check, and test tasks to taskfile
+- **python-sdk**: add lifecycle management and comprehensive test suite
+- **api**: add watch utilities for Kubernetes resource monitoring
+- **api**: add delete() method to SurrealDB ResourceDefinitionService
+- **api**: implement declarative resource architecture with full test coverage
+- **api**: implement new domain services architecture
+- **models**: add enums and Kubernetes models with comprehensive domain service tests
+- **tests**: add comprehensive test coverage for routers and Kubernetes services
+- **validation**: optimize field validation with Pydantic Field constraints
+- **tests**: add comprehensive test coverage for SurrealDB services
+- **tests**: add mock_pragma_resource fixture and update existing fixtures
+- **surrealdb**: implement ResourceManager following ResourceDefinitionManager patterns
+- **models**: add id property to PragmaResource and enhance format_fully_qualified_name
+- **api**: enhance SurrealDB client with comprehensive operations
+- **api**: add domain services layer
+- **api**: add sync status model and service exceptions
+- **k8s**: enhance deployment configuration and database settings
+- **api**: integrate SurrealDB for resource definition storage
+- **api**: add configuration management and health endpoint
+- **k8s**: update database path and add surrealdb dependency
+- **k8s**: add SurrealDB deployment and service configurations
+- add fastapi-mcp dependency and integrate with FastAPI application
+- **typescript-sdk**: add comprehensive TypeScript SDK with resource builders, clients, caching, and Svelte integration
+- **typescript-sdk**: add comprehensive TypeScript SDK for Pragmatiks API with caching, retry, validation, and Svelte integration
+- add OpenAPI schema update script and improve API spec formatting
+- **Taskfile.yaml**: add separate dev tasks for api and operator packages and keep combined dev task for overall development workflow
+- base repository structure
+
+### Fix
+
+- use PyPI JSON API for version availability polling (#60)
+- unset VIRTUAL_ENV in ty pre-commit hook (#59)
+- add PyPI availability polling to update-sdk workflow (#58)
+- upgrade Clerk SDK to 5.x, use async auth, fix trailing slash 404s
+- sanitize slash in provider-id kubernetes label values
+- sanitize slash in provider_url for namespaced providers
+- sanitize slash in deployment names for namespaced providers
+- sanitize provider_id slash in Cloud Build tags
+- **deps**: update pragmatiks-sdk to v0.26.0
+- **deps**: update pragmatiks-sdk to v0.25.0
+- **deps**: update pragmatiks-sdk to v0.24.0
+- address pre-existing CloudBuildService issues (PRA-234) (#46)
+- **deps**: update pragmatiks-sdk to v0.23.0
+- **api**: prevent install race condition with atomic DB create (#43)
+- **api**: persist StoreVersion before starting external build (#42)
+- **deps**: update pragmatiks-sdk to v0.22.0
+- **deps**: update pragmatiks-sdk to v0.21.1
+- **web**: resolve react-doctor errors and clean up dead code (#39)
+- **infra**: move JSON array Helm values to values.dev.yaml
+- **web**: redirect to /resources after Clerk sign-in instead of /dashboard
+- **deps**: update pragmatiks-sdk to v0.21.0
+- **deps**: update pragmatiks-sdk to v0.20.0
+- correct helm dependency update path in deploy workflow
+- **deps**: update pragmatiks-sdk to v0.19.0
+- **web**: handle array dependency values in detail panel
+- **web**: handle API ResourceReference objects in detail panel
+- **web**: edge pulse animation + dependency removal in detail panel
+- deduplicate same-state events for same resource in event feed
+- prevent RunnerConfig validation error on pending dependent trigger
+- allow idempotent re-apply of PROCESSING resources
+- strip empty optional fields from config before API submit
+- allow idempotent re-apply of PENDING resources
+- restore config values on cancel edit
+- prevent config fields from reordering during edit
+- handle raw FieldReference objects in edit form to prevent React error #31
+- improve NATS consumer resilience across reconnects
+- prevent ghost resource crashes and reconciler duplicate flooding
+- isolate Cloud Build sources by provider ID and fix reconciler DELETE handling
+- accept resource deletes regardless of current state
+- improve NATS connection resilience across runtime and API workers
+- **web**: re-render canvas grid background on window resize
+- add services RBAC and resolve raw FieldReferences in pending dependents
+- **web**: replace deprecated Clerk afterSignInUrl with fallbackRedirectUrl
+- **web**: force-dynamic rendering to skip build-time prerendering
+- **web**: move Clerk and API keys from build-time to runtime env vars
+- **infra**: use explicit --context in all kubectl/helm commands
+- **infra**: add .dockerignore to exclude .env.local from builds
+- **infra**: remove .env.local during Docker build so build args take effect
+- **helm**: add resource-policy keep annotation to NATS JetStream PVC
+- **helm**: add resource-policy keep annotation to SurrealDB PVC
+- **deps**: update pragmatiks-sdk to v0.18.0
+- **deps**: update pragmatiks-sdk to v0.17.1
+- **api**: normalize slashes in resource IDs (#26)
+- **deps**: update pragmatiks-sdk to v0.17.0
+- **deps**: update pragmatiks-sdk to v0.16.0
+- **ci**: use setup-uv python-version and explicit python for sync
+- **ci**: add uv python install step
+- **ci**: use working-directory for lockfile updates
+- **api**: retry CREATE when previous on_create failed (#20)
+- **web**: make hero text responsive for mobile screens
+- **ci**: handle NO_COMMITS_TO_BUMP in release workflow
+- **web**: improve landing page scramble animation and text selection
+- **web**: handle undefined label in Canvas.tsx modal
+- **web**: add missing Edge type import in Canvas.tsx
+- **api**: add ConfigValidationError handling and CORS config
+- **web**: improve resource loading and deletion
+- **web**: skip status polling when resourceId is empty
+- **api**: register pragma/secret resource at startup
+- **web**: restore UI design and fix infinite loop bug
+- **web**: preserve types in KeyValueEditor and fix polling race condition (#15)
+- **api**: use standard typing.get_args for generic type extraction
+- **api**: resolve type checker errors
+- **infra**: add NEXT_PUBLIC_API_URL and CORS config for production
+- **web**: use icon.svg file convention for favicon
+- **web**: improve landing page mobile responsiveness
+- **web**: adjust grid opacity and capability card animations
+- **infra**: use git tags instead of commit SHA for image tagging
+- **api**: add CORS middleware for local development
+- **api**: move imports to top of file in resource router
+- **api**: remove noisy debug logs from outbox polling
+- **web**: include queryFn in useQuery dependency array
+- **web**: remove minimap from graph canvas
+- **web**: resolve dashboard infinite loop SSR hydration error
+- **web**: replace Next.js default favicon with Pragmatiks icon
+- **api**: remove Clerk references from auth endpoint docstrings
+- **api**: sanitize docstrings to remove internal implementation details
+- **ci**: add PRAGMA_ prefix to env vars for OpenAPI generation
+- provide dummy env vars for OpenAPI generation
+- use --no-sources for uv run in CI
+- align runtime SDK version with api (v0.15.1)
+- only install api package for OpenAPI generation
+- use --no-sources to skip local dev dependencies in CI
+- update OpenAPI workflow to use correct repo name
+- **web**: use proxy.ts instead of middleware.ts for Next.js 16
+- **docker**: pin npm to v10 to avoid npm 11 breaking changes
+- **ci**: use workflow_run instead of PAT to trigger deploy
+- **ci**: use PAT for release to trigger deploy workflow
+- **web**: correct isValidConnection type for React Flow compatibility
+- **ci**: deploy only on release, not on push
+- **ci**: remove release trigger to prevent duplicate deployments
+- remove invalid hq-crew-role issue ID
+- use fastapi-mcp>=0.4.0 (latest available version)
+- update SDK source to sibling repo path
+- **ci**: add NATS helm repo before dependency update
+- **ci**: add helm dependency update step
+- **ci**: add useDockerCLI to prod profile for BuildKit
+- **ci**: enable BuildKit and add image caching
+- **api**: update SDK to v0.15.1 for is_field_ref_marker
+- **api**: update SDK dependency to v0.13.0
+- **ci**: pass Clerk publishable key as build arg for web image
+- **api**: add error tracking to fire-and-forget propagation task
+- **api**: trigger provider on_delete() during resource deletion
+- **runtime**: improve error handling in dependency resolution
+- **e2e**: fix macOS compatibility and API resource_id format
+- address code review findings for Dependency[T]
+- **e2e**: remove deleted lib/tests references from Dockerfile
+- **dev**: improve local development setup with skaffold
+- handle missing client in shell completions
+- **api**: provider push and deploy issues
+- production deployment issues
+- **api**: auto-create JetStream stream on startup
+- **api**: make get_build_service async for gRPC event loop
+- **helm**: add CLERK_AUTHORIZED_PARTIES to GCP values
+- update SDK path after moving to packages/
+- use absolute imports, include all packages in type checking
+- exclude submodules from main repo type checking
+- **k8s**: resolve NATS authentication in GKE deployment
+- **cli**: narrow exception handler in _stream_build_logs
+- **api**: increase ID lengths in deployment names
+- **api**: use 12 characters of build_id in job names
+- **api**: stream build logs without buffering in memory
+- **api**: add tenant isolation to build operations
+- **skills**: remove fork context from code-review skill
+- **api**: use static NATS auth instead of per-tenant credentials
+- **api**: improve BuildStorage exception handling and test coverage
+- **api**: add symlink/hardlink validation to tarball extraction
+- **api**: add RBAC permissions and eliminate NATS credential race condition
+- **api**: generate NATS credentials once per apply call
+- **api**: validate NATS secret exists before deployment
+- **k8s**: improve deployment security and reliability
+- **k8s**: move SurrealDB credentials to Kubernetes Secret
+- **k8s**: replace cluster-admin with minimal RBAC permissions
+- **sdk**: remove unnecessary type ignore comments
+- **templates**: improve on_update example to show update pattern
+- **templates**: update provider template README and remove mise
+- **cli**: correct test assertions in test_provider and test_completions
+- **cli**: add missing pyyaml dependency
+- **cli**: update apply command to use apply_resource method
+- **api**: fix ResourceDefinitions router and discovery endpoints
+- **uv.lock**: update package sources from virtual/directory to editable for pragma-api and pragma-operator to enable local editable installs
+
+### Refactor
+
+- consolidate provider data model (PRA-253) (#52)
+- centralize provider name derivations into ProviderIdentity (#51)
+- unify provider store with org/name URL scheme (#40)
+- **web**: remove mockup types and use API ResourceDefinition (#14)
+- **web**: extract reusable components and CSS utilities
+- update config for standalone platform
+- remove submodules - repos now live as siblings in town
+- **ci**: use Skaffold for consistent local/CI deployments
+- **k8s**: remove unused runtime deployment
+- **k8s**: remove GKE Ingress resources
+- **e2e**: use CLI JSON output instead of direct API calls
+- **api,runtime**: use shared is_dependency_marker from SDK
+- **api**: hide internal details from API responses
+- **api**: hide internal details from provider delete response
+- use mise for deployment secrets
+- move deploy tasks to infra namespace and cleanup
+- update to pragma providers command
+- **e2e**: consolidate provider delete tests into provider_cli
+- **api**: make ProviderService dependencies required
+- **api**: use native async clients for Cloud Build and storage
+- **api**: remove dead code and consolidate image_url methods
+- move sdk and providers submodules into packages/
+- move CLI to separate repository as submodule
+- move SDK and providers to separate public repos
+- **api**: add pragma-build-cleanup CLI to replace inline CronJob logic
+- remove PlatformProvider, handle pragma/secret inline
+- simplify secrets to SurrealDB-only storage
+- import SDK types from pragma_sdk, not pragma_provider
+- **pragma-provider**: remove SDK re-exports
+- **api**: use lightkube server-side apply for K8s secrets
+- **api**: replace _create/_update_k8s_secret with _apply_k8s_secret
+- recreate platform-provider as pragma-provider using CLI template
+- **cli**: split _upload_and_build into SRP-compliant functions
+- **docs**: lean out CLAUDE.md, move workflow to skills
+- **tests**: enforce no test classes, fixtures in conftest.py
+- **api**: restructure PragmaService into domain-specific sub-services
+- **api**: use obstore for BuildStorage backend
+- **api**: remove _service suffix from module names
+- **api**: move BuildResult/DeploymentResult to models as Pydantic
+- **runtime**: centralize initialization checks in properties
+- **runtime**: consolidate error handling in entrypoint
+- **runtime**: rename get_config_class to config_class
+- **runtime**: apply Greptile feedback patterns
+- **runtime**: extract RuntimeConfig to config.py
+- migrate workflow commands to skills
+- **api**: rename k8s to kubernetes throughout codebase
+- **api**: consolidate dockerfile into build storage and add exceptions
+- **api**: convert test classes to standalone functions
+- update provider template for platform-runs-runtime architecture
+- migrate packages to src-layout structure
+- **python-sdk**: separate sync and async clients with clean API
+- **api**: update service layer for simplified models
+- **api**: simplify models to remove validation layer
+- **api**: simplify service layer after domain_service removal
+- **api**: remove domain_service layer and unused scripts
+- **api**: update core components for new architecture
+- **api**: remove legacy services and models structure
+- **services**: improve routers and domain services with production-ready patterns
+- **validation**: eliminate redundancy between validation methods
+- **surrealdb**: update ResourceDefinitionManager label_selector to use dict
+- **k8s**: improve code formatting and field reference resolution
+- **api**: restructure Kubernetes client architecture
+- **Dockerfile.operator**: remove hardcoded PRAGMA_SERVER_URL to improve flexibility feat(k8s): introduce Helm chart for Pragmatiks to streamline deployment refactor(k8s): remove old Kubernetes manifests in favor of Helm templates chore(skaffold.yaml): switch deployment strategy from raw YAML to Helm for better management fix(python-sdk): rename PRAGMA_SERVER_URL to PRAGMA_API_URL for consistency refactor(resource.py): remove unused PRAGMA_SERVER_URL variable to clean up code
+- new project structure
+- **resource.py**: update client calls to use async methods and adjust resource definition patch strategy fix(resource.py): simplify owner_references filtering for better readability and consistency
+- **cli/resources.py**: replace async calls with synchronous calls to simplify CLI commands and remove asyncio usage
+- **cli/completions.py**: convert async completion functions to synchronous to simplify code and improve compatibility
+- **api**: unify resource definition update to use patch instead of replace and improve Kubernetes client usage
+- **sdk**: unify synchronous and asynchronous PragmaClient methods and enhance resource and resource definition APIs
+
+### Perf
+
+- cache BuildService at startup to avoid GCP client init per request
+- parallelize K8s deployment status calls in list_providers

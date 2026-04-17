@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 # Provider dependency DAG:
-#   gcp, supabase, vercel, github  (no internal deps — run in parallel)
+#   gcp, supabase, vercel, github, pragma  (no internal deps — run in parallel)
 #   kubernetes  (depends on gcp)
 #   qdrant      (depends on kubernetes)
 #   agno        (depends on gcp, kubernetes)
@@ -18,6 +18,7 @@ on:
 #   supabase changed → supabase
 #   vercel changed   → vercel
 #   github changed   → github
+#   pragma changed   → pragma
 #   shared changed   → all providers
 
 jobs:
@@ -32,6 +33,7 @@ jobs:
       supabase: ${{ steps.filter.outputs.supabase }}
       vercel: ${{ steps.filter.outputs.vercel }}
       github: ${{ steps.filter.outputs.github }}
+      pragma: ${{ steps.filter.outputs.pragma }}
     steps:
       - uses: actions/checkout@v4
 
@@ -61,6 +63,8 @@ jobs:
               - 'packages/vercel/**'
             github:
               - 'packages/github/**'
+            pragma:
+              - 'packages/pragma/**'
 
   publish-gcp:
     needs: [detect-changes]
@@ -468,6 +472,108 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
         run: |
           cd packages/github
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+
+  publish-pragma:
+    needs: [detect-changes]
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        !startsWith(github.event.head_commit.message, 'bump:') &&
+        (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.pragma == 'true')
+      )
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install commitizen
+        run: uv tool install commitizen
+
+      - name: Install pragma CLI
+        run: uv tool install pragmatiks-cli
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump and build
+        id: bump
+        run: |
+          cd packages/pragma
+          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+            VERSION=$(cz version --project)
+            echo "Bumped pragma to v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            uv build --package pragmatiks-pragma-provider --out-dir ../../dist
+          else
+            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+              echo "No bump needed for pragma"
+            else
+              cat bump_output.txt
+              exit 1
+            fi
+          fi
+
+      - name: Push version bumps and tags
+        run: |
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            echo "Push attempt $i failed, retrying in ${i}s..."
+            sleep $i
+          done
+          echo "Failed to push after 5 attempts"
+          exit 1
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          gh release create "pragma-v${VERSION}" \
+            --title "pragmatiks-pragma-provider v${VERSION}" \
+            --generate-notes \
+            dist/pragmatiks_pragma_provider-${VERSION}* || echo "Release may already exist"
+
+      - name: Publish to PyPI
+        if: steps.bump.outputs.version != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          password: ${{ secrets.PYPI_TOKEN }}
+          skip-existing: true
+          attestations: false
+
+      - name: Publish to pragma store
+        if: steps.bump.outputs.version != ''
+        env:
+          PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
+        run: |
+          cd packages/pragma
           pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
 
   publish-kubernetes:

@@ -22,6 +22,9 @@ includes:
   github:
     taskfile: ./taskfiles/github.Taskfile.yaml
     dir: ./packages/github
+  pragma:
+    taskfile: ./taskfiles/pragma.Taskfile.yaml
+    dir: ./packages/pragma
 
 tasks:
   default: task --list-all
@@ -40,6 +43,7 @@ tasks:
       - supabase:test
       - vercel:test
       - github:test
+      - pragma:test
 
   format:
     desc: Format all Python code
@@ -51,6 +55,7 @@ tasks:
       - supabase:format
       - vercel:format
       - github:format
+      - pragma:format
 
   check:
     desc: Run all checks (ruff + type checking)
@@ -62,3 +67,4 @@ tasks:
       - supabase:check
       - vercel:check
       - github:check
+      - pragma:check
