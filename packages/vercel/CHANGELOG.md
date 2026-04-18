@@ -1,3 +1,30 @@
+## vercel-v0.13.0 (2026-04-18)
+
+### Feat
+
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+- **kubernetes**: config resource with multi-cluster auth modes (#64)
+
+## vercel-v0.10.0 (2026-04-16)
+
+### Feat
+
+- **agno**: add output_schema for structured agent responses
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+- **ci**: skip builds for unchanged providers
+- accept workflow_dispatch trigger for CLI cascade
+- add icon_url to all provider pyproject.toml
+
+### Fix
+
+- **agno**: mark api_key fields as SensitiveField for API response redaction (#61)
+- remove redundant PRAGMA_API_URL env var from publish workflow
+- use PRAGMA_AUTH_TOKEN secret instead of CLERK_SECRET_KEY for store publish
+- set PRAGMA_API_URL in publish workflow for pragma store
+- install pragma CLI and add git push retry to publish workflow
+- restructure publish workflow as per-provider DAG with API token auth
+
 ## vercel-v0.12.0 (2026-04-18)
 
 ### Feat
