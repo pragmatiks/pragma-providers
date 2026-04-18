@@ -1,3 +1,9 @@
+## pragma-v1.0.1 (2026-04-18)
+
+### Fix
+
+- Republish to land an up-to-date provider version in the platform catalog.
+
 ## pragma-v1.0.0 (2026-04-18)
 
 ### Feat
