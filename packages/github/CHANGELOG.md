@@ -1,3 +1,11 @@
+## github-v0.12.0 (2026-04-18)
+
+### Feat
+
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+- **kubernetes**: config resource with multi-cluster auth modes (#64)
+
 ## github-v0.11.0 (2026-04-16)
 
 ### Feat
