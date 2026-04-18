@@ -10,6 +10,13 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v0.48.0 (2026-04-18)
+
+### Feat
+
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+
 ## qdrant-v0.47.0 (2026-04-18)
 
 ### Feat
