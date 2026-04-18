@@ -52,7 +52,7 @@ async def test_file_create_reads_metadata(
 
     _mock_obstore(mocker)
 
-    config = FileConfig(content_type="application/pdf")
+    config = FileConfig()
 
     result = await harness.invoke_create(File, name="report.pdf", config=config)
 
@@ -76,8 +76,8 @@ async def test_file_update_re_reads_metadata(
 
     _mock_obstore(mocker)
 
-    previous = FileConfig(content_type="application/pdf")
-    current = FileConfig(content_type="application/pdf", description="Updated")
+    previous = FileConfig()
+    current = FileConfig()
 
     result = await harness.invoke_update(
         File,
@@ -105,7 +105,7 @@ async def test_file_delete_removes_file_and_metadata(
         new_callable=mocker.AsyncMock,
     )
 
-    config = FileConfig(content_type="application/pdf")
+    config = FileConfig()
 
     result = await harness.invoke_delete(File, name="report.pdf", config=config)
 
@@ -128,7 +128,7 @@ async def test_file_delete_idempotent_when_not_found(
         side_effect=FileNotFoundError("not found"),
     )
 
-    config = FileConfig(content_type="application/pdf")
+    config = FileConfig()
 
     result = await harness.invoke_delete(File, name="missing.pdf", config=config)
 
@@ -157,3 +157,22 @@ async def test_file_create_fails_when_not_uploaded(
     assert result.failed
     assert result.error is not None
     assert "not uploaded" in str(result.error).lower()
+
+
+async def test_file_create_fails_with_runtime_error_when_env_missing(
+    harness: ProviderHarness,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PRAGMA_FILE_GCS_BUCKET", raising=False)
+    monkeypatch.delenv("PRAGMA_FILE_PUBLIC_URL", raising=False)
+    monkeypatch.delenv("PRAGMA_RUNTIME_ORGANIZATION_ID", raising=False)
+
+    config = FileConfig()
+
+    result = await harness.invoke_create(File, name="report.pdf", config=config)
+
+    assert result.failed
+    assert result.error is not None
+    error_message = str(result.error)
+    assert "PRAGMA_FILE_GCS_BUCKET" in error_message
+    assert "Pragmatiks runtime" in error_message

@@ -108,9 +108,7 @@ resources:
 
 Platform-managed file storage. The actual file content is uploaded through the Pragmatiks API (`POST /files/{name}/upload`); this resource reads the uploaded metadata and exposes URLs, size, and checksum as outputs.
 
-**Config:**
-- `content_type` (string, mutable, default `"application/octet-stream"`) -- MIME type of the file.
-- `description` (string, optional, mutable) -- Human-readable description of the file.
+**Config:** none -- the resource tracks a file already uploaded through the Pragmatiks API under the resource's name.
 
 **Outputs:**
 - `url` -- Internal `pragma://` URL used for cross-resource references.
@@ -125,15 +123,23 @@ resources:
   onboarding-doc:
     provider: pragma
     resource: file
-    config:
-      content_type: application/pdf
-      description: Onboarding guide shipped with every new workspace
+    config: {}
 ```
 
 **Behavior:**
 - Create: Reads the uploaded file metadata and exposes URLs, size, and checksum as outputs. Fails with a clear error if the file content has not been uploaded yet.
-- Update: Re-reads the metadata so mutable fields (description, content type) are reflected in the outputs.
+- Update: Re-reads the metadata from storage so outputs reflect the latest uploaded version.
 - Delete: Removes both the file content and its metadata from the underlying object store. Idempotent -- missing files are treated as already deleted.
+
+## Runtime Environment
+
+The `pragma/file` resource reads storage configuration from environment variables populated by the Pragmatiks runtime. Standalone use is not supported.
+
+| Variable | Purpose |
+|----------|---------|
+| `PRAGMA_FILE_GCS_BUCKET` | Object-store bucket holding uploaded file content |
+| `PRAGMA_FILE_PUBLIC_URL` | Base URL used to compose public download URLs |
+| `PRAGMA_RUNTIME_ORGANIZATION_ID` | Identifies the organization's file prefix in the bucket |
 
 ## Development
 
