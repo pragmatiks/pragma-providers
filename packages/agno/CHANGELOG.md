@@ -1,3 +1,13 @@
+## agno-v0.117.0 (2026-04-18)
+
+### Feat
+
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+- **kubernetes**: config resource with multi-cluster auth modes (#64)
+- **agno**: add output_schema for structured agent responses
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+
 ## agno-v0.116.0 (2026-04-18)
 
 ### Feat
