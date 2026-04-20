@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+import anthropic
 from agno.models.anthropic import Claude
 from pragma_sdk import Field, SensitiveField
 
@@ -77,8 +78,10 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
     parameters. The Claude instance is created via from_spec() at runtime.
 
     This is a thin wrapper - the Claude instance is created on-demand.
-    No API validation is performed since the Agno SDK handles authentication
-    when the model is actually used.
+    On create, the API key and model id are validated against the Anthropic
+    API via ``client.models.retrieve``. Invalid credentials or a missing
+    model id surface as a FAILED resource rather than silently succeeding
+    and breaking on first agent invocation.
 
     Runtime reconstruction from spec:
         ```python
@@ -127,12 +130,28 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         return AnthropicModelOutputs(spec=self._build_spec())
 
     async def on_create(self) -> AnthropicModelOutputs:
-        """Create returns serializable outputs with spec.
+        """Validate credentials against Anthropic and return outputs with spec.
+
+        Performs a lightweight ``client.models.retrieve`` round-trip so an
+        invalid API key or nonexistent model id fails the resource at
+        create time rather than on first agent invocation. Any error from
+        the Anthropic SDK propagates so the runtime marks the resource
+        FAILED.
 
         Returns:
             AnthropicModelOutputs with spec.
         """
+        await self._validate_credentials()
         return self._build_outputs()
+
+    async def _validate_credentials(self) -> None:
+        """Round-trip to Anthropic to verify the API key and model id.
+
+        Any error from the Anthropic SDK propagates so the runtime marks
+        the resource FAILED.
+        """
+        client = anthropic.AsyncAnthropic(api_key=str(self.config.api_key))
+        await client.models.retrieve(self.config.id)
 
     async def on_update(self, previous_config: AnthropicModelConfig) -> AnthropicModelOutputs:  # noqa: ARG002
         """Update returns serializable outputs with spec.
