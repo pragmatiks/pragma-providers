@@ -1,3 +1,9 @@
+## gcp-v0.167.1 (2026-04-20)
+
+### Fix
+
+- **pragma**: correct FieldReference syntax in README (#68)
+
 ## gcp-v0.167.0 (2026-04-18)
 
 ### Feat
