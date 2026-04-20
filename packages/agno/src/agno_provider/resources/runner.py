@@ -553,13 +553,17 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
     ) -> None:
         """Apply kubernetes deployment and service as child resources.
 
+        The deployment is awaited until READY so the runner only reports
+        ready when pods have actually started. The service is applied
+        fire-and-forget because it does not gate pod readiness.
+
         Args:
             namespace_name: Resolved namespace name string.
             agent_specs: Agent specs to deploy on this runner.
             team_specs: Team specs to deploy on this runner.
         """
         kubernetes_deployment = self._build_kubernetes_deployment(namespace_name, agent_specs, team_specs)
-        await kubernetes_deployment.apply()
+        await kubernetes_deployment.apply(wait=True, timeout=300.0)
 
         kubernetes_service = self._build_kubernetes_service(namespace_name)
         await kubernetes_service.apply()

@@ -1357,7 +1357,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-agno-provider"
-version = "0.113.0"
+version = "0.117.0"
 source = { editable = "." }
 dependencies = [
     { name = "agno", extra = ["anthropic", "openai", "postgres", "qdrant"] },
@@ -1388,7 +1388,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.26.0" },
     { name = "pragmatiks-gcp-provider", specifier = ">=0.77.0" },
     { name = "pragmatiks-kubernetes-provider", specifier = ">=0.100.0" },
-    { name = "pragmatiks-sdk", specifier = ">=0.34.0" },
+    { name = "pragmatiks-sdk", specifier = ">=1.2.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
 ]
@@ -1437,7 +1437,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-sdk"
-version = "0.34.0"
+version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -1445,9 +1445,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/58/2c/a9752bc12408f750dd326c4eef2cafa499ae8cdc6137ff4bef85a1b77656/pragmatiks_sdk-0.34.0.tar.gz", hash = "sha256:8ec692eca09b0f2c2df56c5b6418047958da66f75c264bddf71f5744981cf224", size = 33607, upload-time = "2026-04-03T15:55:00.708Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bd/fc/113b34d695938410fdb133b2c8732b0ca227fea2bda8aa5b2052df86cab7/pragmatiks_sdk-1.2.0.tar.gz", hash = "sha256:a1ba9126be12f91d78114cb66936dec3a5004b029a72c1c351dd91e66a00f6de", size = 50175, upload-time = "2026-04-20T11:32:27.413Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7a/82/8c09c86e8c7c10f868c22ab333456ad61a52a29b0a8933a7bf3af6481999/pragmatiks_sdk-0.34.0-py3-none-any.whl", hash = "sha256:e80efcd47bd7fcce5df6127da0a73a667462ac3e00f7f28343313d49e2db946f", size = 41486, upload-time = "2026-04-03T15:54:59.564Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/98/132c11f49a13dc6f5bfc085047c3a40daad6e22063b52ee2987c1a75bbb3/pragmatiks_sdk-1.2.0-py3-none-any.whl", hash = "sha256:f6aefeb900e098dd237eb785471b63485168e0f84627c0cad0fdbd9bdd6e4fbd", size = 60030, upload-time = "2026-04-20T11:32:25.954Z" },
 ]
 
 [[package]]
