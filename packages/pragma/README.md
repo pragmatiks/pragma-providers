@@ -2,7 +2,7 @@
 
 Built-in platform resources for [Pragmatiks](https://pragmatiks.io).
 
-Declaratively manage secrets, non-sensitive configuration, and file storage alongside the rest of your infrastructure. The resources in this provider are available out of the box in every organization and are commonly referenced by other providers through `$ref` lookups.
+Declaratively manage secrets, non-sensitive configuration, and file storage alongside the rest of your infrastructure. The resources in this provider are available out of the box in every organization and are commonly referenced by other providers through `FieldReference`.
 
 ## Installation
 
@@ -28,13 +28,13 @@ uv add pragmatiks-pragma-provider
 
 ### Secret
 
-Stores sensitive key-value data and exposes each entry as an output so that other resources can reference individual values through `$ref` lookups.
+Stores sensitive key-value data and exposes each entry as an output so that other resources can reference individual values through `FieldReference`.
 
 **Config:**
 - `data` (`dict[str, str]`, required, mutable) -- Key-value pairs of secret data. Values must be strings.
 
 **Outputs:**
-- Each key-value pair from `data` is exposed as a separate output field.
+- Each key-value pair from `data` is exposed as a separately referenceable output field (e.g., `outputs.username`, `outputs.password`).
 
 ```yaml
 resources:
@@ -45,20 +45,10 @@ resources:
       data:
         username: app_service
         password: hunter2
-
-  app-user:
-    provider: gcp
-    resource: cloudsql/user
-    config:
-      instance: ${{ prod-instance }}
-      username:
-        $ref: database-credentials#outputs.username
-      password:
-        $ref: database-credentials#outputs.password
 ```
 
 **Behavior:**
-- Create: Stores each key as a separate output for downstream `$ref` resolution.
+- Create: Stores each key as a separate output for downstream references.
 - Update: Replaces the full output set with the new `data` keys and values.
 - Delete: No-op. Secret state is held alongside the resource itself.
 
@@ -72,7 +62,7 @@ Non-sensitive configuration store. Unlike `pragma/secret`, values may be any JSO
 - `data` (`dict[str, Any]`, required, mutable) -- Key-value pairs of configuration data. Values may be strings, numbers, booleans, lists, or nested objects.
 
 **Outputs:**
-- Each key-value pair from `data` is exposed as a separate output field, preserving its original type.
+- Each key-value pair from `data` is exposed as a separately referenceable output field (e.g., `outputs.project_id`, `outputs.region`), preserving its original type.
 
 ```yaml
 resources:
@@ -86,19 +76,10 @@ resources:
         tags:
           - production
           - primary
-
-  my-bucket:
-    provider: gcp
-    resource: storage
-    config:
-      project_id:
-        $ref: gcp-defaults#outputs.project_id
-      location:
-        $ref: gcp-defaults#outputs.region
 ```
 
 **Behavior:**
-- Create: Stores each key as a separate output for downstream `$ref` resolution.
+- Create: Stores each key as a separate output for downstream references.
 - Update: Replaces the full output set with the new `data` keys and values.
 - Delete: No-op. Config state is held alongside the resource itself.
 
