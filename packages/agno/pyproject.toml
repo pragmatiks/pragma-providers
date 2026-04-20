@@ -7,7 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "pragmatiks-sdk>=1.2.0",
     "pragmatiks-gcp-provider>=0.77.0",
-    "pragmatiks-kubernetes-provider>=0.100.0",
+    "pragmatiks-kubernetes-provider>=0.171.0",
     "agno[anthropic,openai,postgres,qdrant]>=2.4.0",
     "fastapi[standard]>=0.115.0",
     "sqlalchemy>=2.0.0",
