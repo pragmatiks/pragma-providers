@@ -1,3 +1,9 @@
+## pragma-v1.2.0 (2026-04-20)
+
+### Fix
+
+- **pragma**: correct FieldReference syntax in README (#68)
+
 ## pragma-v1.1.0 (2026-04-18)
 
 ## pragma-v1.0.1 (2026-04-18)
