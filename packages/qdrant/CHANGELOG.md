@@ -10,6 +10,19 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v0.50.0 (2026-04-20)
+
+### Feat
+
+- **agno**: honest readiness for runner + credential validation (#69)
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+
+### Fix
+
+- refresh provider lockfiles to resolve cross-provider deps (#70)
+- **pragma**: correct FieldReference syntax in README (#68)
+
 ## qdrant-v0.49.0 (2026-04-18)
 
 ### Feat
