@@ -1,3 +1,15 @@
+## vercel-v0.16.0 (2026-04-20)
+
+### Feat
+
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+- **kubernetes**: config resource with multi-cluster auth modes (#64)
+
+### Fix
+
+- **pragma**: correct FieldReference syntax in README (#68)
+
 ## vercel-v0.15.0 (2026-04-18)
 
 ### Feat
