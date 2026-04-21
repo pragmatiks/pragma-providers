@@ -1,3 +1,28 @@
+## supabase-v0.23.0 (2026-04-21)
+
+### Feat
+
+- **agno**: honest readiness for runner + credential validation (#69)
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+- **kubernetes**: config resource with multi-cluster auth modes (#64)
+- **agno**: add output_schema for structured agent responses
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+- **ci**: skip builds for unchanged providers
+- accept workflow_dispatch trigger for CLI cascade
+- add icon_url to all provider pyproject.toml
+
+### Fix
+
+- refresh provider lockfiles to resolve cross-provider deps (#70)
+- **pragma**: correct FieldReference syntax in README (#68)
+- **agno**: mark api_key fields as SensitiveField for API response redaction (#61)
+- remove redundant PRAGMA_API_URL env var from publish workflow
+- use PRAGMA_AUTH_TOKEN secret instead of CLERK_SECRET_KEY for store publish
+- set PRAGMA_API_URL in publish workflow for pragma store
+- install pragma CLI and add git push retry to publish workflow
+- restructure publish workflow as per-provider DAG with API token auth
+
 ## supabase-v0.22.0 (2026-04-21)
 
 ### Feat
