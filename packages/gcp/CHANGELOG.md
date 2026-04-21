@@ -1,3 +1,14 @@
+## gcp-v0.172.0 (2026-04-21)
+
+### Feat
+
+- **agno**: honest readiness for runner + credential validation (#69)
+
+### Fix
+
+- refresh provider lockfiles to resolve cross-provider deps (#70)
+- **pragma**: correct FieldReference syntax in README (#68)
+
 ## gcp-v0.171.0 (2026-04-21)
 
 ### Feat
