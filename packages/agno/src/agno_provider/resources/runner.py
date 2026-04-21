@@ -1,8 +1,6 @@
 """Agno Runner resource - deploys agents and teams to Kubernetes.
 
 A Runner hosts one or more agents and teams on a single AgentOS instance.
-The ``workflows`` field is reserved; it will be populated once a dedicated
-Workflow resource type ships and must stay empty in the meantime.
 """
 
 from __future__ import annotations
@@ -112,15 +110,11 @@ class RunnerConfig(Config):
     """Configuration for deploying Agno agents and teams to Kubernetes.
 
     A single runner can host multiple agents and teams in one AgentOS
-    instance. At least one agent or team is required. The ``workflows``
-    field is reserved and must be left empty until the Workflow resource
-    type ships; runtime validation rejects any non-empty value.
+    instance. At least one agent or team is required.
 
     Attributes:
         agents: Agent dependencies to deploy on this runner.
         teams: Team dependencies to deploy on this runner.
-        workflows: Reserved for a future Workflow resource type. Must be
-            empty; populating it is rejected by the config validator.
         config: Kubernetes config dependency providing cluster access.
         namespace: Kubernetes namespace dependency for the runner pods.
         replicas: Number of pod replicas. Defaults to 1.
@@ -134,7 +128,6 @@ class RunnerConfig(Config):
 
     agents: list[Dependency[Agent]] = []
     teams: list[Dependency[Team]] = []
-    workflows: list[Any] = []
 
     config: ImmutableDependency[KubernetesConfig]
     namespace: Dependency[Namespace]
@@ -155,16 +148,8 @@ class RunnerConfig(Config):
             Self after validation.
 
         Raises:
-            ValueError: If no entities are provided, or if workflows is non-empty
-                (the Workflow resource type is not yet implemented).
+            ValueError: If no entities are provided.
         """
-        if self.workflows:
-            msg = (
-                "workflows is reserved for a future release; pass an empty "
-                "list until the Workflow resource type is introduced"
-            )
-            raise ValueError(msg)
-
         total = len(self.agents) + len(self.teams)
         if total < 1:
             msg = "At least one agent or team must be provided"
