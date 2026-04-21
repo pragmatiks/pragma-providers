@@ -1,3 +1,20 @@
+## agno-v0.120.0 (2026-04-21)
+
+### Feat
+
+- **agno**: honest readiness for runner + credential validation (#69)
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+- **kubernetes**: config resource with multi-cluster auth modes (#64)
+- **agno**: add output_schema for structured agent responses
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+
+### Fix
+
+- **agno**: remove workflows placeholder field to satisfy sdk type validation (#71)
+- refresh provider lockfiles to resolve cross-provider deps (#70)
+- **pragma**: correct FieldReference syntax in README (#68)
+
 ## agno-v0.119.0 (2026-04-21)
 
 ### Feat
