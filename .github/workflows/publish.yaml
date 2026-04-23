@@ -269,7 +269,7 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
         run: |
           cd packages/supabase
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
 
   publish-vercel:
     needs: [detect-changes]
