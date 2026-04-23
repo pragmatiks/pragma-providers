@@ -10,6 +10,16 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v0.56.0 (2026-04-23)
+
+### Feat
+
+- rename canonical platform providers from pragmatiks/* to platform/* (PRA-368) (#72)
+
+### Fix
+
+- **agno**: remove workflows placeholder field to satisfy sdk type validation (#71)
+
 ## qdrant-v0.55.0 (2026-04-21)
 
 ### Feat
