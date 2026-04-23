@@ -575,7 +575,7 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
         run: |
           cd packages/pragma
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
 
   publish-kubernetes:
     needs: [detect-changes, publish-gcp]
