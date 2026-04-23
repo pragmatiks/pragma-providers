@@ -1,3 +1,16 @@
+## gcp-v0.174.0 (2026-04-23)
+
+### Feat
+
+- rename canonical platform providers from pragmatiks/* to platform/* (PRA-368) (#72)
+- **agno**: honest readiness for runner + credential validation (#69)
+
+### Fix
+
+- **agno**: remove workflows placeholder field to satisfy sdk type validation (#71)
+- refresh provider lockfiles to resolve cross-provider deps (#70)
+- **pragma**: correct FieldReference syntax in README (#68)
+
 ## gcp-v0.173.0 (2026-04-21)
 
 ### Feat
