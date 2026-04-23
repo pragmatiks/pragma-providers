@@ -986,7 +986,7 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
         run: |
           cd packages/agno
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
 
       - name: Read runner transport version
         id: runner-transport
