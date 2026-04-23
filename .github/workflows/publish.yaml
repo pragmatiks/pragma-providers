@@ -709,7 +709,7 @@ jobs:
           PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
         run: |
           cd packages/kubernetes
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org pragmatiks
+          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
 
   publish-qdrant:
     needs: [detect-changes, publish-kubernetes]
