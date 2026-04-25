@@ -10,6 +10,33 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v0.65.0 (2026-04-25)
+
+### Feat
+
+- **ci**: add allow_no_commit dispatch input for catalog repopulation (PRA-369) (#76)
+- **ci**: migrate provider publish to ConsoleMachine + /console publish endpoint (PRA-369) (#73)
+- rename canonical platform providers from pragmatiks/* to platform/* (PRA-368) (#72)
+
+### Fix
+
+- **ci**: forward provider metadata from pyproject to /console publish (PRA-369) (#75)
+- **ci**: mint opaque M2M token (mt_*) instead of JWT-format (PRA-369) (#74)
+- **agno**: remove workflows placeholder field to satisfy sdk type validation (#71)
+
+## qdrant-v0.55.0 (2026-04-21)
+
+### Feat
+
+- **agno**: honest readiness for runner + credential validation (#69)
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+
+### Fix
+
+- refresh provider lockfiles to resolve cross-provider deps (#70)
+- **pragma**: correct FieldReference syntax in README (#68)
+
 ## qdrant-v0.64.0 (2026-04-25)
 
 ### Feat
