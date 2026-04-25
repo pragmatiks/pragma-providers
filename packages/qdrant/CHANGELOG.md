@@ -10,6 +10,17 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v0.57.0 (2026-04-25)
+
+### Feat
+
+- **ci**: migrate provider publish to ConsoleMachine + /console publish endpoint (PRA-369) (#73)
+- rename canonical platform providers from pragmatiks/* to platform/* (PRA-368) (#72)
+
+### Fix
+
+- **agno**: remove workflows placeholder field to satisfy sdk type validation (#71)
+
 ## qdrant-v0.56.0 (2026-04-23)
 
 ### Feat
