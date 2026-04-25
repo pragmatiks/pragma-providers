@@ -105,9 +105,6 @@ jobs:
       - name: Install commitizen
         run: uv tool install commitizen
 
-      - name: Install pragma CLI
-        run: uv tool install pragmatiks-cli
-
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
@@ -164,10 +161,12 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
+          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
         run: |
-          cd packages/gcp
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
+          ./scripts/publish_platform_provider.sh \
+            gcp \
+            "dist/pragmatiks_gcp_provider-${{ steps.bump.outputs.version }}.tar.gz" \
+            "${{ steps.bump.outputs.version }}"
 
   publish-supabase:
     needs: [detect-changes]
@@ -206,9 +205,6 @@ jobs:
 
       - name: Install commitizen
         run: uv tool install commitizen
-
-      - name: Install pragma CLI
-        run: uv tool install pragmatiks-cli
 
       - name: Configure git
         run: |
@@ -266,10 +262,12 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
+          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
         run: |
-          cd packages/supabase
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
+          ./scripts/publish_platform_provider.sh \
+            supabase \
+            "dist/pragmatiks_supabase_provider-${{ steps.bump.outputs.version }}.tar.gz" \
+            "${{ steps.bump.outputs.version }}"
 
   publish-vercel:
     needs: [detect-changes]
@@ -308,9 +306,6 @@ jobs:
 
       - name: Install commitizen
         run: uv tool install commitizen
-
-      - name: Install pragma CLI
-        run: uv tool install pragmatiks-cli
 
       - name: Configure git
         run: |
@@ -368,10 +363,12 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
+          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
         run: |
-          cd packages/vercel
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
+          ./scripts/publish_platform_provider.sh \
+            vercel \
+            "dist/pragmatiks_vercel_provider-${{ steps.bump.outputs.version }}.tar.gz" \
+            "${{ steps.bump.outputs.version }}"
 
   publish-github:
     needs: [detect-changes]
@@ -410,9 +407,6 @@ jobs:
 
       - name: Install commitizen
         run: uv tool install commitizen
-
-      - name: Install pragma CLI
-        run: uv tool install pragmatiks-cli
 
       - name: Configure git
         run: |
@@ -470,10 +464,12 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
+          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
         run: |
-          cd packages/github
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
+          ./scripts/publish_platform_provider.sh \
+            github \
+            "dist/pragmatiks_github_provider-${{ steps.bump.outputs.version }}.tar.gz" \
+            "${{ steps.bump.outputs.version }}"
 
   publish-pragma:
     needs: [detect-changes]
@@ -512,9 +508,6 @@ jobs:
 
       - name: Install commitizen
         run: uv tool install commitizen
-
-      - name: Install pragma CLI
-        run: uv tool install pragmatiks-cli
 
       - name: Configure git
         run: |
@@ -572,10 +565,12 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
+          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
         run: |
-          cd packages/pragma
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
+          ./scripts/publish_platform_provider.sh \
+            pragma \
+            "dist/pragmatiks_pragma_provider-${{ steps.bump.outputs.version }}.tar.gz" \
+            "${{ steps.bump.outputs.version }}"
 
   publish-kubernetes:
     needs: [detect-changes, publish-gcp]
@@ -629,9 +624,6 @@ jobs:
 
       - name: Install commitizen
         run: uv tool install commitizen
-
-      - name: Install pragma CLI
-        run: uv tool install pragmatiks-cli
 
       - name: Configure git
         run: |
@@ -706,10 +698,12 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
+          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
         run: |
-          cd packages/kubernetes
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
+          ./scripts/publish_platform_provider.sh \
+            kubernetes \
+            "dist/pragmatiks_kubernetes_provider-${{ steps.bump.outputs.version }}.tar.gz" \
+            "${{ steps.bump.outputs.version }}"
 
   publish-qdrant:
     needs: [detect-changes, publish-kubernetes]
@@ -762,9 +756,6 @@ jobs:
 
       - name: Install commitizen
         run: uv tool install commitizen
-
-      - name: Install pragma CLI
-        run: uv tool install pragmatiks-cli
 
       - name: Configure git
         run: |
@@ -839,10 +830,12 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
+          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
         run: |
-          cd packages/qdrant
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
+          ./scripts/publish_platform_provider.sh \
+            qdrant \
+            "dist/pragmatiks_qdrant_provider-${{ steps.bump.outputs.version }}.tar.gz" \
+            "${{ steps.bump.outputs.version }}"
 
   publish-agno:
     needs: [detect-changes, publish-gcp, publish-kubernetes]
@@ -897,9 +890,6 @@ jobs:
 
       - name: Install commitizen
         run: uv tool install commitizen
-
-      - name: Install pragma CLI
-        run: uv tool install pragmatiks-cli
 
       - name: Configure git
         run: |
@@ -983,10 +973,12 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_AUTH_TOKEN: ${{ secrets.PRAGMA_AUTH_TOKEN }}
+          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
         run: |
-          cd packages/agno
-          pragma providers publish --version "${{ steps.bump.outputs.version }}" --org platform
+          ./scripts/publish_platform_provider.sh \
+            agno \
+            "dist/pragmatiks_agno_provider-${{ steps.bump.outputs.version }}.tar.gz" \
+            "${{ steps.bump.outputs.version }}"
 
       - name: Read runner transport version
         id: runner-transport
