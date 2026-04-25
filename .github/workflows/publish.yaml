@@ -166,7 +166,8 @@ jobs:
           ./scripts/publish_platform_provider.sh \
             gcp \
             "dist/pragmatiks_gcp_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}"
+            "${{ steps.bump.outputs.version }}" \
+            packages/gcp/pyproject.toml
 
   publish-supabase:
     needs: [detect-changes]
@@ -267,7 +268,8 @@ jobs:
           ./scripts/publish_platform_provider.sh \
             supabase \
             "dist/pragmatiks_supabase_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}"
+            "${{ steps.bump.outputs.version }}" \
+            packages/supabase/pyproject.toml
 
   publish-vercel:
     needs: [detect-changes]
@@ -368,7 +370,8 @@ jobs:
           ./scripts/publish_platform_provider.sh \
             vercel \
             "dist/pragmatiks_vercel_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}"
+            "${{ steps.bump.outputs.version }}" \
+            packages/vercel/pyproject.toml
 
   publish-github:
     needs: [detect-changes]
@@ -469,7 +472,8 @@ jobs:
           ./scripts/publish_platform_provider.sh \
             github \
             "dist/pragmatiks_github_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}"
+            "${{ steps.bump.outputs.version }}" \
+            packages/github/pyproject.toml
 
   publish-pragma:
     needs: [detect-changes]
@@ -570,7 +574,8 @@ jobs:
           ./scripts/publish_platform_provider.sh \
             pragma \
             "dist/pragmatiks_pragma_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}"
+            "${{ steps.bump.outputs.version }}" \
+            packages/pragma/pyproject.toml
 
   publish-kubernetes:
     needs: [detect-changes, publish-gcp]
@@ -703,7 +708,8 @@ jobs:
           ./scripts/publish_platform_provider.sh \
             kubernetes \
             "dist/pragmatiks_kubernetes_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}"
+            "${{ steps.bump.outputs.version }}" \
+            packages/kubernetes/pyproject.toml
 
   publish-qdrant:
     needs: [detect-changes, publish-kubernetes]
@@ -835,7 +841,8 @@ jobs:
           ./scripts/publish_platform_provider.sh \
             qdrant \
             "dist/pragmatiks_qdrant_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}"
+            "${{ steps.bump.outputs.version }}" \
+            packages/qdrant/pyproject.toml
 
   publish-agno:
     needs: [detect-changes, publish-gcp, publish-kubernetes]
@@ -978,7 +985,8 @@ jobs:
           ./scripts/publish_platform_provider.sh \
             agno \
             "dist/pragmatiks_agno_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}"
+            "${{ steps.bump.outputs.version }}" \
+            packages/agno/pyproject.toml
 
       - name: Read runner transport version
         id: runner-transport
