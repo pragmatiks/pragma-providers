@@ -5,6 +5,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      allow_no_commit:
+        description: "Force commitizen to bump even with no eligible commits (use after a catalog wipe)"
+        type: boolean
+        required: false
+        default: false
 
 # Provider dependency DAG:
 #   gcp, supabase, vercel, github, pragma  (no internal deps — run in parallel)
@@ -112,9 +118,11 @@ jobs:
 
       - name: Bump and build
         id: bump
+        env:
+          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit' || '' }}
         run: |
           cd packages/gcp
-          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped gcp to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -214,9 +222,11 @@ jobs:
 
       - name: Bump and build
         id: bump
+        env:
+          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit' || '' }}
         run: |
           cd packages/supabase
-          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped supabase to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -316,9 +326,11 @@ jobs:
 
       - name: Bump and build
         id: bump
+        env:
+          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit' || '' }}
         run: |
           cd packages/vercel
-          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped vercel to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -418,9 +430,11 @@ jobs:
 
       - name: Bump and build
         id: bump
+        env:
+          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit' || '' }}
         run: |
           cd packages/github
-          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped github to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -520,9 +534,11 @@ jobs:
 
       - name: Bump and build
         id: bump
+        env:
+          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit' || '' }}
         run: |
           cd packages/pragma
-          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped pragma to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -654,9 +670,11 @@ jobs:
 
       - name: Bump and build
         id: bump
+        env:
+          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit' || '' }}
         run: |
           cd packages/kubernetes
-          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped kubernetes to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -787,9 +805,11 @@ jobs:
 
       - name: Bump and build
         id: bump
+        env:
+          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit' || '' }}
         run: |
           cd packages/qdrant
-          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped qdrant to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -931,9 +951,11 @@ jobs:
 
       - name: Bump and build
         id: bump
+        env:
+          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit' || '' }}
         run: |
           cd packages/agno
-          if cz bump --yes --changelog 2>&1 | tee bump_output.txt; then
+          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped agno to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
