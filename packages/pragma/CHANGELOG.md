@@ -1,3 +1,9 @@
+## pragma-v1.14.0 (2026-04-25)
+
+### Fix
+
+- **ci**: detect new commitizen no-commits output (#77)
+
 ## pragma-v1.13.0 (2026-04-25)
 
 ### Fix
