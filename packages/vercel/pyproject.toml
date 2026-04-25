@@ -5,7 +5,7 @@ description = "Vercel provider for Pragmatiks"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk>=1.2.0",
+    "pragmatiks-sdk>=1.4.0",
     "httpx>=0.28.0",
 ]
 
