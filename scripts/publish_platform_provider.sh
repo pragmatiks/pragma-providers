@@ -3,7 +3,7 @@
 # Publish a platform provider tarball to api.pragmatiks.io via the
 # ConsoleMachine-authenticated /console/providers/{name}/publish endpoint.
 #
-# Mints a fresh short-lived Clerk M2M JWT (mt_...) from the long-lived
+# Mints a fresh short-lived Clerk M2M token (mt_...) from the long-lived
 # Clerk Machine Secret (ak_...) for each call, then POSTs the tarball as
 # multipart/form-data. No long-lived M2M token is kept in CI.
 #
@@ -54,14 +54,13 @@ if ! TOKEN=$(
 import os
 import sys
 
-from clerk_backend_api import Clerk, TokenFormat
+from clerk_backend_api import Clerk
 
 ttl = int(os.environ["MINT_TTL_SECONDS"])
 secret = os.environ["CONSOLE_CLERK_MACHINE_SECRET_KEY"]
 
 with Clerk(bearer_auth=secret) as clerk:
     created = clerk.m2m.create_token(
-        token_format=TokenFormat.JWT,
         seconds_until_expiration=float(ttl),
         claims=None,
     )
