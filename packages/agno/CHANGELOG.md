@@ -1,3 +1,152 @@
+## agno-v0.126.0 (2026-04-25)
+
+### Feat
+
+- **ci**: add allow_no_commit dispatch input for catalog repopulation (PRA-369) (#76)
+- **ci**: migrate provider publish to ConsoleMachine + /console publish endpoint (PRA-369) (#73)
+- rename canonical platform providers from pragmatiks/* to platform/* (PRA-368) (#72)
+- **agno**: honest readiness for runner + credential validation (#69)
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+- **kubernetes**: config resource with multi-cluster auth modes (#64)
+- **agno**: add output_schema for structured agent responses
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+
+### Fix
+
+- **ci**: forward provider metadata from pyproject to /console publish (PRA-369) (#75)
+- **ci**: mint opaque M2M token (mt_*) instead of JWT-format (PRA-369) (#74)
+- **agno**: remove workflows placeholder field to satisfy sdk type validation (#71)
+- refresh provider lockfiles to resolve cross-provider deps (#70)
+- **pragma**: correct FieldReference syntax in README (#68)
+
+## agno-v0.111.0 (2026-04-07)
+
+### Feat
+
+- **ci**: skip builds for unchanged providers
+- accept workflow_dispatch trigger for CLI cascade
+- add icon_url to all provider pyproject.toml
+- add GitHub provider with Repository, Environment, and Secret resources (#59)
+
+### Fix
+
+- **agno**: mark api_key fields as SensitiveField for API response redaction (#61)
+- remove redundant PRAGMA_API_URL env var from publish workflow
+- use PRAGMA_AUTH_TOKEN secret instead of CLERK_SECRET_KEY for store publish
+- set PRAGMA_API_URL in publish workflow for pragma store
+- install pragma CLI and add git push retry to publish workflow
+- restructure publish workflow as per-provider DAG with API token auth
+- simplify publish workflow - remove change detection, isolate PyPI uploads
+- add supabase, vercel, github to publish and CI workflows
+- **ci**: update per-provider lockfiles in update-sdk workflow
+- **ci**: pull --rebase before push and fix update-sdk auto-merge
+
+### Refactor
+
+- remove provider identity from Python classes (PRA-269)
+
+## agno-v0.99.0 (2026-03-19)
+
+### Feat
+
+- add explicit upgrade/downgrade methods to all resources (PRA-226) (#41)
+- migrate provider configs to Field[T] and ImmutableField[T] (PRA-225) (#36)
+
+### Fix
+
+- use PyPI JSON API for version availability polling (#46)
+- add PyPI availability polling to update-sdk workflow (#45)
+- **gcp**: replace fake $ref syntax with actual reference format in docstrings (#42)
+- remove editable SDK source overrides from provider pyproject.toml files (#38)
+
+## agno-v0.88.0 (2026-02-27)
+
+### Feat
+
+- add pragma store publish to CI/CD pipeline (#35)
+- add kubernetes/namespace resource type (PRA-177) (#34)
+- add store metadata and seed script (PRA-211) (#33)
+- add store metadata fields to provider copier template (PRA-193) (#32)
+- **agno**: add knowledge and content resource support (#30)
+
+### Fix
+
+- **gcp**: handle CloudSQL 400 error when deleting non-existent user
+- **agno**: remove wait_ready calls from runner resource application
+- **gcp**: handle HTTP 400 for already-existing CloudSQL databases
+- **agno**: drop --frozen from Dockerfile uv sync (incompatible with --no-sources)
+- **ci**: prevent infinite publish loop on bump commits
+
+## agno-v0.77.0 (2026-02-07)
+
+### Feat
+
+- **agno**: add team resource, runner auth, model discriminators, and memory config (#29)
+
+## agno-v0.66.0 (2026-02-07)
+
+### Feat
+
+- **kubernetes**: add startup probe support and authorized_user credentials (#28)
+
+## agno-v0.55.0 (2026-02-05)
+
+### Fix
+
+- **agno**: runtime dependencies and import fix (#27)
+
+## agno-v0.44.0 (2026-02-02)
+
+### Fix
+
+- **agno**: rewrite agent tests for current AgentConfig implementation
+- **gcp**: convert db_port to int in CloudSQL database outputs
+
+## agno-v0.33.0 (2026-02-02)
+
+### Feat
+
+- **agno**: rebuild agent, add team and deployment resources (#24)
+
+### Fix
+
+- **ci**: use PyPI API for availability check instead of pip index
+
+## agno-v0.10.0 (2026-02-02)
+
+### Feat
+
+- **kubernetes**: add Deployment resource (#25)
+- **agno**: add memory/manager resource and abstract Model interface (#22)
+- **agno**: implement knowledge/embedder/openai resource (#21)
+- **agno**: add vectordb/qdrant resource for Qdrant vector store (#20)
+- **agno**: add tools/mcp resource for MCP server integration
+- **agno**: add tools/websearch resource wrapping DuckDuckGoTools (#19)
+- **agno**: add prompt resource for reusable instruction templates (#18)
+- **agno**: add db/postgres resource for agent storage (#17)
+- **gcp**: add cloudsql resource for Cloud SQL instances (#14)
+- **agno**: add models/openai resource (#13)
+- **agno**: add models/anthropic resource (#12)
+- **qdrant**: add LoadBalancer exposure and API key authentication (#11)
+- **kubernetes**: add kubernetes provider with lightkube
+- **gcp**: add logs() and health() methods to GKE resource
+- **gcp**: rename region to location for zonal cluster support
+- **gcp**: add standard cluster support to GKE resource
+
+### Fix
+
+- **ci**: output builds to workspace dist directory
+- **ci**: use env vars instead of dynamic expressions in publish workflow
+- **gcp**: add defaults for optional outputs to ensure serialization
+- **gcp**: use Dependency.resolve() for instance access (#16)
+
+### Refactor
+
+- **agno**: DRY refactor with base classes and spec pattern (#23)
+- **agno**: use pytest-mock MockType instead of Any for mock typing
+- **agno**: move mock_mcp_tools fixture to conftest.py
+
 ## agno-v0.125.0 (2026-04-25)
 
 ### Feat
