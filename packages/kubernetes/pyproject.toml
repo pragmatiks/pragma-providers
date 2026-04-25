@@ -5,7 +5,7 @@ description = "Generic Kubernetes resources using lightkube"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk>=1.2.0",
+    "pragmatiks-sdk>=1.4.0",
     "pragmatiks-gcp-provider>=0.55.0",
     "lightkube>=0.15.0",
     "google-auth>=2.30.0",
