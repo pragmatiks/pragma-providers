@@ -10,6 +10,57 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v0.64.0 (2026-04-25)
+
+### Feat
+
+- **ci**: add allow_no_commit dispatch input for catalog repopulation (PRA-369) (#76)
+- **ci**: migrate provider publish to ConsoleMachine + /console publish endpoint (PRA-369) (#73)
+- rename canonical platform providers from pragmatiks/* to platform/* (PRA-368) (#72)
+
+### Fix
+
+- **ci**: forward provider metadata from pyproject to /console publish (PRA-369) (#75)
+- **ci**: mint opaque M2M token (mt_*) instead of JWT-format (PRA-369) (#74)
+- **agno**: remove workflows placeholder field to satisfy sdk type validation (#71)
+
+## qdrant-v0.55.0 (2026-04-21)
+
+### Feat
+
+- **agno**: honest readiness for runner + credential validation (#69)
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+
+### Fix
+
+- refresh provider lockfiles to resolve cross-provider deps (#70)
+- **pragma**: correct FieldReference syntax in README (#68)
+
+## qdrant-v0.44.0 (2026-04-16)
+
+### Feat
+
+- **kubernetes**: config resource with multi-cluster auth modes (#64)
+- **agno**: add output_schema for structured agent responses
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+- **ci**: skip builds for unchanged providers
+- accept workflow_dispatch trigger for CLI cascade
+- add icon_url to all provider pyproject.toml
+- add GitHub provider with Repository, Environment, and Secret resources (#59)
+
+### Fix
+
+- **agno**: mark api_key fields as SensitiveField for API response redaction (#61)
+- remove redundant PRAGMA_API_URL env var from publish workflow
+- use PRAGMA_AUTH_TOKEN secret instead of CLERK_SECRET_KEY for store publish
+- set PRAGMA_API_URL in publish workflow for pragma store
+- install pragma CLI and add git push retry to publish workflow
+- restructure publish workflow as per-provider DAG with API token auth
+- simplify publish workflow - remove change detection, isolate PyPI uploads
+- add supabase, vercel, github to publish and CI workflows
+- **ci**: update per-provider lockfiles in update-sdk workflow
+
 ## qdrant-v0.63.0 (2026-04-25)
 
 ### Feat
