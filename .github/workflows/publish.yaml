@@ -128,7 +128,7 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             uv build --package pragmatiks-gcp-provider --out-dir ../../dist
           else
-            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for gcp"
             else
               cat bump_output.txt
@@ -232,7 +232,7 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             uv build --package pragmatiks-supabase-provider --out-dir ../../dist
           else
-            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for supabase"
             else
               cat bump_output.txt
@@ -336,7 +336,7 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             uv build --package pragmatiks-vercel-provider --out-dir ../../dist
           else
-            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for vercel"
             else
               cat bump_output.txt
@@ -440,7 +440,7 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             uv build --package pragmatiks-github-provider --out-dir ../../dist
           else
-            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for github"
             else
               cat bump_output.txt
@@ -544,7 +544,7 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             uv build --package pragmatiks-pragma-provider --out-dir ../../dist
           else
-            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for pragma"
             else
               cat bump_output.txt
@@ -680,7 +680,7 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             uv build --package pragmatiks-kubernetes-provider --out-dir ../../dist
           else
-            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for kubernetes"
             else
               cat bump_output.txt
@@ -815,7 +815,7 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             uv build --package pragmatiks-qdrant-provider --out-dir ../../dist
           else
-            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for qdrant"
             else
               cat bump_output.txt
@@ -961,7 +961,7 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             uv build --package pragmatiks-agno-provider --out-dir ../../dist
           else
-            if grep -qE "No commits found|is not a bump" bump_output.txt; then
+            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for agno"
             else
               cat bump_output.txt
