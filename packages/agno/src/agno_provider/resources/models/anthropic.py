@@ -93,9 +93,15 @@ def _validate_thinking_fields(
     """Enforce per-mode constraints on thinking-related fields.
 
     ``"off"`` rejects both ``thinking_budget_tokens`` and ``effort``.
-    ``"extended"`` requires ``thinking_budget_tokens >= 1024`` (Anthropic API
-    minimum) and rejects ``effort``. ``"adaptive"`` rejects
+    ``"extended"`` requires ``thinking_budget_tokens`` to be set, and when
+    it is a concrete integer it must be ``>= 1024`` (Anthropic API
+    minimum); ``effort`` is rejected. ``"adaptive"`` rejects
     ``thinking_budget_tokens`` and accepts optional ``effort``.
+
+    Numeric checks against ``thinking_budget_tokens`` are skipped when
+    the value is a ``FieldReference`` (still unresolved). Reference
+    values get re-validated on the resolved Spec where they are
+    guaranteed to be concrete integers.
 
     Args:
         thinking_mode: One of "off", "extended", or "adaptive".
@@ -103,9 +109,9 @@ def _validate_thinking_fields(
         effort: Effort level for adaptive thinking.
 
     Raises:
-        ValueError: If any field is set in a mode that does not accept it,
-            or if ``thinking_budget_tokens`` is missing/below 1024 in
-            ``"extended"`` mode.
+        ValueError: If any field is set in a mode that does not accept
+            it, or if ``thinking_budget_tokens`` is missing or below
+            1024 (when concrete) in ``"extended"`` mode.
     """
     if thinking_mode == "off":
         if thinking_budget_tokens is not None:
@@ -117,7 +123,10 @@ def _validate_thinking_fields(
         return
 
     if thinking_mode == "extended":
-        if thinking_budget_tokens is None or thinking_budget_tokens < 1024:
+        if thinking_budget_tokens is None:
+            msg = "extended thinking requires thinking_budget_tokens >= 1024 (Anthropic API minimum)"
+            raise ValueError(msg)
+        if isinstance(thinking_budget_tokens, int) and thinking_budget_tokens < 1024:
             msg = "extended thinking requires thinking_budget_tokens >= 1024 (Anthropic API minimum)"
             raise ValueError(msg)
         if effort is not None:
