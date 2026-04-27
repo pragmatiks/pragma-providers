@@ -2,14 +2,45 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 import anthropic
 from agno.models.anthropic import Claude
 from pragma_sdk import Field, SensitiveField
+from pydantic import model_validator
 
 from agno_provider.resources.base import AgnoSpec
 from agno_provider.resources.models.base import Model, ModelConfig, ModelOutputs
+
+
+ThinkingMode = Literal["off", "extended", "adaptive"]
+
+
+def _build_thinking_param(
+    thinking_mode: ThinkingMode,
+    thinking_budget_tokens: int | None,
+) -> dict[str, Any] | None:
+    """Translate the high-level thinking mode into agno's ``thinking`` dict.
+
+    Agno's ``Claude`` class accepts a ``thinking`` parameter shaped like
+    ``{"type": "enabled", "budget_tokens": N}`` for extended thinking and
+    ``{"type": "adaptive"}`` for adaptive thinking. ``None`` disables it.
+
+    Args:
+        thinking_mode: One of "off", "extended", or "adaptive".
+        thinking_budget_tokens: Token budget for extended thinking. Required
+            when ``thinking_mode`` is "extended"; ignored otherwise.
+
+    Returns:
+        Dict to pass to ``Claude(thinking=...)``, or ``None`` when disabled.
+    """
+    if thinking_mode == "off":
+        return None
+
+    if thinking_mode == "adaptive":
+        return {"type": "adaptive"}
+
+    return {"type": "enabled", "budget_tokens": thinking_budget_tokens}
 
 
 class AnthropicModelSpec(AgnoSpec):
@@ -27,6 +58,13 @@ class AnthropicModelSpec(AgnoSpec):
         top_p: Nucleus sampling parameter.
         top_k: Top-k sampling parameter.
         stop_sequences: Stop sequences to end generation.
+        thinking_mode: Extended-thinking mode. ``"off"`` disables thinking,
+            ``"extended"`` enables Anthropic's extended thinking with a fixed
+            token budget, and ``"adaptive"`` lets the model pick its own
+            thinking budget per turn.
+        thinking_budget_tokens: Token budget for extended thinking. Required
+            (positive int) when ``thinking_mode == "extended"``; must be
+            ``None`` for the other modes.
     """
 
     type: Literal["anthropic"] = "anthropic"
@@ -37,6 +75,8 @@ class AnthropicModelSpec(AgnoSpec):
     top_p: float | None = None
     top_k: int | None = None
     stop_sequences: list[str] | None = None
+    thinking_mode: ThinkingMode = "off"
+    thinking_budget_tokens: int | None = None
 
 
 class AnthropicModelConfig(ModelConfig):
@@ -51,6 +91,15 @@ class AnthropicModelConfig(ModelConfig):
         top_p: Nucleus sampling parameter. Optional.
         top_k: Top-k sampling parameter. Optional.
         stop_sequences: Stop sequences to end generation. Optional.
+        thinking_mode: Extended-thinking mode. Defaults to ``"off"``. Set to
+            ``"extended"`` to enable Anthropic extended thinking with a fixed
+            ``thinking_budget_tokens`` budget, or ``"adaptive"`` to let the
+            model pick its own budget per turn. Note that some Claude model
+            ids (e.g. Claude 3 / 3.5 Haiku families) do not support thinking;
+            agno will reject the combination at runtime.
+        thinking_budget_tokens: Token budget when ``thinking_mode`` is
+            ``"extended"``. Required (positive integer) in that mode and must
+            be omitted for ``"off"`` and ``"adaptive"``.
     """
 
     api_key: SensitiveField[str]
@@ -59,6 +108,33 @@ class AnthropicModelConfig(ModelConfig):
     top_p: Field[float] | None = None
     top_k: Field[int] | None = None
     stop_sequences: Field[list[str]] | None = None
+    thinking_mode: Field[ThinkingMode] = "off"
+    thinking_budget_tokens: Field[int] | None = None
+
+    @model_validator(mode="after")
+    def validate_thinking_budget(self) -> AnthropicModelConfig:
+        """Enforce that ``thinking_budget_tokens`` matches ``thinking_mode``.
+
+        ``"extended"`` requires a positive ``thinking_budget_tokens``;
+        ``"off"`` and ``"adaptive"`` reject any budget so the catalog cannot
+        accidentally silently drop a configured budget when switching modes.
+
+        Returns:
+            Self after validation.
+
+        Raises:
+            ValueError: If the budget is missing/non-positive for
+                ``"extended"``, or set for ``"off"`` / ``"adaptive"``.
+        """
+        if self.thinking_mode == "extended":
+            if self.thinking_budget_tokens is None or self.thinking_budget_tokens <= 0:
+                msg = "thinking_budget_tokens must be a positive integer when thinking_mode is 'extended'"
+                raise ValueError(msg)
+        elif self.thinking_budget_tokens is not None:
+            msg = f"thinking_budget_tokens must be None when thinking_mode is {self.thinking_mode!r}"
+            raise ValueError(msg)
+
+        return self
 
 
 class AnthropicModelOutputs(ModelOutputs):
@@ -94,13 +170,29 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
     def from_spec(spec: AnthropicModelSpec) -> Claude:
         """Factory: construct Agno Claude object from spec.
 
+        ``thinking_mode`` and ``thinking_budget_tokens`` are translated into
+        the ``thinking`` dict shape that ``agno.models.anthropic.Claude``
+        expects (``{"type": "enabled", "budget_tokens": N}`` for extended
+        thinking, ``{"type": "adaptive"}`` for adaptive). The high-level
+        fields are not forwarded as kwargs because Claude does not accept
+        them directly.
+
         Args:
             spec: The model specification.
 
         Returns:
             Configured Claude instance ready for use.
         """
-        return Claude(**spec.model_dump(exclude={"type"}, exclude_none=True))
+        kwargs = spec.model_dump(
+            exclude={"type", "thinking_mode", "thinking_budget_tokens"},
+            exclude_none=True,
+        )
+
+        thinking = _build_thinking_param(spec.thinking_mode, spec.thinking_budget_tokens)
+        if thinking is not None:
+            kwargs["thinking"] = thinking
+
+        return Claude(**kwargs)
 
     def _build_spec(self) -> AnthropicModelSpec:
         """Build spec from current config.
@@ -119,6 +211,8 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
             top_p=self.config.top_p,
             top_k=self.config.top_k,
             stop_sequences=self.config.stop_sequences,
+            thinking_mode=self.config.thinking_mode,
+            thinking_budget_tokens=self.config.thinking_budget_tokens,
         )
 
     def _build_outputs(self) -> AnthropicModelOutputs:
