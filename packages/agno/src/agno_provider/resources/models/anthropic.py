@@ -32,6 +32,21 @@ and https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking.
 """
 
 
+NO_THINKING_MODEL_PREFIXES: frozenset[str] = frozenset({
+    "claude-3-haiku-",
+    "claude-3-5-haiku-",
+})
+"""Model id prefixes that do not support extended thinking at all.
+
+Mirrors the entries in ``agno.models.anthropic.Claude.NON_THINKING_MODELS``
+(``claude-3-haiku-20240307``, ``claude-3-5-haiku-20241022``,
+``claude-3-5-haiku-latest``). Any non-``"off"`` thinking_mode on a model
+matching one of these prefixes is rejected by ``Claude.__post_init__``;
+catching it here keeps the failure at apply time rather than runner-pod
+startup.
+"""
+
+
 def _build_thinking_param(
     thinking_mode: ThinkingMode,
     thinking_budget_tokens: int | None,
@@ -101,7 +116,9 @@ def _validate_thinking_fields(
     Numeric checks against ``thinking_budget_tokens`` are skipped when
     the value is a ``FieldReference`` (still unresolved). Reference
     values get re-validated on the resolved Spec where they are
-    guaranteed to be concrete integers.
+    guaranteed to be concrete integers. The whole helper is skipped
+    when ``thinking_mode`` itself is a ``FieldReference``; mode-aware
+    validation re-runs against the resolved Spec.
 
     Args:
         thinking_mode: One of "off", "extended", or "adaptive".
@@ -113,6 +130,9 @@ def _validate_thinking_fields(
             it, or if ``thinking_budget_tokens`` is missing or below
             1024 (when concrete) in ``"extended"`` mode.
     """
+    if not isinstance(thinking_mode, str):
+        return
+
     if thinking_mode == "off":
         if thinking_budget_tokens is not None:
             msg = "thinking_budget_tokens must be None when thinking_mode is 'off'"
@@ -395,9 +415,16 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
 
         Some Claude families only support one thinking mode — for example,
         ``claude-opus-4-7`` is adaptive-only and ``claude-haiku-4-5`` is
-        extended-only. Older families (sonnet-4-5, opus-4-5, sonnet-3-7)
-        accept manual thinking and are not flagged here. ``"off"`` always
-        passes since both modes can be disabled.
+        extended-only. Legacy haiku families (``claude-3-haiku-*``,
+        ``claude-3-5-haiku-*``) do not support extended thinking at all
+        and reject any non-``"off"`` mode. Older sonnet/opus families
+        (sonnet-4-5, opus-4-5, sonnet-3-7) accept manual thinking and
+        are not flagged here. ``"off"`` always passes since both modes
+        can be disabled.
+
+        Skipped when ``self.config.id`` or ``self.config.thinking_mode``
+        is a ``FieldReference``; the resolved Spec re-runs equivalent
+        per-mode validation before reaching the runner.
 
         See https://platform.claude.com/docs/en/build-with-claude/extended-thinking
         and https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
@@ -407,8 +434,21 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
             ValueError: If the model id and thinking_mode combination is
                 not supported by Anthropic.
         """
+        if not isinstance(self.config.id, str) or not isinstance(self.config.thinking_mode, str):
+            return
+
         if self.config.thinking_mode == "off":
             return
+
+        for prefix in NO_THINKING_MODEL_PREFIXES:
+            if self.config.id.startswith(prefix):
+                msg = (
+                    f"Model {self.config.id!r} does not support extended thinking; "
+                    f"thinking_mode must be 'off'. "
+                    f"See https://platform.claude.com/docs/en/build-with-claude/extended-thinking "
+                    f"for the per-model compatibility matrix."
+                )
+                raise ValueError(msg)
 
         for prefix, incompatible_mode in INCOMPATIBLE_MODE_BY_PREFIX.items():
             if self.config.id.startswith(prefix) and self.config.thinking_mode == incompatible_mode:
