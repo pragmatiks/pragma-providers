@@ -177,8 +177,24 @@ class AnthropicModelSpec(AgnoSpec):
 
         Returns:
             Self after validation.
+
+        Raises:
+            ValueError: If ``thinking_budget_tokens`` is greater than or
+                equal to ``max_tokens``.
         """
         _validate_thinking_fields(self.thinking_mode, self.thinking_budget_tokens, self.effort)
+
+        if (
+            self.thinking_budget_tokens is not None
+            and self.max_tokens is not None
+            and self.thinking_budget_tokens >= self.max_tokens
+        ):
+            msg = (
+                f"thinking_budget_tokens ({self.thinking_budget_tokens}) must be less "
+                f"than max_tokens ({self.max_tokens}) (Anthropic API constraint)"
+            )
+            raise ValueError(msg)
+
         return self
 
 
@@ -226,10 +242,31 @@ class AnthropicModelConfig(ModelConfig):
     def validate_thinking_fields(self) -> AnthropicModelConfig:
         """Enforce per-mode constraints on thinking-related fields.
 
+        The ``budget < max_tokens`` check only fires when both fields are
+        concrete integers. If either is a ``FieldReference`` it is left
+        for the resolved Spec to validate.
+
         Returns:
             Self after validation.
+
+        Raises:
+            ValueError: If both ``thinking_budget_tokens`` and ``max_tokens``
+                are concrete integers and the budget is greater than or
+                equal to ``max_tokens``.
         """
         _validate_thinking_fields(self.thinking_mode, self.thinking_budget_tokens, self.effort)
+
+        if (
+            isinstance(self.thinking_budget_tokens, int)
+            and isinstance(self.max_tokens, int)
+            and self.thinking_budget_tokens >= self.max_tokens
+        ):
+            msg = (
+                f"thinking_budget_tokens ({self.thinking_budget_tokens}) must be less "
+                f"than max_tokens ({self.max_tokens}) (Anthropic API constraint)"
+            )
+            raise ValueError(msg)
+
         return self
 
 
@@ -383,7 +420,12 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         await client.models.retrieve(self.config.id)
 
     async def on_update(self, previous_config: AnthropicModelConfig) -> AnthropicModelOutputs:  # noqa: ARG002
-        """Update returns serializable outputs with spec.
+        """Validate model/mode compatibility and return serializable outputs with spec.
+
+        Re-runs the model/thinking-mode compatibility check so updating an
+        existing resource to an unsupported combination (e.g. switching
+        ``thinking_mode`` to ``"extended"`` on ``claude-opus-4-7``) fails
+        the update rather than silently propagating to the runner pod.
 
         Args:
             previous_config: The previous configuration (unused for stateless resource).
@@ -391,6 +433,7 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         Returns:
             AnthropicModelOutputs with spec.
         """
+        self._validate_model_thinking_compatibility()
         return self._build_outputs()
 
     async def on_delete(self) -> None:
