@@ -93,9 +93,9 @@ def _validate_thinking_fields(
     """Enforce per-mode constraints on thinking-related fields.
 
     ``"off"`` rejects both ``thinking_budget_tokens`` and ``effort``.
-    ``"extended"`` requires a positive ``thinking_budget_tokens`` and rejects
-    ``effort``. ``"adaptive"`` rejects ``thinking_budget_tokens`` and accepts
-    optional ``effort``.
+    ``"extended"`` requires ``thinking_budget_tokens >= 1024`` (Anthropic API
+    minimum) and rejects ``effort``. ``"adaptive"`` rejects
+    ``thinking_budget_tokens`` and accepts optional ``effort``.
 
     Args:
         thinking_mode: One of "off", "extended", or "adaptive".
@@ -104,7 +104,7 @@ def _validate_thinking_fields(
 
     Raises:
         ValueError: If any field is set in a mode that does not accept it,
-            or if ``thinking_budget_tokens`` is missing/non-positive in
+            or if ``thinking_budget_tokens`` is missing/below 1024 in
             ``"extended"`` mode.
     """
     if thinking_mode == "off":
@@ -117,8 +117,8 @@ def _validate_thinking_fields(
         return
 
     if thinking_mode == "extended":
-        if thinking_budget_tokens is None or thinking_budget_tokens <= 0:
-            msg = "thinking_budget_tokens must be a positive integer when thinking_mode is 'extended'"
+        if thinking_budget_tokens is None or thinking_budget_tokens < 1024:
+            msg = "extended thinking requires thinking_budget_tokens >= 1024 (Anthropic API minimum)"
             raise ValueError(msg)
         if effort is not None:
             msg = "effort must be None when thinking_mode is 'extended' (effort is only valid for 'adaptive')"
@@ -150,7 +150,8 @@ class AnthropicModelSpec(AgnoSpec):
             token budget, and ``"adaptive"`` lets the model pick its own
             thinking budget per turn.
         thinking_budget_tokens: Token budget for extended thinking. Required
-            (positive int) when ``thinking_mode == "extended"``; must be
+            when ``thinking_mode == "extended"``; must be ``>= 1024``
+            (Anthropic API minimum) and less than ``max_tokens``. Must be
             ``None`` for the other modes.
         effort: Effort knob for ``"adaptive"`` thinking. Only valid when
             ``thinking_mode == "adaptive"``; must be ``None`` for the other
@@ -201,8 +202,9 @@ class AnthropicModelConfig(ModelConfig):
             (e.g. ``claude-opus-4-7`` is adaptive-only; ``claude-haiku-4-5``
             is extended-only).
         thinking_budget_tokens: Token budget when ``thinking_mode`` is
-            ``"extended"``. Required (positive integer) in that mode and must
-            be omitted for ``"off"`` and ``"adaptive"``.
+            ``"extended"``. Required in that mode and must be ``>= 1024``
+            (Anthropic API minimum) and less than ``max_tokens``. Must be
+            omitted for ``"off"`` and ``"adaptive"``.
         effort: Effort knob when ``thinking_mode`` is ``"adaptive"``. One of
             ``"low"``, ``"medium"``, ``"high"``, ``"xhigh"``, ``"max"``. Must
             be omitted for ``"off"`` and ``"extended"``. When omitted in
