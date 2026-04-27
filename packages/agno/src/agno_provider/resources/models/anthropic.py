@@ -14,6 +14,22 @@ from agno_provider.resources.models.base import Model, ModelConfig, ModelOutputs
 
 
 ThinkingMode = Literal["off", "extended", "adaptive"]
+EffortLevel = Literal["low", "medium", "high", "xhigh", "max"]
+
+
+INCOMPATIBLE_MODE_BY_PREFIX: dict[str, ThinkingMode] = {
+    "claude-opus-4-7": "extended",
+    "claude-haiku-4-5": "adaptive",
+}
+"""Maps a model id prefix to the thinking_mode it does NOT support.
+
+Per the Anthropic compatibility matrix, ``claude-opus-4-7*`` is adaptive-only
+and ``claude-haiku-4-5*`` is extended-only. Older families (sonnet-4-5,
+opus-4-5, sonnet-3-7) accept either mode and are not listed.
+
+See https://platform.claude.com/docs/en/build-with-claude/extended-thinking
+and https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking.
+"""
 
 
 def _build_thinking_param(
@@ -43,6 +59,77 @@ def _build_thinking_param(
     return {"type": "enabled", "budget_tokens": thinking_budget_tokens}
 
 
+def _build_output_config_param(
+    thinking_mode: ThinkingMode,
+    effort: EffortLevel | None,
+) -> dict[str, Any] | None:
+    """Translate ``effort`` into agno's ``output_config`` dict.
+
+    Anthropic's adaptive-thinking mode pairs with a top-level ``output_config``
+    object that carries the ``effort`` knob (``low`` / ``medium`` / ``high`` /
+    ``xhigh`` / ``max``). Agno's ``Claude`` class plumbs ``output_config``
+    straight through to the Anthropic API.
+
+    Args:
+        thinking_mode: One of "off", "extended", or "adaptive".
+        effort: Effort level for adaptive thinking. Only valid when
+            ``thinking_mode`` is "adaptive".
+
+    Returns:
+        Dict to pass to ``Claude(output_config=...)``, or ``None`` when no
+        effort is configured.
+    """
+    if thinking_mode != "adaptive" or effort is None:
+        return None
+
+    return {"effort": effort}
+
+
+def _validate_thinking_fields(
+    thinking_mode: ThinkingMode,
+    thinking_budget_tokens: int | None,
+    effort: EffortLevel | None,
+) -> None:
+    """Enforce per-mode constraints on thinking-related fields.
+
+    ``"off"`` rejects both ``thinking_budget_tokens`` and ``effort``.
+    ``"extended"`` requires a positive ``thinking_budget_tokens`` and rejects
+    ``effort``. ``"adaptive"`` rejects ``thinking_budget_tokens`` and accepts
+    optional ``effort``.
+
+    Args:
+        thinking_mode: One of "off", "extended", or "adaptive".
+        thinking_budget_tokens: Token budget for extended thinking.
+        effort: Effort level for adaptive thinking.
+
+    Raises:
+        ValueError: If any field is set in a mode that does not accept it,
+            or if ``thinking_budget_tokens`` is missing/non-positive in
+            ``"extended"`` mode.
+    """
+    if thinking_mode == "off":
+        if thinking_budget_tokens is not None:
+            msg = "thinking_budget_tokens must be None when thinking_mode is 'off'"
+            raise ValueError(msg)
+        if effort is not None:
+            msg = "effort must be None when thinking_mode is 'off'"
+            raise ValueError(msg)
+        return
+
+    if thinking_mode == "extended":
+        if thinking_budget_tokens is None or thinking_budget_tokens <= 0:
+            msg = "thinking_budget_tokens must be a positive integer when thinking_mode is 'extended'"
+            raise ValueError(msg)
+        if effort is not None:
+            msg = "effort must be None when thinking_mode is 'extended' (effort is only valid for 'adaptive')"
+            raise ValueError(msg)
+        return
+
+    if thinking_budget_tokens is not None:
+        msg = "thinking_budget_tokens must be None when thinking_mode is 'adaptive' (adaptive picks its own budget)"
+        raise ValueError(msg)
+
+
 class AnthropicModelSpec(AgnoSpec):
     """Specification for an Anthropic Claude model.
 
@@ -65,6 +152,10 @@ class AnthropicModelSpec(AgnoSpec):
         thinking_budget_tokens: Token budget for extended thinking. Required
             (positive int) when ``thinking_mode == "extended"``; must be
             ``None`` for the other modes.
+        effort: Effort knob for ``"adaptive"`` thinking. Only valid when
+            ``thinking_mode == "adaptive"``; must be ``None`` for the other
+            modes. Defaults to ``None``, which lets Anthropic pick its
+            default effort level (currently ``"high"``).
     """
 
     type: Literal["anthropic"] = "anthropic"
@@ -77,6 +168,17 @@ class AnthropicModelSpec(AgnoSpec):
     stop_sequences: list[str] | None = None
     thinking_mode: ThinkingMode = "off"
     thinking_budget_tokens: int | None = None
+    effort: EffortLevel | None = None
+
+    @model_validator(mode="after")
+    def validate_thinking_fields(self) -> AnthropicModelSpec:
+        """Enforce per-mode constraints on thinking-related fields.
+
+        Returns:
+            Self after validation.
+        """
+        _validate_thinking_fields(self.thinking_mode, self.thinking_budget_tokens, self.effort)
+        return self
 
 
 class AnthropicModelConfig(ModelConfig):
@@ -94,12 +196,18 @@ class AnthropicModelConfig(ModelConfig):
         thinking_mode: Extended-thinking mode. Defaults to ``"off"``. Set to
             ``"extended"`` to enable Anthropic extended thinking with a fixed
             ``thinking_budget_tokens`` budget, or ``"adaptive"`` to let the
-            model pick its own budget per turn. Note that some Claude model
-            ids (e.g. Claude 3 / 3.5 Haiku families) do not support thinking;
-            agno will reject the combination at runtime.
+            model pick its own budget per turn. Per-model compatibility is
+            checked in ``on_create`` against Anthropic's documented matrix
+            (e.g. ``claude-opus-4-7`` is adaptive-only; ``claude-haiku-4-5``
+            is extended-only).
         thinking_budget_tokens: Token budget when ``thinking_mode`` is
             ``"extended"``. Required (positive integer) in that mode and must
             be omitted for ``"off"`` and ``"adaptive"``.
+        effort: Effort knob when ``thinking_mode`` is ``"adaptive"``. One of
+            ``"low"``, ``"medium"``, ``"high"``, ``"xhigh"``, ``"max"``. Must
+            be omitted for ``"off"`` and ``"extended"``. When omitted in
+            adaptive mode, Anthropic uses its default effort (currently
+            ``"high"``).
     """
 
     api_key: SensitiveField[str]
@@ -110,30 +218,16 @@ class AnthropicModelConfig(ModelConfig):
     stop_sequences: Field[list[str]] | None = None
     thinking_mode: Field[ThinkingMode] = "off"
     thinking_budget_tokens: Field[int] | None = None
+    effort: Field[EffortLevel] | None = None
 
     @model_validator(mode="after")
-    def validate_thinking_budget(self) -> AnthropicModelConfig:
-        """Enforce that ``thinking_budget_tokens`` matches ``thinking_mode``.
-
-        ``"extended"`` requires a positive ``thinking_budget_tokens``;
-        ``"off"`` and ``"adaptive"`` reject any budget so the catalog cannot
-        accidentally silently drop a configured budget when switching modes.
+    def validate_thinking_fields(self) -> AnthropicModelConfig:
+        """Enforce per-mode constraints on thinking-related fields.
 
         Returns:
             Self after validation.
-
-        Raises:
-            ValueError: If the budget is missing/non-positive for
-                ``"extended"``, or set for ``"off"`` / ``"adaptive"``.
         """
-        if self.thinking_mode == "extended":
-            if self.thinking_budget_tokens is None or self.thinking_budget_tokens <= 0:
-                msg = "thinking_budget_tokens must be a positive integer when thinking_mode is 'extended'"
-                raise ValueError(msg)
-        elif self.thinking_budget_tokens is not None:
-            msg = f"thinking_budget_tokens must be None when thinking_mode is {self.thinking_mode!r}"
-            raise ValueError(msg)
-
+        _validate_thinking_fields(self.thinking_mode, self.thinking_budget_tokens, self.effort)
         return self
 
 
@@ -173,9 +267,11 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         ``thinking_mode`` and ``thinking_budget_tokens`` are translated into
         the ``thinking`` dict shape that ``agno.models.anthropic.Claude``
         expects (``{"type": "enabled", "budget_tokens": N}`` for extended
-        thinking, ``{"type": "adaptive"}`` for adaptive). The high-level
-        fields are not forwarded as kwargs because Claude does not accept
-        them directly.
+        thinking, ``{"type": "adaptive"}`` for adaptive). When ``effort`` is
+        set (adaptive mode only), it is forwarded as
+        ``output_config={"effort": <level>}`` which agno passes through to
+        the Anthropic API. The high-level fields are not forwarded as
+        kwargs because Claude does not accept them directly.
 
         Args:
             spec: The model specification.
@@ -184,13 +280,17 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
             Configured Claude instance ready for use.
         """
         kwargs = spec.model_dump(
-            exclude={"type", "thinking_mode", "thinking_budget_tokens"},
+            exclude={"type", "thinking_mode", "thinking_budget_tokens", "effort"},
             exclude_none=True,
         )
 
         thinking = _build_thinking_param(spec.thinking_mode, spec.thinking_budget_tokens)
         if thinking is not None:
             kwargs["thinking"] = thinking
+
+        output_config = _build_output_config_param(spec.thinking_mode, spec.effort)
+        if output_config is not None:
+            kwargs["output_config"] = output_config
 
         return Claude(**kwargs)
 
@@ -213,6 +313,7 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
             stop_sequences=self.config.stop_sequences,
             thinking_mode=self.config.thinking_mode,
             thinking_budget_tokens=self.config.thinking_budget_tokens,
+            effort=self.config.effort,
         )
 
     def _build_outputs(self) -> AnthropicModelOutputs:
@@ -224,19 +325,51 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         return AnthropicModelOutputs(spec=self._build_spec())
 
     async def on_create(self) -> AnthropicModelOutputs:
-        """Validate credentials against Anthropic and return outputs with spec.
+        """Validate credentials and model/mode compatibility, then return outputs.
 
         Performs a lightweight ``client.models.retrieve`` round-trip so an
         invalid API key or nonexistent model id fails the resource at
-        create time rather than on first agent invocation. Any error from
-        the Anthropic SDK propagates so the runtime marks the resource
-        FAILED.
+        create time rather than on first agent invocation. Then checks the
+        configured ``thinking_mode`` against Anthropic's per-model matrix so
+        bad combinations (e.g. ``claude-opus-4-7`` with extended thinking)
+        fail the resource here rather than at runner-pod startup. Any error
+        propagates so the runtime marks the resource FAILED.
 
         Returns:
             AnthropicModelOutputs with spec.
         """
         await self._validate_credentials()
+        self._validate_model_thinking_compatibility()
         return self._build_outputs()
+
+    def _validate_model_thinking_compatibility(self) -> None:
+        """Reject model/thinking-mode combinations Anthropic does not accept.
+
+        Some Claude families only support one thinking mode — for example,
+        ``claude-opus-4-7`` is adaptive-only and ``claude-haiku-4-5`` is
+        extended-only. Older families (sonnet-4-5, opus-4-5, sonnet-3-7)
+        accept manual thinking and are not flagged here. ``"off"`` always
+        passes since both modes can be disabled.
+
+        See https://platform.claude.com/docs/en/build-with-claude/extended-thinking
+        and https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
+        for the authoritative compatibility matrix.
+
+        Raises:
+            ValueError: If the model id and thinking_mode combination is
+                not supported by Anthropic.
+        """
+        if self.config.thinking_mode == "off":
+            return
+
+        for prefix, incompatible_mode in INCOMPATIBLE_MODE_BY_PREFIX.items():
+            if self.config.id.startswith(prefix) and self.config.thinking_mode == incompatible_mode:
+                msg = (
+                    f"Model {self.config.id!r} does not support thinking_mode={incompatible_mode!r}. "
+                    f"See https://platform.claude.com/docs/en/build-with-claude/extended-thinking "
+                    f"for the per-model compatibility matrix."
+                )
+                raise ValueError(msg)
 
     async def _validate_credentials(self) -> None:
         """Round-trip to Anthropic to verify the API key and model id.
