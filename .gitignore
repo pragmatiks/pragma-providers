@@ -28,3 +28,6 @@ venv/
 # E2E test files (local testing only)
 e2e-test-*.yaml
 e2e/
+
+# Claude Code local settings (per-machine, not committed)
+.claude/settings.local.json
