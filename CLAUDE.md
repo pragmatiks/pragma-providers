@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-> Tasks tracked in Linear. SessionStart hook injects issue context from branch name.
-
 ## Project
 
 **pragma-providers**: Official providers for the Pragmatiks platform (GCP, AWS, etc.).
