@@ -435,7 +435,7 @@ config:
 ### Infrastructure Resources (Separate Providers)
 
 #### `pragma/file`
-Managed file storage. *Core platform resource in pragma-os.*
+Managed file storage. *Core platform resource in Pragmatiks.*
 
 ```yaml
 provider: pragma

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/wordmark.png" alt="Pragma-OS" width="800">
+  <img src="assets/wordmark.png" alt="Pragmatiks" width="800">
 </p>
 
 # Pragma Providers
@@ -11,7 +11,7 @@
 
 **[Documentation](https://docs.pragmatiks.io/providers/overview)** | **[SDK](https://github.com/pragmatiks/pragma-sdk)** | **[CLI](https://github.com/pragmatiks/pragma-cli)**
 
-Resource providers for the pragma-os platform.
+Resource providers for Pragmatiks.
 
 ## Quick Start
 
