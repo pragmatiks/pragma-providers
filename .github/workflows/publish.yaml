@@ -85,6 +85,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -166,16 +167,18 @@ jobs:
           skip-existing: true
           attestations: false
 
+      - name: Authenticate to Google Cloud
+        if: steps.bump.outputs.version != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            gcp \
-            "dist/pragmatiks_gcp_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/gcp/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/gcp
 
   publish-supabase:
     needs: [detect-changes]
@@ -189,6 +192,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -270,16 +274,18 @@ jobs:
           skip-existing: true
           attestations: false
 
+      - name: Authenticate to Google Cloud
+        if: steps.bump.outputs.version != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            supabase \
-            "dist/pragmatiks_supabase_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/supabase/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/supabase
 
   publish-vercel:
     needs: [detect-changes]
@@ -293,6 +299,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -374,16 +381,18 @@ jobs:
           skip-existing: true
           attestations: false
 
+      - name: Authenticate to Google Cloud
+        if: steps.bump.outputs.version != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            vercel \
-            "dist/pragmatiks_vercel_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/vercel/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/vercel
 
   publish-github:
     needs: [detect-changes]
@@ -397,6 +406,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -478,16 +488,18 @@ jobs:
           skip-existing: true
           attestations: false
 
+      - name: Authenticate to Google Cloud
+        if: steps.bump.outputs.version != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            github \
-            "dist/pragmatiks_github_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/github/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/github
 
   publish-pragma:
     needs: [detect-changes]
@@ -501,6 +513,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -582,16 +595,18 @@ jobs:
           skip-existing: true
           attestations: false
 
+      - name: Authenticate to Google Cloud
+        if: steps.bump.outputs.version != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            pragma \
-            "dist/pragmatiks_pragma_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/pragma/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/pragma
 
   publish-kubernetes:
     needs: [detect-changes, publish-gcp]
@@ -617,6 +632,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -718,16 +734,18 @@ jobs:
           skip-existing: true
           attestations: false
 
+      - name: Authenticate to Google Cloud
+        if: steps.bump.outputs.version != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            kubernetes \
-            "dist/pragmatiks_kubernetes_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/kubernetes/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/kubernetes
 
   publish-qdrant:
     needs: [detect-changes, publish-kubernetes]
@@ -752,6 +770,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -853,16 +872,18 @@ jobs:
           skip-existing: true
           attestations: false
 
+      - name: Authenticate to Google Cloud
+        if: steps.bump.outputs.version != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            qdrant \
-            "dist/pragmatiks_qdrant_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/qdrant/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/qdrant
 
   publish-agno:
     needs: [detect-changes, publish-gcp, publish-kubernetes]
@@ -888,6 +909,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
       packages: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
@@ -999,16 +1021,18 @@ jobs:
           skip-existing: true
           attestations: false
 
+      - name: Authenticate to Google Cloud
+        if: steps.bump.outputs.version != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            agno \
-            "dist/pragmatiks_agno_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/agno/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/agno
 
       - name: Read runner transport version
         id: runner-transport

@@ -32,6 +32,7 @@ display_name = "GitHub"
 description = "Manage GitHub repositories, environments, and secrets through declarative resources using the GitHub REST API."
 icon_url = "https://cdn.simpleicons.org/github"
 tags = ["github", "repositories", "secrets", "environments", "source-control"]
+entrypoint = ["python", "-m", "pragma_runtime.entrypoint"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

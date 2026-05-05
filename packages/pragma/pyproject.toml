@@ -29,6 +29,7 @@ display_name = "Pragma Platform"
 description = "Manage platform-native secrets, configuration, and file storage declaratively through Pragmatiks."
 icon_url = "https://pragmatiks.io/icon.svg"
 tags = ["platform", "secrets", "configuration", "files"]
+entrypoint = ["python", "-m", "pragma_runtime.entrypoint"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

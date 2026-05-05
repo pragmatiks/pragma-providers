@@ -31,6 +31,7 @@ display_name = "Vercel"
 description = "Manage Vercel projects, deployments, and domains through declarative resources using the Vercel REST API."
 icon_url = "https://cdn.simpleicons.org/vercel"
 tags = ["vercel", "hosting", "deployments", "domains", "frontend"]
+entrypoint = ["python", "-m", "pragma_runtime.entrypoint"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
