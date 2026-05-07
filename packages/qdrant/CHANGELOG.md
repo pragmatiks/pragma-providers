@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v0.67.0 (2026-05-07)
+
+### Feat
+
+- **agno**: add thinking-mode support to models/anthropic (#78)
+
 ## qdrant-v0.66.0 (2026-04-25)
 
 ### Feat
