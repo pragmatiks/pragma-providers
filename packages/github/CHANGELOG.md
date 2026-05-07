@@ -1,3 +1,9 @@
+## github-v0.34.0 (2026-05-07)
+
+### Feat
+
+- **agno**: add thinking-mode support to models/anthropic (#78)
+
 ## github-v0.33.0 (2026-04-25)
 
 ### Feat
