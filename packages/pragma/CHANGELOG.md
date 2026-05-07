@@ -1,3 +1,13 @@
+## pragma-v1.15.0 (2026-05-07)
+
+### Feat
+
+- **agno**: add thinking-mode support to models/anthropic (#78)
+
+### Fix
+
+- **ci**: detect new commitizen no-commits output (#77)
+
 ## pragma-v1.14.0 (2026-04-25)
 
 ### Fix
