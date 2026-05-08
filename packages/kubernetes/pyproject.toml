@@ -33,6 +33,7 @@ display_name = "Kubernetes"
 description = "Deploy and manage Kubernetes resources including deployments, services, configmaps, secrets, and statefulsets."
 icon_url = "https://cdn.simpleicons.org/kubernetes"
 tags = ["kubernetes", "orchestration", "containers", "infrastructure"]
+entrypoint = ["python", "-m", "pragma_runtime.entrypoint"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
