@@ -1,3 +1,37 @@
+## pragma-v3.0.0 (2026-05-08)
+
+### Feat
+
+- **agno**: declare explicit runtime entrypoint in [tool.pragma] (#86)
+- **qdrant**: declare explicit runtime entrypoint in [tool.pragma] (#85)
+- **kubernetes**: declare explicit runtime entrypoint in [tool.pragma] (#84)
+- **gcp**: declare explicit runtime entrypoint in [tool.pragma] (#83)
+- register PyPI wheel via pragma CLI, switch PyPI auth to OIDC (PRA-382) (#82)
+- **agno**: add thinking-mode support to models/anthropic (#78)
+
+### Fix
+
+- **publish**: mint JWT M2M tokens instead of opaque (#88)
+- **publish-script**: pin provider wheel via PEP 508 direct reference (#87)
+- **ci**: detect new commitizen no-commits output (#77)
+
+## pragma-v1.11.0 (2026-04-25)
+
+### Feat
+
+- **ci**: add allow_no_commit dispatch input for catalog repopulation (PRA-369) (#76)
+- **ci**: migrate provider publish to ConsoleMachine + /console publish endpoint (PRA-369) (#73)
+- rename canonical platform providers from pragmatiks/* to platform/* (PRA-368) (#72)
+- **agno**: honest readiness for runner + credential validation (#69)
+
+### Fix
+
+- **ci**: forward provider metadata from pyproject to /console publish (PRA-369) (#75)
+- **ci**: mint opaque M2M token (mt_*) instead of JWT-format (PRA-369) (#74)
+- **agno**: remove workflows placeholder field to satisfy sdk type validation (#71)
+- refresh provider lockfiles to resolve cross-provider deps (#70)
+- **pragma**: correct FieldReference syntax in README (#68)
+
 ## pragma-v2.0.0 (2026-05-08)
 
 ### Feat
