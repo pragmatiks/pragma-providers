@@ -1,3 +1,10 @@
+## supabase-v3.0.0 (2026-05-08)
+
+### Fix
+
+- **publish**: post directly to Console wheel-register endpoint (#90)
+- **publish**: mint JWT M2M tokens instead of opaque (#88)
+
 ## supabase-v2.0.0 (2026-05-08)
 
 ### Fix
