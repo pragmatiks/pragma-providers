@@ -85,6 +85,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -162,7 +163,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          password: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
           attestations: false
 
@@ -170,12 +170,7 @@ jobs:
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            gcp \
-            "dist/pragmatiks_gcp_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/gcp/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/gcp "${{ steps.bump.outputs.version }}"
 
   publish-supabase:
     needs: [detect-changes]
@@ -189,6 +184,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -266,7 +262,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          password: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
           attestations: false
 
@@ -274,12 +269,7 @@ jobs:
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            supabase \
-            "dist/pragmatiks_supabase_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/supabase/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/supabase "${{ steps.bump.outputs.version }}"
 
   publish-vercel:
     needs: [detect-changes]
@@ -293,6 +283,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -370,7 +361,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          password: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
           attestations: false
 
@@ -378,12 +368,7 @@ jobs:
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            vercel \
-            "dist/pragmatiks_vercel_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/vercel/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/vercel "${{ steps.bump.outputs.version }}"
 
   publish-github:
     needs: [detect-changes]
@@ -397,6 +382,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -474,7 +460,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          password: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
           attestations: false
 
@@ -482,12 +467,7 @@ jobs:
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            github \
-            "dist/pragmatiks_github_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/github/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/github "${{ steps.bump.outputs.version }}"
 
   publish-pragma:
     needs: [detect-changes]
@@ -501,6 +481,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -578,7 +559,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          password: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
           attestations: false
 
@@ -586,12 +566,7 @@ jobs:
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            pragma \
-            "dist/pragmatiks_pragma_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/pragma/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/pragma "${{ steps.bump.outputs.version }}"
 
   publish-kubernetes:
     needs: [detect-changes, publish-gcp]
@@ -617,6 +592,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -714,7 +690,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          password: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
           attestations: false
 
@@ -722,12 +697,7 @@ jobs:
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            kubernetes \
-            "dist/pragmatiks_kubernetes_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/kubernetes/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/kubernetes "${{ steps.bump.outputs.version }}"
 
   publish-qdrant:
     needs: [detect-changes, publish-kubernetes]
@@ -752,6 +722,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -849,7 +820,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          password: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
           attestations: false
 
@@ -857,12 +827,7 @@ jobs:
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            qdrant \
-            "dist/pragmatiks_qdrant_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/qdrant/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/qdrant "${{ steps.bump.outputs.version }}"
 
   publish-agno:
     needs: [detect-changes, publish-gcp, publish-kubernetes]
@@ -888,6 +853,7 @@ jobs:
     environment: pypi
     permissions:
       contents: write
+      id-token: write
       packages: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
@@ -995,7 +961,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          password: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
           attestations: false
 
@@ -1003,12 +968,7 @@ jobs:
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
-        run: |
-          ./scripts/publish_platform_provider.sh \
-            agno \
-            "dist/pragmatiks_agno_provider-${{ steps.bump.outputs.version }}.tar.gz" \
-            "${{ steps.bump.outputs.version }}" \
-            packages/agno/pyproject.toml
+        run: ./scripts/publish_platform_provider.sh packages/agno "${{ steps.bump.outputs.version }}"
 
       - name: Read runner transport version
         id: runner-transport
