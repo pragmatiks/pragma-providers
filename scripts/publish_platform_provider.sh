@@ -208,8 +208,9 @@ icon_url = pragma.get("icon_url")
 if icon_url:
     metadata["icon_url"] = icon_url
 
+provider_short = pragma["provider"]
 payload = {
-    "name": f"platform/{pragma['provider']}",
+    "name": f"platform/{provider_short}",
     "version": os.environ["VERSION"],
     "wheel_url": os.environ["WHEEL_URL"],
     "sha256": os.environ["WHEEL_SHA256"],
