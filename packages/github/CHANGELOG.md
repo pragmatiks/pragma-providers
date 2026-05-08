@@ -1,3 +1,10 @@
+## github-v1.0.0 (2026-05-08)
+
+### Feat
+
+- register PyPI wheel via pragma CLI, switch PyPI auth to OIDC (PRA-382) (#82)
+- **agno**: add thinking-mode support to models/anthropic (#78)
+
 ## github-v0.34.0 (2026-05-07)
 
 ### Feat
