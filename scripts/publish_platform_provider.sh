@@ -189,13 +189,14 @@ if ! TOKEN=$(
 import os
 import sys
 
-from clerk_backend_api import Clerk
+from clerk_backend_api import Clerk, models
 
 ttl = int(os.environ["MINT_TTL_SECONDS"])
 secret = os.environ["CONSOLE_CLERK_MACHINE_SECRET_KEY"]
 
 with Clerk(bearer_auth=secret) as clerk:
     created = clerk.m2m.create_token(
+        token_format=models.TokenFormat.JWT,
         seconds_until_expiration=float(ttl),
         claims=None,
     )
