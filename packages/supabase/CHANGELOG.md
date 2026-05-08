@@ -1,3 +1,9 @@
+## supabase-v2.0.0 (2026-05-08)
+
+### Fix
+
+- **publish**: mint JWT M2M tokens instead of opaque (#88)
+
 ## supabase-v1.0.1 (2026-05-08)
 
 ## supabase-v1.0.0 (2026-05-08)
