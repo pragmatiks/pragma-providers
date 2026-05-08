@@ -10,6 +10,13 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v1.0.0 (2026-05-08)
+
+### Feat
+
+- register PyPI wheel via pragma CLI, switch PyPI auth to OIDC (PRA-382) (#82)
+- **agno**: add thinking-mode support to models/anthropic (#78)
+
 ## qdrant-v0.67.0 (2026-05-07)
 
 ### Feat
