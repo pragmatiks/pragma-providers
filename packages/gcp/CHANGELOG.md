@@ -1,3 +1,9 @@
+## gcp-v2.0.0 (2026-05-08)
+
+### Fix
+
+- **publish-script**: pin provider wheel via PEP 508 direct reference (#87)
+
 ## gcp-v1.0.1 (2026-05-08)
 
 ### Fix
