@@ -18,7 +18,12 @@
 #     [tool.pragma] table itself, then imports the provider package to
 #     extract resource schemas — which is why this script installs the
 #     provider's just-published wheel into the same `uv run` env via
-#     `--with <dist-name>==<version>`. Without that, schema extraction
+#     `--with "<dist-name> @ <wheel-url>"`. The wheel URL is used as a
+#     PEP 508 direct reference (rather than `==<version>` against the
+#     simple index) because the JSON `/pypi/<name>/<ver>/json` endpoint
+#     propagates ahead of the `/simple/<name>/` index uv would otherwise
+#     consult — pinning to the URL we already resolved bypasses that
+#     race entirely. Without provider deps installed, schema extraction
 #     fails with ModuleNotFoundError for the provider's runtime deps
 #     (e.g. google-cloud-storage, qdrant_client, agno, ...).
 #
@@ -225,7 +230,7 @@ fi
 PRAGMA_AUTH_TOKEN="${TOKEN}" \
   uv run --isolated \
     --with "pragmatiks-cli${PRAGMA_CLI_VERSION}" \
-    --with "${DIST_NAME}==${VERSION}" \
+    --with "${DIST_NAME} @ ${WHEEL_URL}" \
     pragma "${CONTEXT_ARGS[@]}" providers register \
     --wheel-url "${WHEEL_URL}" \
     --sha256 "${WHEEL_SHA256}" \
