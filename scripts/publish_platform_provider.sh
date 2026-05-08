@@ -64,11 +64,17 @@ if [ ! -f "${PYPROJECT_PATH}" ]; then
   exit 1
 fi
 
+MINT_STDERR="$(mktemp)"
+cleanup() {
+  rm -f "${MINT_STDERR}"
+}
+trap cleanup EXIT
+
 echo "Reading distribution name from ${PYPROJECT_PATH}..."
 
 if ! DIST_NAME=$(
   PYPROJECT_PATH="${PYPROJECT_PATH}" \
-  uv run --isolated python -c '
+  uv run --no-project python -c '
 import os
 import sys
 import tomllib
@@ -92,73 +98,64 @@ fi
 echo "Resolving wheel URL for ${DIST_NAME} v${VERSION} on PyPI..."
 
 PYPI_JSON_URL="https://pypi.org/pypi/${DIST_NAME}/${VERSION}/json"
-PYPI_RESPONSE="$(mktemp)"
-trap 'rm -f "${PYPI_RESPONSE}"' EXIT
 
-WHEEL_FOUND=0
-for attempt in $(seq 1 "${PYPI_POLL_ATTEMPTS}"); do
-  if curl -sfL -o "${PYPI_RESPONSE}" "${PYPI_JSON_URL}"; then
-    HAS_WHEEL=$(
-      PYPI_RESPONSE="${PYPI_RESPONSE}" uv run --isolated python -c '
+# Resolves the wheel URL + sha256 from the PyPI JSON streamed on stdin.
+# Exit codes:
+#   0  exactly one bdist_wheel entry; emits "<url>\n<sha256>" on stdout.
+#   1  zero bdist_wheel entries (wheel not yet propagated — retry).
+#   2  malformed JSON or multiple/ambiguous wheels (fatal — do not retry).
+read -r -d '' WHEEL_RESOLVER_PY <<'PY' || true
 import json
-import os
 import sys
 
-with open(os.environ["PYPI_RESPONSE"], "rb") as f:
-    data = json.load(f)
+try:
+    data = json.load(sys.stdin)
+except json.JSONDecodeError as exc:
+    sys.stderr.write(f"invalid PyPI JSON: {exc}\n")
+    sys.exit(2)
 
-for entry in data.get("urls") or []:
-    if entry.get("packagetype") == "bdist_wheel":
-        sys.stdout.write("yes")
-        sys.exit(0)
+wheels = [e for e in (data.get("urls") or []) if e.get("packagetype") == "bdist_wheel"]
+if not wheels:
+    sys.exit(1)
+if len(wheels) > 1:
+    sys.stderr.write(f"expected exactly one bdist_wheel entry, found {len(wheels)}\n")
+    sys.exit(2)
 
-sys.stdout.write("no")
-'
-    )
-    if [ "${HAS_WHEEL}" = "yes" ]; then
-      WHEEL_FOUND=1
-      break
-    fi
+entry = wheels[0]
+url = entry.get("url")
+sha256 = (entry.get("digests") or {}).get("sha256")
+if not url or not sha256:
+    sys.stderr.write("wheel entry is missing url or digests.sha256\n")
+    sys.exit(2)
+
+sys.stdout.write(f"{url}\n{sha256}\n")
+PY
+
+resolve_wheel() {
+  curl -sfL "${PYPI_JSON_URL}" \
+    | uv run --no-project python -c "${WHEEL_RESOLVER_PY}"
+}
+
+WHEEL_META=""
+for ((attempt = 1; attempt <= PYPI_POLL_ATTEMPTS; attempt++)); do
+  if WHEEL_META=$(resolve_wheel); then
+    break
+  fi
+  rc=$?
+  if [ "${rc}" -eq 2 ]; then
+    echo "publish_platform_provider: fatal error resolving wheel on PyPI" >&2
+    exit 1
   fi
   echo "Attempt ${attempt}: wheel not yet visible on PyPI, waiting ${PYPI_POLL_INTERVAL}s..."
   sleep "${PYPI_POLL_INTERVAL}"
 done
 
-if [ "${WHEEL_FOUND}" -ne 1 ]; then
+if [ -z "${WHEEL_META}" ]; then
   echo "publish_platform_provider: timed out waiting for ${DIST_NAME} v${VERSION} wheel on PyPI" >&2
   exit 1
 fi
 
-if ! WHEEL_META=$(
-  PYPI_RESPONSE="${PYPI_RESPONSE}" uv run --isolated python -c '
-import json
-import os
-import sys
-
-with open(os.environ["PYPI_RESPONSE"], "rb") as f:
-    data = json.load(f)
-
-for entry in data.get("urls") or []:
-    if entry.get("packagetype") != "bdist_wheel":
-        continue
-    url = entry.get("url")
-    sha256 = (entry.get("digests") or {}).get("sha256")
-    if not url or not sha256:
-        sys.stderr.write("wheel entry is missing url or digests.sha256\n")
-        sys.exit(1)
-    sys.stdout.write(f"{url}\n{sha256}\n")
-    sys.exit(0)
-
-sys.stderr.write("no bdist_wheel entry found in PyPI response\n")
-sys.exit(1)
-'
-); then
-  echo "publish_platform_provider: failed to extract wheel metadata from PyPI response" >&2
-  exit 1
-fi
-
-WHEEL_URL=$(printf '%s\n' "${WHEEL_META}" | sed -n '1p')
-WHEEL_SHA256=$(printf '%s\n' "${WHEEL_META}" | sed -n '2p')
+{ read -r WHEEL_URL; read -r WHEEL_SHA256; } <<<"${WHEEL_META}"
 
 if [ -z "${WHEEL_URL}" ] || [ -z "${WHEEL_SHA256}" ]; then
   echo "publish_platform_provider: empty wheel URL or sha256" >&2
@@ -169,9 +166,6 @@ echo "Wheel URL: ${WHEEL_URL}"
 echo "Wheel sha256: ${WHEEL_SHA256}"
 
 echo "Minting ConsoleMachine M2M token (ttl=${MINT_TTL_SECONDS}s)..."
-
-MINT_STDERR="$(mktemp)"
-trap 'rm -f "${PYPI_RESPONSE}" "${MINT_STDERR}"' EXIT
 
 if ! TOKEN=$(
   CONSOLE_CLERK_MACHINE_SECRET_KEY="${PRAGMA_CONSOLE_MACHINE_SECRET_KEY}" \
