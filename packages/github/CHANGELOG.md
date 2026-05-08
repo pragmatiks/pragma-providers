@@ -1,3 +1,11 @@
+## github-v4.0.0 (2026-05-08)
+
+### Fix
+
+- **publish**: hoist provider lookup out of f-string (#91)
+- **publish**: post directly to Console wheel-register endpoint (#90)
+- **publish**: mint JWT M2M tokens instead of opaque (#88)
+
 ## github-v3.0.0 (2026-05-08)
 
 ### Fix
