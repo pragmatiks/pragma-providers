@@ -1,3 +1,10 @@
+## gcp-v3.0.0 (2026-05-08)
+
+### Fix
+
+- **publish**: mint JWT M2M tokens instead of opaque (#88)
+- **publish-script**: pin provider wheel via PEP 508 direct reference (#87)
+
 ## gcp-v2.0.0 (2026-05-08)
 
 ### Fix
