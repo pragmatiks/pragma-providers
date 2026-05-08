@@ -34,6 +34,7 @@ display_name = "Google Cloud Platform"
 description = "Manage GCP resources including Cloud SQL databases, GKE clusters, and secrets through declarative configuration."
 icon_url = "https://cdn.simpleicons.org/googlecloud"
 tags = ["cloud", "gcp", "infrastructure", "database", "kubernetes"]
+entrypoint = ["python", "-m", "pragma_runtime.entrypoint"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
