@@ -10,6 +10,14 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v5.0.0 (2026-05-08)
+
+### Fix
+
+- **publish**: post directly to Console wheel-register endpoint (#90)
+- **publish**: mint JWT M2M tokens instead of opaque (#88)
+- **publish-script**: pin provider wheel via PEP 508 direct reference (#87)
+
 ## qdrant-v4.0.0 (2026-05-08)
 
 ### Fix
