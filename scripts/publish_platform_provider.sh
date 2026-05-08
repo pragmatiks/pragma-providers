@@ -29,9 +29,13 @@
 #
 # Optional env vars:
 #   MINT_TTL_SECONDS                   Default: 3600 (max 7200).
-#   PRAGMA_CLI_VERSION                 Default: >=3.0.0. Version specifier
-#                                      passed to `uv run --with
-#                                      pragmatiks-cli<spec>`.
+#   PRAGMA_CLI_VERSION                 Default: >=4.0.0,<5.0.0. Version
+#                                      specifier passed to `uv run
+#                                      --with pragmatiks-cli<spec>`. The
+#                                      `providers register` subcommand
+#                                      first shipped in pragmatiks-cli
+#                                      4.0.0; pin must include it and
+#                                      should not float across majors.
 #   PYPI_POLL_ATTEMPTS                 Default: 30. Times to poll PyPI for
 #                                      wheel availability.
 #   PYPI_POLL_INTERVAL                 Default: 10. Seconds between polls.
@@ -54,7 +58,7 @@ VERSION="${2:?version argument is required}"
 
 PYPROJECT_PATH="${PROVIDER_DIR}/pyproject.toml"
 
-PRAGMA_CLI_VERSION="${PRAGMA_CLI_VERSION:->=3.0.0}"
+PRAGMA_CLI_VERSION="${PRAGMA_CLI_VERSION:->=4.0.0,<5.0.0}"
 MINT_TTL_SECONDS="${MINT_TTL_SECONDS:-3600}"
 PYPI_POLL_ATTEMPTS="${PYPI_POLL_ATTEMPTS:-30}"
 PYPI_POLL_INTERVAL="${PYPI_POLL_INTERVAL:-10}"
