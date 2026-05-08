@@ -1,3 +1,32 @@
+## agno-v1.0.0 (2026-05-08)
+
+### Feat
+
+- **agno**: declare explicit runtime entrypoint in [tool.pragma] (#86)
+- **qdrant**: declare explicit runtime entrypoint in [tool.pragma] (#85)
+- **kubernetes**: declare explicit runtime entrypoint in [tool.pragma] (#84)
+- **gcp**: declare explicit runtime entrypoint in [tool.pragma] (#83)
+- register PyPI wheel via pragma CLI, switch PyPI auth to OIDC (PRA-382) (#82)
+- **agno**: add thinking-mode support to models/anthropic (#78)
+- **ci**: add allow_no_commit dispatch input for catalog repopulation (PRA-369) (#76)
+- **ci**: migrate provider publish to ConsoleMachine + /console publish endpoint (PRA-369) (#73)
+- rename canonical platform providers from pragmatiks/* to platform/* (PRA-368) (#72)
+- **agno**: honest readiness for runner + credential validation (#69)
+- **pragma**: publish pragma provider via standard pipeline (#66)
+- **agno**: multi-entity AgentOS support on runner (#65)
+- **kubernetes**: config resource with multi-cluster auth modes (#64)
+- **agno**: add output_schema for structured agent responses
+- **agno**: add HITL fields to ToolsMCP and approvals_table to DbPostgres
+
+### Fix
+
+- **ci**: detect new commitizen no-commits output (#77)
+- **ci**: forward provider metadata from pyproject to /console publish (PRA-369) (#75)
+- **ci**: mint opaque M2M token (mt_*) instead of JWT-format (PRA-369) (#74)
+- **agno**: remove workflows placeholder field to satisfy sdk type validation (#71)
+- refresh provider lockfiles to resolve cross-provider deps (#70)
+- **pragma**: correct FieldReference syntax in README (#68)
+
 ## agno-v0.131.0 (2026-05-02)
 
 ### Feat
