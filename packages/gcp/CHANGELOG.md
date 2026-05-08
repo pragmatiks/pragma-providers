@@ -1,3 +1,11 @@
+## gcp-v4.0.0 (2026-05-08)
+
+### Fix
+
+- **publish**: post directly to Console wheel-register endpoint (#90)
+- **publish**: mint JWT M2M tokens instead of opaque (#88)
+- **publish-script**: pin provider wheel via PEP 508 direct reference (#87)
+
 ## gcp-v3.0.0 (2026-05-08)
 
 ### Fix
