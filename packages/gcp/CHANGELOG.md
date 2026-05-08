@@ -1,3 +1,23 @@
+## gcp-v1.0.0 (2026-05-08)
+
+### Feat
+
+- register PyPI wheel via pragma CLI, switch PyPI auth to OIDC (PRA-382) (#82)
+- **agno**: add thinking-mode support to models/anthropic (#78)
+- **ci**: add allow_no_commit dispatch input for catalog repopulation (PRA-369) (#76)
+- **ci**: migrate provider publish to ConsoleMachine + /console publish endpoint (PRA-369) (#73)
+- rename canonical platform providers from pragmatiks/* to platform/* (PRA-368) (#72)
+- **agno**: honest readiness for runner + credential validation (#69)
+
+### Fix
+
+- **ci**: detect new commitizen no-commits output (#77)
+- **ci**: forward provider metadata from pyproject to /console publish (PRA-369) (#75)
+- **ci**: mint opaque M2M token (mt_*) instead of JWT-format (PRA-369) (#74)
+- **agno**: remove workflows placeholder field to satisfy sdk type validation (#71)
+- refresh provider lockfiles to resolve cross-provider deps (#70)
+- **pragma**: correct FieldReference syntax in README (#68)
+
 ## gcp-v0.187.0 (2026-05-07)
 
 ### Feat
