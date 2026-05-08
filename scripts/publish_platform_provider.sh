@@ -14,8 +14,13 @@
 #     Clerk Machine Secret (ak_...), exports it as PRAGMA_AUTH_TOKEN, and
 #     invokes `pragma providers register` with the wheel URL, sha256,
 #     version, and pyproject path. The CLI reads the rest of the metadata
-#     (display_name, description, icon_url, tags, package, entrypoint) out
-#     of the [tool.pragma] table itself.
+#     (display_name, description, icon_url, tags, package) out of the
+#     [tool.pragma] table itself, then imports the provider package to
+#     extract resource schemas — which is why this script installs the
+#     provider's just-published wheel into the same `uv run` env via
+#     `--with <dist-name>==<version>`. Without that, schema extraction
+#     fails with ModuleNotFoundError for the provider's runtime deps
+#     (e.g. google-cloud-storage, qdrant_client, agno, ...).
 #
 # Required env vars:
 #   PRAGMA_CONSOLE_MACHINE_SECRET_KEY  Clerk Machine Secret (ak_...) for
@@ -214,7 +219,9 @@ if [ -n "${PRAGMA_CONTEXT:-}" ]; then
 fi
 
 PRAGMA_AUTH_TOKEN="${TOKEN}" \
-  uv run --isolated --with "pragmatiks-cli${PRAGMA_CLI_VERSION}" \
+  uv run --isolated \
+    --with "pragmatiks-cli${PRAGMA_CLI_VERSION}" \
+    --with "${DIST_NAME}==${VERSION}" \
     pragma "${CONTEXT_ARGS[@]}" providers register \
     --wheel-url "${WHEEL_URL}" \
     --sha256 "${WHEEL_SHA256}" \
