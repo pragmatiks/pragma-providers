@@ -1,54 +1,44 @@
 #!/usr/bin/env bash
 #
-# Register a platform provider version on api.pragmatiks.io using a wheel
-# already uploaded to PyPI.
+# Register a platform provider version on the Pragmatiks Console API
+# using a wheel already uploaded to PyPI.
 #
-# Assumes the wheel for `<dist-name>==<version>` (where `<dist-name>` is the
-# `[project].name` field of the provider's pyproject.toml) has just been
-# published to PyPI. The script:
-#   - Reads `[project].name` from the provider's pyproject.toml.
+# Assumes the wheel for `<dist-name>==<version>` (where `<dist-name>` is
+# the `[project].name` field of the provider's pyproject.toml) has just
+# been published to PyPI. The script:
+#   - Reads `[project].name` and `[tool.pragma]` metadata from the
+#     provider's pyproject.toml (`provider`, `package`, `display_name`,
+#     `description`, optional `icon_url`, `tags`, `entrypoint`).
 #   - Polls https://pypi.org/pypi/<dist-name>/<version>/json until the
 #     wheel ("bdist_wheel") entry appears, then captures its `url` and
 #     `digests.sha256`.
-#   - Mints a fresh short-lived Clerk M2M token (mt_...) from the long-lived
-#     Clerk Machine Secret (ak_...), exports it as PRAGMA_AUTH_TOKEN, and
-#     invokes `pragma providers register` with the wheel URL, sha256,
-#     version, and pyproject path. The CLI reads the rest of the metadata
-#     (display_name, description, icon_url, tags, package) out of the
-#     [tool.pragma] table itself, then imports the provider package to
-#     extract resource schemas — which is why this script installs the
-#     provider's just-published wheel into the same `uv run` env via
-#     `--with "<dist-name> @ <wheel-url>"`. The wheel URL is used as a
-#     PEP 508 direct reference (rather than `==<version>` against the
-#     simple index) because the JSON `/pypi/<name>/<ver>/json` endpoint
-#     propagates ahead of the `/simple/<name>/` index uv would otherwise
-#     consult — pinning to the URL we already resolved bypasses that
-#     race entirely. Without provider deps installed, schema extraction
-#     fails with ModuleNotFoundError for the provider's runtime deps
-#     (e.g. google-cloud-storage, qdrant_client, agno, ...).
+#   - Mints a fresh short-lived Clerk M2M JWT (mt_...) from the
+#     long-lived Clerk Machine Secret (ak_...).
+#   - POSTs a `WheelProviderVersionCreate` payload to
+#     `${PRAGMA_API_URL}/console/provider-versions` with the bearer
+#     JWT. The endpoint is gated by the Console release-machine
+#     allow-list and accepts only `platform/<name>` registrations.
+#
+# Resource schemas are intentionally omitted: the wheel-based register
+# route accepts a null `schemas` field, and the runtime extracts schemas
+# from the installed provider package at deploy time. This is why the
+# script does NOT install the provider wheel locally.
 #
 # Required env vars:
 #   PRAGMA_CONSOLE_MACHINE_SECRET_KEY  Clerk Machine Secret (ak_...) for
-#                                      the Pragmatiks Console "ci-release"
-#                                      Machine.
+#                                      the Pragmatiks Console release
+#                                      Machine. The Machine ID must be
+#                                      in the API's
+#                                      CONSOLE_RELEASE_MACHINE_IDS
+#                                      allow-list.
 #
 # Optional env vars:
+#   PRAGMA_API_URL                     Default: https://api.pragmatiks.io
+#                                      Pragmatiks Console API base URL.
 #   MINT_TTL_SECONDS                   Default: 3600 (max 7200).
-#   PRAGMA_CLI_VERSION                 Default: >=4.0.0,<5.0.0. Version
-#                                      specifier passed to `uv run
-#                                      --with pragmatiks-cli<spec>`. The
-#                                      `providers register` subcommand
-#                                      first shipped in pragmatiks-cli
-#                                      4.0.0; pin must include it and
-#                                      should not float across majors.
 #   PYPI_POLL_ATTEMPTS                 Default: 30. Times to poll PyPI for
 #                                      wheel availability.
 #   PYPI_POLL_INTERVAL                 Default: 10. Seconds between polls.
-#
-# To target a non-prod API, configure a CLI context with the desired
-# api_url before invoking this script (e.g. `pragma config set-context
-# staging --api-url https://api.staging.pragmatiks.io`) and pass
-# `--context staging` through PRAGMA_CONTEXT.
 #
 # Usage:
 #   publish_platform_provider.sh <provider_dir> <version>
@@ -63,7 +53,7 @@ VERSION="${2:?version argument is required}"
 
 PYPROJECT_PATH="${PROVIDER_DIR}/pyproject.toml"
 
-PRAGMA_CLI_VERSION="${PRAGMA_CLI_VERSION:->=4.0.0,<5.0.0}"
+PRAGMA_API_URL="${PRAGMA_API_URL:-https://api.pragmatiks.io}"
 MINT_TTL_SECONDS="${MINT_TTL_SECONDS:-3600}"
 PYPI_POLL_ATTEMPTS="${PYPI_POLL_ATTEMPTS:-30}"
 PYPI_POLL_INTERVAL="${PYPI_POLL_INTERVAL:-10}"
@@ -79,8 +69,10 @@ if [ ! -f "${PYPROJECT_PATH}" ]; then
 fi
 
 MINT_STDERR="$(mktemp)"
+REGISTER_STDERR="$(mktemp)"
+PAYLOAD_FILE="$(mktemp)"
 cleanup() {
-  rm -f "${MINT_STDERR}"
+  rm -f "${MINT_STDERR}" "${REGISTER_STDERR}" "${PAYLOAD_FILE}"
 }
 trap cleanup EXIT
 
@@ -179,6 +171,66 @@ fi
 echo "Wheel URL: ${WHEEL_URL}"
 echo "Wheel sha256: ${WHEEL_SHA256}"
 
+echo "Building Console registration payload from ${PYPROJECT_PATH}..."
+
+if ! PROVIDER_NAME=$(
+  PYPROJECT_PATH="${PYPROJECT_PATH}" \
+  VERSION="${VERSION}" \
+  WHEEL_URL="${WHEEL_URL}" \
+  WHEEL_SHA256="${WHEEL_SHA256}" \
+  PAYLOAD_FILE="${PAYLOAD_FILE}" \
+  uv run --no-project python -c '
+import json
+import os
+import sys
+import tomllib
+
+with open(os.environ["PYPROJECT_PATH"], "rb") as f:
+    data = tomllib.load(f)
+
+pragma = data.get("tool", {}).get("pragma")
+if not pragma:
+    sys.stderr.write("[tool.pragma] table is missing\n")
+    sys.exit(1)
+
+required = ["provider", "package", "display_name", "description"]
+missing = [k for k in required if not pragma.get(k)]
+if missing:
+    sys.stderr.write(f"[tool.pragma] missing required keys: {missing}\n")
+    sys.exit(1)
+
+metadata = {
+    "display_name": pragma["display_name"],
+    "description": pragma["description"],
+    "tags": pragma.get("tags") or [],
+}
+icon_url = pragma.get("icon_url")
+if icon_url:
+    metadata["icon_url"] = icon_url
+
+payload = {
+    "name": f"platform/{pragma['provider']}",
+    "version": os.environ["VERSION"],
+    "wheel_url": os.environ["WHEEL_URL"],
+    "sha256": os.environ["WHEEL_SHA256"],
+    "package_name": pragma["package"],
+    "metadata": metadata,
+}
+
+entrypoint = pragma.get("entrypoint")
+if entrypoint:
+    payload["entrypoint"] = list(entrypoint)
+
+with open(os.environ["PAYLOAD_FILE"], "w") as out:
+    json.dump(payload, out)
+
+sys.stdout.write(payload["name"])
+'
+); then
+  echo "publish_platform_provider: failed to build registration payload" >&2
+  exit 1
+fi
+
 echo "Minting ConsoleMachine M2M token (ttl=${MINT_TTL_SECONDS}s)..."
 
 if ! TOKEN=$(
@@ -221,21 +273,29 @@ if [ -z "${TOKEN}" ]; then
 fi
 
 echo "::add-mask::${TOKEN}"
-echo "Minted token (length=${#TOKEN}). Registering ${DIST_NAME} v${VERSION} with Pragma catalog..."
+echo "Minted token (length=${#TOKEN}). Registering ${PROVIDER_NAME} v${VERSION} at ${PRAGMA_API_URL}/console/provider-versions..."
 
-CONTEXT_ARGS=()
-if [ -n "${PRAGMA_CONTEXT:-}" ]; then
-  CONTEXT_ARGS+=(--context "${PRAGMA_CONTEXT}")
-fi
+REGISTER_URL="${PRAGMA_API_URL}/console/provider-versions"
+HTTP_CODE=$(
+  curl -sS -o "${REGISTER_STDERR}" -w '%{http_code}' \
+    -X POST "${REGISTER_URL}" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json" \
+    --data-binary "@${PAYLOAD_FILE}"
+)
 
-PRAGMA_AUTH_TOKEN="${TOKEN}" \
-  uv run --isolated \
-    --with "pragmatiks-cli${PRAGMA_CLI_VERSION}" \
-    --with "${DIST_NAME} @ ${WHEEL_URL}" \
-    pragma "${CONTEXT_ARGS[@]}" providers register \
-    --wheel-url "${WHEEL_URL}" \
-    --sha256 "${WHEEL_SHA256}" \
-    --version "${VERSION}" \
-    --pyproject "${PYPROJECT_PATH}"
-
-echo "Registered ${DIST_NAME} v${VERSION} with Pragma catalog."
+case "${HTTP_CODE}" in
+  201)
+    echo "Registered ${PROVIDER_NAME} v${VERSION} (HTTP ${HTTP_CODE})."
+    ;;
+  200)
+    echo "Already registered: ${PROVIDER_NAME} v${VERSION} (HTTP ${HTTP_CODE})."
+    ;;
+  *)
+    echo "publish_platform_provider: register failed with HTTP ${HTTP_CODE}" >&2
+    cat "${REGISTER_STDERR}" >&2
+    echo >&2
+    exit 1
+    ;;
+esac
