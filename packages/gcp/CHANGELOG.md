@@ -1,3 +1,9 @@
+## gcp-v6.0.0 (2026-05-09)
+
+### Feat
+
+- **publish**: add register_only dispatch mode (#94)
+
 ## gcp-v5.0.2 (2026-05-09)
 
 ## gcp-v5.0.1 (2026-05-09)
