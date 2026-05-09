@@ -154,7 +154,7 @@ jobs:
         if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            git pull --rebase origin main && git push origin main --tags && exit 0
             echo "Push attempt $i failed, retrying in ${i}s..."
             sleep $i
           done
@@ -262,7 +262,7 @@ jobs:
         if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            git pull --rebase origin main && git push origin main --tags && exit 0
             echo "Push attempt $i failed, retrying in ${i}s..."
             sleep $i
           done
@@ -370,7 +370,7 @@ jobs:
         if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            git pull --rebase origin main && git push origin main --tags && exit 0
             echo "Push attempt $i failed, retrying in ${i}s..."
             sleep $i
           done
@@ -478,7 +478,7 @@ jobs:
         if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            git pull --rebase origin main && git push origin main --tags && exit 0
             echo "Push attempt $i failed, retrying in ${i}s..."
             sleep $i
           done
@@ -586,7 +586,7 @@ jobs:
         if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            git pull --rebase origin main && git push origin main --tags && exit 0
             echo "Push attempt $i failed, retrying in ${i}s..."
             sleep $i
           done
@@ -726,7 +726,7 @@ jobs:
         if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            git pull --rebase origin main && git push origin main --tags && exit 0
             echo "Push attempt $i failed, retrying in ${i}s..."
             sleep $i
           done
@@ -865,7 +865,7 @@ jobs:
         if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            git pull --rebase origin main && git push origin main --tags && exit 0
             echo "Push attempt $i failed, retrying in ${i}s..."
             sleep $i
           done
@@ -1015,7 +1015,7 @@ jobs:
         if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --follow-tags && exit 0
+            git pull --rebase origin main && git push origin main --tags && exit 0
             echo "Push attempt $i failed, retrying in ${i}s..."
             sleep $i
           done
