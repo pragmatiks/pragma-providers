@@ -11,6 +11,11 @@ on:
         type: boolean
         required: false
         default: false
+      register_only:
+        description: "Skip cz bump, tag push, GitHub release, and PyPI publish; only re-register the existing pyproject version with the Pragma catalog"
+        type: boolean
+        required: false
+        default: false
 
 # Provider dependency DAG:
 #   gcp, supabase, vercel, github, pragma  (no internal deps — run in parallel)
@@ -127,7 +132,11 @@ jobs:
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/gcp
-          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
+          if [ "${{ inputs.register_only }}" = "true" ]; then
+            VERSION=$(cz version --project)
+            echo "Register-only mode: using existing v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped gcp to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -142,6 +151,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
+        if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --follow-tags && exit 0
@@ -152,7 +162,7 @@ jobs:
           exit 1
 
       - name: Create GitHub Release
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -163,7 +173,7 @@ jobs:
             dist/pragmatiks_gcp_provider-${VERSION}* || echo "Release may already exist"
 
       - name: Publish to PyPI
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
@@ -230,7 +240,11 @@ jobs:
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/supabase
-          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
+          if [ "${{ inputs.register_only }}" = "true" ]; then
+            VERSION=$(cz version --project)
+            echo "Register-only mode: using existing v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped supabase to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -245,6 +259,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
+        if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --follow-tags && exit 0
@@ -255,7 +270,7 @@ jobs:
           exit 1
 
       - name: Create GitHub Release
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -266,7 +281,7 @@ jobs:
             dist/pragmatiks_supabase_provider-${VERSION}* || echo "Release may already exist"
 
       - name: Publish to PyPI
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
@@ -333,7 +348,11 @@ jobs:
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/vercel
-          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
+          if [ "${{ inputs.register_only }}" = "true" ]; then
+            VERSION=$(cz version --project)
+            echo "Register-only mode: using existing v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped vercel to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -348,6 +367,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
+        if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --follow-tags && exit 0
@@ -358,7 +378,7 @@ jobs:
           exit 1
 
       - name: Create GitHub Release
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -369,7 +389,7 @@ jobs:
             dist/pragmatiks_vercel_provider-${VERSION}* || echo "Release may already exist"
 
       - name: Publish to PyPI
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
@@ -436,7 +456,11 @@ jobs:
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/github
-          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
+          if [ "${{ inputs.register_only }}" = "true" ]; then
+            VERSION=$(cz version --project)
+            echo "Register-only mode: using existing v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped github to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -451,6 +475,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
+        if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --follow-tags && exit 0
@@ -461,7 +486,7 @@ jobs:
           exit 1
 
       - name: Create GitHub Release
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -472,7 +497,7 @@ jobs:
             dist/pragmatiks_github_provider-${VERSION}* || echo "Release may already exist"
 
       - name: Publish to PyPI
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
@@ -539,7 +564,11 @@ jobs:
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/pragma
-          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
+          if [ "${{ inputs.register_only }}" = "true" ]; then
+            VERSION=$(cz version --project)
+            echo "Register-only mode: using existing v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped pragma to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -554,6 +583,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
+        if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --follow-tags && exit 0
@@ -564,7 +594,7 @@ jobs:
           exit 1
 
       - name: Create GitHub Release
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -575,7 +605,7 @@ jobs:
             dist/pragmatiks_pragma_provider-${VERSION}* || echo "Release may already exist"
 
       - name: Publish to PyPI
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
@@ -674,7 +704,11 @@ jobs:
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/kubernetes
-          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
+          if [ "${{ inputs.register_only }}" = "true" ]; then
+            VERSION=$(cz version --project)
+            echo "Register-only mode: using existing v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped kubernetes to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -689,6 +723,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
+        if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --follow-tags && exit 0
@@ -699,7 +734,7 @@ jobs:
           exit 1
 
       - name: Create GitHub Release
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -710,7 +745,7 @@ jobs:
             dist/pragmatiks_kubernetes_provider-${VERSION}* || echo "Release may already exist"
 
       - name: Publish to PyPI
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
@@ -808,7 +843,11 @@ jobs:
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/qdrant
-          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
+          if [ "${{ inputs.register_only }}" = "true" ]; then
+            VERSION=$(cz version --project)
+            echo "Register-only mode: using existing v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped qdrant to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -823,6 +862,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
+        if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --follow-tags && exit 0
@@ -833,7 +873,7 @@ jobs:
           exit 1
 
       - name: Create GitHub Release
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -844,7 +884,7 @@ jobs:
             dist/pragmatiks_qdrant_provider-${VERSION}* || echo "Release may already exist"
 
       - name: Publish to PyPI
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
@@ -953,7 +993,11 @@ jobs:
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/agno
-          if cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
+          if [ "${{ inputs.register_only }}" = "true" ]; then
+            VERSION=$(cz version --project)
+            echo "Register-only mode: using existing v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped agno to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -968,6 +1012,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
+        if: inputs.register_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --follow-tags && exit 0
@@ -978,7 +1023,7 @@ jobs:
           exit 1
 
       - name: Create GitHub Release
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -989,7 +1034,7 @@ jobs:
             dist/pragmatiks_agno_provider-${VERSION}* || echo "Release may already exist"
 
       - name: Publish to PyPI
-        if: steps.bump.outputs.version != ''
+        if: steps.bump.outputs.version != '' && inputs.register_only != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
