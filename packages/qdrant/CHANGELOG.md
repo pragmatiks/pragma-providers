@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v7.0.1 (2026-05-09)
+
+### Fix
+
+- **publish**: push tags reliably so cz finds previous version (#96)
+
 ## qdrant-v7.0.0 (2026-05-09)
 
 ### Feat
