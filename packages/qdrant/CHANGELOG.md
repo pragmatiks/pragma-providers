@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v6.0.2 (2026-05-09)
+
 ## qdrant-v6.0.1 (2026-05-09)
 
 ### Fix
