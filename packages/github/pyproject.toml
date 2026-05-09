@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-github-provider"
-version = "4.0.1"
+version = "4.0.2"
 description = "GitHub provider for Pragmatiks"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -39,7 +39,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "4.0.1"
+version = "4.0.2"
 version_files = ["pyproject.toml:^version"]
 tag_format = "github-v$version"
 update_changelog_on_bump = true
