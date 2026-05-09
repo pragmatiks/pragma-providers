@@ -1,3 +1,9 @@
+## github-v5.0.1 (2026-05-09)
+
+### Fix
+
+- **publish**: push tags reliably so cz finds previous version (#96)
+
 ## github-v5.0.0 (2026-05-09)
 
 ### Feat
