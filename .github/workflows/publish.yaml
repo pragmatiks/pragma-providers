@@ -1,9 +1,9 @@
 name: Publish Providers
 
 on:
-  # Auto-publish on push to main is paused while platform M2M auth is broken
-  # (api.pragmatiks.io rejects Clerk JWT M2M tokens at /me with HTTP 401).
-  # Tracked in PRA-392. Re-enable the push trigger once register succeeds.
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       allow_no_commit:
