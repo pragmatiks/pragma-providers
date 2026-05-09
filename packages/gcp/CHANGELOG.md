@@ -1,3 +1,13 @@
+## gcp-v5.0.1 (2026-05-09)
+
+### Fix
+
+- **publish**: pin --allow-no-commit dispatches to PATCH increment (#92)
+- **publish**: hoist provider lookup out of f-string (#91)
+- **publish**: post directly to Console wheel-register endpoint (#90)
+- **publish**: mint JWT M2M tokens instead of opaque (#88)
+- **publish-script**: pin provider wheel via PEP 508 direct reference (#87)
+
 ## gcp-v5.0.0 (2026-05-08)
 
 ### Fix
