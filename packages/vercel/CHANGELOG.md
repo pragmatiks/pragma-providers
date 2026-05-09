@@ -1,3 +1,9 @@
+## vercel-v5.0.0 (2026-05-09)
+
+### Feat
+
+- **publish**: add register_only dispatch mode (#94)
+
 ## vercel-v4.0.2 (2026-05-09)
 
 ## vercel-v4.0.1 (2026-05-09)
