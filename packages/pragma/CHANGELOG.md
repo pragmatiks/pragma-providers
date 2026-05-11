@@ -1,3 +1,13 @@
+## pragma-v5.1.0 (2026-05-11)
+
+### Feat
+
+- **publish**: add register_only dispatch mode (#94)
+
+### Fix
+
+- **publish**: push tags reliably so cz finds previous version (#96)
+
 ## pragma-v5.0.2 (2026-05-09)
 
 ## pragma-v5.0.1 (2026-05-09)
