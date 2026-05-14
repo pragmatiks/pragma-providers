@@ -17,6 +17,12 @@ __pycache__/
 coverage/
 htmlcov/
 
+# Per-package build artifacts
+packages/*/.venv/
+packages/*/dist/
+packages/*/build/
+packages/*/__pycache__/
+
 # Worktrees and graph output (prevent recursion / duplication)
 .claude/worktrees/
 graphify-out/
