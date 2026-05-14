@@ -33,3 +33,6 @@ e2e/
 .claude/settings.local.json
 .claude/worktrees/
 .claude/plans/
+
+# graphify
+graphify-out/
