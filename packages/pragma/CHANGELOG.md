@@ -1,3 +1,9 @@
+## pragma-v5.1.2 (2026-07-22)
+
+### Fix
+
+- **ci**: republish providers on automated sdk updates
+
 ## pragma-v5.1.1 (2026-07-22)
 
 ### Fix
