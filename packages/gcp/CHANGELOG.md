@@ -1,3 +1,9 @@
+## gcp-v6.0.2 (2026-07-22)
+
+### Fix
+
+- require pragmatiks-sdk >= 8.0.0 across providers
+
 ## gcp-v6.0.1 (2026-05-09)
 
 ### Fix
