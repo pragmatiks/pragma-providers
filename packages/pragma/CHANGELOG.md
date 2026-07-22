@@ -1,3 +1,9 @@
+## pragma-v5.1.1 (2026-07-22)
+
+### Fix
+
+- require pragmatiks-sdk >= 8.0.0 across providers
+
 ## pragma-v5.1.0 (2026-05-11)
 
 ### Feat
