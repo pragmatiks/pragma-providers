@@ -1,3 +1,9 @@
+## gcp-v6.0.5 (2026-07-22)
+
+### Fix
+
+- **ci**: run pragma publish on shared changes
+
 ## gcp-v6.0.4 (2026-07-22)
 
 ### Fix
