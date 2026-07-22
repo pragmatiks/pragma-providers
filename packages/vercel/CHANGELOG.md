@@ -1,3 +1,9 @@
+## vercel-v5.0.2 (2026-07-22)
+
+### Fix
+
+- require pragmatiks-sdk >= 8.0.0 across providers
+
 ## vercel-v5.0.1 (2026-05-09)
 
 ### Fix
