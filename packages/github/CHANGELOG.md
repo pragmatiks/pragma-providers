@@ -1,3 +1,9 @@
+## github-v5.0.3 (2026-07-22)
+
+### Fix
+
+- **ci**: republish providers on automated sdk updates
+
 ## github-v5.0.2 (2026-07-22)
 
 ### Fix
