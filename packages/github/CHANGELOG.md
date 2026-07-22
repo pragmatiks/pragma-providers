@@ -1,3 +1,10 @@
+## github-v5.0.4 (2026-07-22)
+
+### Fix
+
+- **ci**: publish providers through the unified publish route
+- **deps**: update pragmatiks-sdk to v9.0.1 (#101)
+
 ## github-v5.0.3 (2026-07-22)
 
 ### Fix
