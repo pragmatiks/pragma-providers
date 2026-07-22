@@ -183,7 +183,7 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
+          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/gcp "${{ steps.bump.outputs.version }}"
 
   publish-supabase:
@@ -291,7 +291,7 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
+          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/supabase "${{ steps.bump.outputs.version }}"
 
   publish-vercel:
@@ -399,7 +399,7 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
+          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/vercel "${{ steps.bump.outputs.version }}"
 
   publish-github:
@@ -507,7 +507,7 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
+          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/github "${{ steps.bump.outputs.version }}"
 
   publish-pragma:
@@ -615,7 +615,7 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
+          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/pragma "${{ steps.bump.outputs.version }}"
 
   publish-kubernetes:
@@ -684,7 +684,7 @@ jobs:
           VERSION="${{ needs.publish-gcp.outputs.version }}"
           echo "Waiting for $PACKAGE v$VERSION on PyPI..."
           for i in {1..30}; do
-            if curl -sf "https://pypi.org/pypi/$PACKAGE/$VERSION/json" > /dev/null; then
+            if curl -sf --max-time 30 "https://pypi.org/pypi/$PACKAGE/$VERSION/json" > /dev/null; then
               echo "Package available on PyPI"
               exit 0
             fi
@@ -755,7 +755,7 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
+          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/kubernetes "${{ steps.bump.outputs.version }}"
 
   publish-qdrant:
@@ -823,7 +823,7 @@ jobs:
           VERSION="${{ needs.publish-kubernetes.outputs.version }}"
           echo "Waiting for $PACKAGE v$VERSION on PyPI..."
           for i in {1..30}; do
-            if curl -sf "https://pypi.org/pypi/$PACKAGE/$VERSION/json" > /dev/null; then
+            if curl -sf --max-time 30 "https://pypi.org/pypi/$PACKAGE/$VERSION/json" > /dev/null; then
               echo "Package available on PyPI"
               exit 0
             fi
@@ -894,7 +894,7 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
+          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/qdrant "${{ steps.bump.outputs.version }}"
 
   publish-agno:
@@ -964,7 +964,7 @@ jobs:
             local version=$2
             echo "Waiting for $package v$version on PyPI..."
             for i in {1..30}; do
-              if curl -sf "https://pypi.org/pypi/$package/$version/json" > /dev/null; then
+              if curl -sf --max-time 30 "https://pypi.org/pypi/$package/$version/json" > /dev/null; then
                 echo "Package available on PyPI"
                 return 0
               fi
@@ -1044,7 +1044,7 @@ jobs:
       - name: Publish to pragma store
         if: steps.bump.outputs.version != ''
         env:
-          PRAGMA_CONSOLE_MACHINE_SECRET_KEY: ${{ secrets.PRAGMA_CONSOLE_MACHINE_SECRET_KEY }}
+          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/agno "${{ steps.bump.outputs.version }}"
 
       - name: Read runner transport version
