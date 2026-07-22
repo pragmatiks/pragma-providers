@@ -271,7 +271,7 @@ wheels = [
 
 [[package]]
 name = "google-api-core"
-version = "2.32.0"
+version = "2.33.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-auth" },
@@ -280,9 +280,9 @@ dependencies = [
     { name = "protobuf" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/03/33/00277be1305fd68355d08197f05e22db259c0cff49a10c8590a1869ade9b/google_api_core-2.32.0.tar.gz", hash = "sha256:2b33aad226b19272458c46abfe5c5a38d9531ece0c44502129a1463ce83674ac", size = 177659 }
+sdist = { url = "https://files.pythonhosted.org/packages/87/62/8fb1fb647d2788c950d69d6a769cd9d55c918ac1fc57be2f90b7e4029787/google_api_core-2.33.0.tar.gz", hash = "sha256:3a36bcc3e319783f4c97da41f6f45ea6ffcaa55848e341de16e09cb70243c2bb", size = 181607 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/81/44/5018c5ac1526c98169db98d87a6ff7d5508f5246621c3ee1a046fdd5e0a6/google_api_core-2.32.0-py3-none-any.whl", hash = "sha256:ae1f0d58a6c8869350bf469f8eb3092e7f8c494a942d9525494afb6c162b0904", size = 174198 },
+    { url = "https://files.pythonhosted.org/packages/89/31/5056a347bb934ea04583c8b27916ef1501729c72638629545bce26ff4223/google_api_core-2.33.0-py3-none-any.whl", hash = "sha256:a2e22a0c1d0f03eafff1858b38cf46f832d5902b0c052235bf0ab8402929fbdc", size = 176462 },
 ]
 
 [package.optional-dependencies]
@@ -604,7 +604,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "6.0.3"
+version = "6.0.5"
 source = { editable = "." }
 dependencies = [
     { name = "google-api-python-client" },
@@ -631,7 +631,7 @@ requires-dist = [
     { name = "google-cloud-container", specifier = ">=2.50.0" },
     { name = "google-cloud-logging", specifier = ">=3.10.0" },
     { name = "google-cloud-secret-manager", specifier = ">=2.20.0" },
-    { name = "pragmatiks-sdk", specifier = ">=9.0.1" },
+    { name = "pragmatiks-sdk", specifier = ">=10.0.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -645,7 +645,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-sdk"
-version = "9.0.1"
+version = "10.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -653,21 +653,21 @@ dependencies = [
     { name = "pyyaml" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/54/d1/f11bb5b0b839869d889c65533abc259a573540943fa4b649c52b896b5b12/pragmatiks_sdk-9.0.1.tar.gz", hash = "sha256:40f7f0c7c4d216245d58bdaf19aa1d00c42092e49a60be55bd1633c3221a4f34", size = 42572 }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/29/3f8d52ae8f7488735363376a6969f504a02e54b00ad385c7e05d5c493f55/pragmatiks_sdk-10.0.0.tar.gz", hash = "sha256:6e50236325ae14677d2c9ee20b84836037ec36915e1525aaaf7e2368a4e2f819", size = 42440 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9f/be/663b219e2d748ba75efb724cd8dc9dd0c5887bd18fb15ffddfac393f95bb/pragmatiks_sdk-9.0.1-py3-none-any.whl", hash = "sha256:a33d4872a7db81ce59bff6e3388766233762e6d0c34423a04830f3e69a6e258c", size = 52504 },
+    { url = "https://files.pythonhosted.org/packages/75/b8/4ce08e594b90a9bc0f1b42dfb0e5d0b1350f2aee2f981ef68a2aa063cdbe/pragmatiks_sdk-10.0.0-py3-none-any.whl", hash = "sha256:6d5c3bbacd2deef19a673c2577995e40535282f26b12a2b8a114486e2c33c3ea", size = 52354 },
 ]
 
 [[package]]
 name = "proto-plus"
-version = "1.28.1"
+version = "1.28.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/87/44/767757fd2cdd4a60d7e4440d9f7b491d6131103d313638d2c03e06c268fb/proto_plus-1.28.1.tar.gz", hash = "sha256:832e68e7fe064cf90ab153b6e5eb935b27891bb89aaeb68b115e9b702f6cb168", size = 57166 }
+sdist = { url = "https://files.pythonhosted.org/packages/73/3e/29e0d6a2c5adde6ab5772253fd16ab346324026b89a66e354689c86d0584/proto_plus-1.28.2.tar.gz", hash = "sha256:26d843eb99c1e32fdf1d20ff0faae56607f7748fe774acf9ecd5cfe6c6472501", size = 58063 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6a/34/2f2b57dbfd145b995a29847a16b0903fce5ef6ad3c7aad740a609c5d3678/proto_plus-1.28.1-py3-none-any.whl", hash = "sha256:6660f5f1970874bdcfc3088b435188a36a37bd3596668f7d726417c4ae8cfbed", size = 50408 },
+    { url = "https://files.pythonhosted.org/packages/9d/84/4e9a53a062d4073c74897a6bd20fff74d55307341b3e85c081002462b3ef/proto_plus-1.28.2-py3-none-any.whl", hash = "sha256:b874236fcac2358f601e4330bcb76cb8b89c851303ccf4078408b3d4774d1c52", size = 50693 },
 ]
 
 [[package]]
