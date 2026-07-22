@@ -1,3 +1,9 @@
+## agno-v1.0.3 (2026-07-22)
+
+### Fix
+
+- **ci**: run pragma publish on shared changes
+
 ## agno-v1.0.2 (2026-07-22)
 
 ### Fix
