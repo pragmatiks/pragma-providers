@@ -1,3 +1,9 @@
+## supabase-v5.0.5 (2026-07-22)
+
+### Fix
+
+- **ci**: run pragma publish on shared changes
+
 ## supabase-v5.0.4 (2026-07-22)
 
 ### Fix
