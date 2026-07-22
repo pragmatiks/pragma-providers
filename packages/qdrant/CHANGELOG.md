@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v7.0.3 (2026-07-22)
+
+### Fix
+
+- **ci**: publish providers through the unified publish route
+
 ## qdrant-v7.0.2 (2026-07-22)
 
 ### Fix
