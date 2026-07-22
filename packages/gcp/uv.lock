@@ -617,7 +617,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "0.174.0"
+version = "6.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "google-api-python-client" },
@@ -644,7 +644,7 @@ requires-dist = [
     { name = "google-cloud-container", specifier = ">=2.50.0" },
     { name = "google-cloud-logging", specifier = ">=3.10.0" },
     { name = "google-cloud-secret-manager", specifier = ">=2.20.0" },
-    { name = "pragmatiks-sdk", specifier = ">=1.4.0" },
+    { name = "pragmatiks-sdk", specifier = ">=8.0.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -658,7 +658,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-sdk"
-version = "1.4.0"
+version = "8.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -666,9 +666,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/24/fd/8581b4ab661431e5ecc41704d9062c2beeb6a817f8f5ff1c92de1a42b7f3/pragmatiks_sdk-1.4.0.tar.gz", hash = "sha256:3c74a311ce4dafd93d388adbf9eccae32384641fac8569a750e7896ec483f9ca", size = 50442, upload-time = "2026-04-24T20:17:27.448Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c2/7b/a8725f475204d33af75d6ce14979b04db1e478c35fca3a820c8ec5ae60d5/pragmatiks_sdk-8.0.0.tar.gz", hash = "sha256:95f2dde9e800b772dd3392b4293cc48eb9c0a6aefc9757ee20f2cd236f8cc860", size = 42641, upload-time = "2026-07-20T20:59:15.158Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cf/36/185667cc2b892b6dfe0d9f4172d5c0d80d97da6a6a55e5c36d2887f74870/pragmatiks_sdk-1.4.0-py3-none-any.whl", hash = "sha256:4afb72fc9fd46924664b00bc43030f3761b2277b65239e716956a4527f0267af", size = 60364, upload-time = "2026-04-24T20:17:25.842Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/18/fda01792b4deeec6146b5e00af6fcf4c323f556f9b6e38c0489a1d7d8a60/pragmatiks_sdk-8.0.0-py3-none-any.whl", hash = "sha256:90d099327642aa60d75218b699df0c9666e6ed9cd56995cb06408539c87767cf", size = 52537, upload-time = "2026-07-20T20:59:13.742Z" },
 ]
 
 [[package]]
