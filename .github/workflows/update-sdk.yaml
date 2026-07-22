@@ -72,7 +72,7 @@ jobs:
       - name: Commit and push branch
         run: |
           SDK_VERSION="${{ inputs.sdk_version }}"
-          BRANCH="chore/update-sdk-${SDK_VERSION}"
+          BRANCH="fix/update-sdk-${SDK_VERSION}"
 
           git add .
           if git diff --staged --quiet; then
@@ -80,7 +80,7 @@ jobs:
             echo "skip_pr=true" >> "$GITHUB_ENV"
           else
             git checkout -b "$BRANCH"
-            git commit -m "chore(deps): update pragmatiks-sdk to v${SDK_VERSION}"
+            git commit -m "fix(deps): update pragmatiks-sdk to v${SDK_VERSION}"
             git push -u origin "$BRANCH"
           fi
 
@@ -91,6 +91,6 @@ jobs:
         run: |
           SDK_VERSION="${{ inputs.sdk_version }}"
           gh pr create \
-            --title "chore(deps): update pragmatiks-sdk to v${SDK_VERSION}" \
+            --title "fix(deps): update pragmatiks-sdk to v${SDK_VERSION}" \
             --body "Automated SDK version bump to \`v${SDK_VERSION}\`."
           gh pr merge --squash
