@@ -1,3 +1,11 @@
+## pragma-v5.1.3 (2026-07-22)
+
+### Fix
+
+- **ci**: run pragma publish on shared changes
+- **ci**: publish providers through the unified publish route
+- **deps**: update pragmatiks-sdk to v9.0.1 (#101)
+
 ## pragma-v5.1.2 (2026-07-22)
 
 ### Fix
