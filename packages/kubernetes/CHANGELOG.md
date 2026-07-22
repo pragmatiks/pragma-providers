@@ -1,3 +1,12 @@
+## kubernetes-v1.0.2 (2026-07-22)
+
+### Fix
+
+- **ci**: publish providers through the unified publish route
+- **deps**: update pragmatiks-sdk to v9.0.1 (#101)
+- **ci**: republish providers on automated sdk updates
+- require pragmatiks-sdk >= 8.0.0 across providers
+
 ## kubernetes-v1.0.1 (2026-05-09)
 
 ### Fix
