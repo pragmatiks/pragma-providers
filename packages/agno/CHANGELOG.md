@@ -1,3 +1,9 @@
+## agno-v1.0.4 (2026-07-22)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v10.0.0 (#102)
+
 ## agno-v1.0.3 (2026-07-22)
 
 ### Fix
