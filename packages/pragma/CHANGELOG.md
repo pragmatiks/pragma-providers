@@ -1,3 +1,9 @@
+## pragma-v5.1.5 (2026-07-24)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v11.0.0 (#103)
+
 ## pragma-v5.1.4 (2026-07-23)
 
 ### Fix
