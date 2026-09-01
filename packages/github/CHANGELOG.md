@@ -1,3 +1,9 @@
+## github-v5.0.9 (2026-09-01)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v13.0.0 (#105)
+
 ## github-v5.0.8 (2026-08-28)
 
 ### Fix
