@@ -53,7 +53,7 @@ LABEL ai.pragmatiks.agno-runner.transport="v2"
 # Node.js is needed for MCP tools that use npx
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_26.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     apt-get purge -y curl && \
     apt-get autoremove -y && \
