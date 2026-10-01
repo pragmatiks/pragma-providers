@@ -53,7 +53,7 @@ Deploys a Qdrant vector database to a Kubernetes cluster as a StatefulSet with p
 | `memory` | string | `"2Gi"` | Memory limit for each Qdrant pod |
 | `cpu` | string | `"1"` | CPU limit for each Qdrant pod |
 
-**Outputs:** `url`, `grpc_url`, `api_key`, `ready`
+**Outputs:** `url`, `grpc_url`, `api_key`
 
 **Example:**
 
@@ -76,9 +76,9 @@ resources:
 ```
 
 **Behavior:**
-- Create: Deploys headless Service, StatefulSet, and LoadBalancer Service sequentially. Waits for each to be ready and for the LoadBalancer to receive an external IP (up to 5 minutes).
-- Update: Reapplies all child Kubernetes resources with updated configuration. Skips reapply if config is unchanged. Changing the `config` dependency requires delete and recreate.
-- Delete: Explicitly removes child Kubernetes resources (LoadBalancer Service, StatefulSet, headless Service).
+- Create: Deploys headless Service, StatefulSet, and LoadBalancer Service sequentially. Waits for each to be ready and for the LoadBalancer to receive an external IP, up to 19 minutes in total.
+- Update: Reapplies all child Kubernetes resources with the full configuration, waiting for the StatefulSet only when its settings changed, then reapplies the LoadBalancer Service. The `config` dependency is immutable; changing it requires delete and recreate.
+- Delete: Explicitly deletes child Kubernetes resources (LoadBalancer Service, StatefulSet, headless Service). The stored vectors live on the StatefulSet's PersistentVolumeClaims; whether they are deleted with the StatefulSet follows the kubernetes provider's StatefulSet.
 - Health: Delegates to the underlying StatefulSet health check.
 - Logs: Streams pod logs from the underlying StatefulSet.
 
@@ -92,10 +92,10 @@ Manages a vector collection on any Qdrant instance for similarity search. Works 
 
 | Field | Type | Required | Mutable | Default | Description |
 |-------|------|----------|---------|---------|-------------|
-| `url` | string | no | yes | `"http://localhost:6333"` | Qdrant server URL |
+| `url` | string | no | no | `"http://localhost:6333"` | Qdrant server URL (immutable) |
 | `api_key` | string | no | yes | -- | API key for Qdrant Cloud or secured instances |
 | `name` | string | yes | no | -- | Collection name within Qdrant (immutable) |
-| `vectors` | object | yes | yes | -- | Vector configuration (see below) |
+| `vectors` | object | yes | no | -- | Vector configuration (immutable, see below) |
 | `on_disk` | bool | no | yes | `false` | Store vectors on disk instead of in memory |
 
 **VectorConfig:**
@@ -105,7 +105,7 @@ Manages a vector collection on any Qdrant instance for similarity search. Works 
 | `size` | int | -- | Vector dimension (must match your embedding model output) |
 | `distance` | string | `"Cosine"` | Distance metric: `Cosine`, `Euclid`, or `Dot` |
 
-**Outputs:** `name`, `indexed_vectors_count`, `points_count`, `status`
+**Outputs:** `name`
 
 **Example (Qdrant Cloud):**
 
@@ -142,9 +142,11 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the collection if it does not already exist. Idempotent -- if the collection exists, returns its current info.
-- Update: Recreates the collection if vector configuration changes (size, distance, on_disk). This is destructive and deletes all existing vectors. Collection name changes are not allowed.
+- Create: Creates the collection if it does not already exist. Idempotent -- if the collection exists, leaves it as is.
+- Observe: Reports the collection present when the server has a collection with the configured name.
+- Update: Applies `on_disk` to the live collection in place, keeping its vectors. Fails if the live vector size or distance differs from the config. Vector configuration, collection name and server URL changes are not allowed; changing them requires delete and recreate.
 - Delete: Deletes the collection and all its vectors. Idempotent -- succeeds if the collection does not exist.
+- Health: Reads the live collection status. Green is healthy, yellow and grey are degraded, red or a missing collection is unhealthy. Details carry the point, indexed vector and segment counts.
 
 ---
 
@@ -280,9 +282,6 @@ Choose the `vectors.size` to match your embedding model:
 ## Development
 
 ```bash
-# Run tests
-task qdrant:test
-
 # Lint and type check
 task qdrant:check
 

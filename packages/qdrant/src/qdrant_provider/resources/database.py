@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -25,14 +26,15 @@ from kubernetes_provider.resources.statefulset import (
     VolumeClaimTemplateConfig,
     VolumeMountConfig,
 )
+from lightkube import ApiError
 from lightkube.resources.core_v1 import Service as K8sService
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
 from pydantic import BaseModel, model_validator
 from pydantic import Field as PydanticField
 
 
-_LB_POLL_INTERVAL_SECONDS = 5
-_LB_MAX_POLL_ATTEMPTS = 60
+LOAD_BALANCER_POLL_INTERVAL_SECONDS = 5
+OPERATION_BUDGET_SECONDS = 1140
 
 
 class StorageConfig(BaseModel):
@@ -106,13 +108,11 @@ class DatabaseOutputs(Outputs):
         url: HTTP endpoint for Qdrant REST API (external LoadBalancer URL).
         grpc_url: gRPC endpoint for Qdrant (external LoadBalancer URL).
         api_key: The API key for authentication (if configured).
-        ready: Whether the StatefulSet is ready.
     """
 
     url: str
     grpc_url: str
     api_key: str | None
-    ready: bool
 
 
 class Database(Resource[DatabaseConfig, DatabaseOutputs]):
@@ -126,8 +126,10 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
     Lifecycle:
         - on_create: Create child resources, wait for ready
         - on_update: Update child resources
-        - on_delete: Child resources cascade deleted via owner_references
+        - on_delete: Delete child resources and wait until each is gone
     """
+
+    computed = True
 
     _resolved_api_key: str | None = None
 
@@ -208,28 +210,35 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         async with cluster_config.build_client() as client:
             yield client
 
-    async def _wait_for_load_balancer_ip(self, timeout: float = 300.0) -> str:
-        """Wait for LoadBalancer external IP to be assigned.
+    async def wait_for_load_balancer_address(self, deadline: float) -> str:
+        """Wait for the client Service's LoadBalancer to receive an external address.
 
         Args:
-            timeout: Maximum time to wait in seconds.
+            deadline: Time on the ``time.monotonic`` clock by which the address must be assigned.
 
         Returns:
-            External IP address.
+            External IP address, or hostname when the load balancer reports no IP.
 
         Raises:
-            TimeoutError: If IP not assigned within timeout.
+            ApiError: If reading the Service fails for any reason other than not found.
+            TimeoutError: If no address is assigned by the deadline; the message names the Service.
         """
         namespace = self._namespace()
         service_name = self._client_service_name()
-        max_attempts = int(timeout / _LB_POLL_INTERVAL_SECONDS)
 
         async with self._get_client() as client:
-            for _ in range(max_attempts):
-                svc = await client.get(K8sService, name=service_name, namespace=namespace)
+            while True:
+                try:
+                    service = await client.get(K8sService, name=service_name, namespace=namespace)
+                except ApiError as error:
+                    if error.status.code != 404:
+                        raise
+                    service = None
 
-                if svc.status and svc.status.loadBalancer and svc.status.loadBalancer.ingress:
-                    ingress = svc.status.loadBalancer.ingress[0]
+                if service is None:
+                    last_status = "service not found"
+                elif service.status and service.status.loadBalancer and service.status.loadBalancer.ingress:
+                    ingress = service.status.loadBalancer.ingress[0]
 
                     if ingress.ip:
                         return ingress.ip
@@ -237,10 +246,20 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
                     if ingress.hostname:
                         return ingress.hostname
 
-                await asyncio.sleep(_LB_POLL_INTERVAL_SECONDS)
+                    last_status = "ingress without ip or hostname"
+                else:
+                    last_status = "no ingress"
 
-        msg = f"LoadBalancer {service_name} did not receive external IP within {timeout}s"
-        raise TimeoutError(msg)
+                if time.monotonic() >= deadline:
+                    break
+
+                await asyncio.sleep(LOAD_BALANCER_POLL_INTERVAL_SECONDS)
+
+        message = (
+            f"LoadBalancer Service {namespace}/{service_name} did not receive an external address "
+            f"by the operation deadline; last status: {last_status}"
+        )
+        raise TimeoutError(message)
 
     def _build_headless_service(self) -> Service:
         """Build headless service for pod DNS.
@@ -260,6 +279,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         )
 
         return Service(
+            project_id=self.project_id,
             name=self._headless_service_name(),
             config=config,
         )
@@ -282,6 +302,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         )
 
         return Service(
+            project_id=self.project_id,
             name=self._client_service_name(),
             config=config,
         )
@@ -356,99 +377,134 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         )
 
         return StatefulSet(
+            project_id=self.project_id,
             name=self._statefulset_name(),
             config=config,
         )
 
-    async def _build_outputs(self) -> DatabaseOutputs:
-        """Build outputs with external LoadBalancer URLs.
+    async def fetch_outputs(self, deadline: float) -> DatabaseOutputs:
+        """Wait for the client Service's LoadBalancer address and return the outputs.
+
+        Args:
+            deadline: Time on the ``time.monotonic`` clock by which the address must be assigned.
 
         Returns:
             DatabaseOutputs with external URLs and API key.
-        """
-        external_ip = await self._wait_for_load_balancer_ip()
 
-        url = f"http://{external_ip}:6333"
-        grpc_url = f"http://{external_ip}:6334"
+        Raises:
+            TimeoutError: If the LoadBalancer gets no external address by the deadline.
+        """
+        external_address = await self.wait_for_load_balancer_address(deadline)
+
+        url = f"http://{external_address}:6333"
+        grpc_url = f"http://{external_address}:6334"
 
         return DatabaseOutputs(
             url=url,
             grpc_url=grpc_url,
             api_key=self._resolve_api_key(),
-            ready=True,
         )
+
+    def is_statefulset_changed(self, previous_config: DatabaseConfig) -> bool:
+        """Tell whether the StatefulSet built from this configuration differs from the previous one.
+
+        Args:
+            previous_config: The configuration last applied.
+
+        Returns:
+            ``True`` when a StatefulSet setting changed or the API key is generated anew on every apply.
+        """
+        if self.config.generate_api_key:
+            return True
+
+        return previous_config.model_dump(exclude={"config"}) != self.config.model_dump(exclude={"config"})
+
+    async def apply_child(self, child: Service | StatefulSet) -> None:
+        """Apply a child resource owned by this database.
+
+        Args:
+            child: The child resource to apply.
+        """
+        child.set_owner(self)
+        await child.apply()
+
+    async def wait_for_child(self, child: Service | StatefulSet, deadline: float) -> None:
+        """Wait for an applied child resource to become ready by the operation deadline.
+
+        Args:
+            child: The applied child resource.
+            deadline: Time on the ``time.monotonic`` clock by which the child must be ready.
+
+        Raises:
+            TimeoutError: If the child is not ready by the deadline; the message names the child.
+        """
+        try:
+            await child.wait_ready(timeout=max(deadline - time.monotonic(), 0.0))
+        except TimeoutError as error:
+            message = f"{type(child).__name__} {child.name} did not become ready by the operation deadline"
+            raise TimeoutError(message) from error
 
     async def on_create(self) -> DatabaseOutputs:
         """Deploy Qdrant using child Kubernetes resources.
 
-        Creates headless service (for pod DNS), StatefulSet, and client service.
-        Waits for all resources to be ready and LoadBalancer IP to be assigned.
-
-        Returns:
-            DatabaseOutputs with external LoadBalancer URLs.
-        """
-        headless_svc = self._build_headless_service()
-        headless_svc.set_owner(self)
-        await headless_svc.apply()
-        await headless_svc.wait_ready(timeout=60.0)
-
-        statefulset = self._build_statefulset()
-        statefulset.set_owner(self)
-        await statefulset.apply()
-        await statefulset.wait_ready(timeout=300.0)
-
-        client_svc = self._build_client_service()
-        client_svc.set_owner(self)
-        await client_svc.apply()
-        await client_svc.wait_ready(timeout=60.0)
-
-        return await self._build_outputs()
-
-    async def on_update(self, previous_config: DatabaseConfig) -> DatabaseOutputs:
-        """Update Qdrant deployment.
-
-        Args:
-            previous_config: The previous configuration before update.
+        Creates headless service (for pod DNS), StatefulSet, and client service, waiting for each
+        to be ready and for the LoadBalancer address, all within one ``OPERATION_BUDGET_SECONDS``
+        budget.
 
         Returns:
             DatabaseOutputs with external LoadBalancer URLs.
 
         Raises:
-            ValueError: If config changed (requires delete + create).
+            TimeoutError: If a child or the LoadBalancer address is not ready within the budget; the
+                message names what was waited for.
         """
-        if previous_config.config.id != self.config.config.id:
-            msg = "Cannot change config; delete and recreate resource"
-            raise ValueError(msg)
+        deadline = time.monotonic() + OPERATION_BUDGET_SECONDS
 
-        if self.outputs is not None:
-            previous_dict = previous_config.model_dump(exclude={"config"})
-            current_dict = self.config.model_dump(exclude={"config"})
+        for child in (self._build_headless_service(), self._build_statefulset(), self._build_client_service()):
+            await self.apply_child(child)
+            await self.wait_for_child(child, deadline)
 
-            if previous_dict == current_dict:
-                return self.outputs
+        return await self.fetch_outputs(deadline)
 
-        headless_svc = self._build_headless_service()
-        headless_svc.set_owner(self)
-        await headless_svc.apply()
-        await headless_svc.wait_ready(timeout=60.0)
+    async def on_update(self, previous_config: DatabaseConfig | None) -> DatabaseOutputs:
+        """Reapply every child resource with the desired configuration.
 
+        Without a previous configuration, behaves as ``on_create``. Otherwise waits only for the
+        StatefulSet, and only when its settings changed, before reapplying the client Service. All
+        waits share one ``OPERATION_BUDGET_SECONDS`` budget.
+
+        Args:
+            previous_config: The previous configuration, if any.
+
+        Returns:
+            DatabaseOutputs with external LoadBalancer URLs.
+
+        Raises:
+            TimeoutError: If a waited-for child or the LoadBalancer address is not ready within the
+                budget; the message names what was waited for.
+        """
+        if previous_config is None:
+            return await self.on_create()
+
+        deadline = time.monotonic() + OPERATION_BUDGET_SECONDS
         statefulset = self._build_statefulset()
-        statefulset.set_owner(self)
-        await statefulset.apply()
-        await statefulset.wait_ready(timeout=300.0)
 
-        client_svc = self._build_client_service()
-        client_svc.set_owner(self)
-        await client_svc.apply()
-        await client_svc.wait_ready(timeout=60.0)
+        await self.apply_child(self._build_headless_service())
+        await self.apply_child(statefulset)
 
-        return await self._build_outputs()
+        if self.is_statefulset_changed(previous_config):
+            await self.wait_for_child(statefulset, deadline)
+
+        await self.apply_child(self._build_client_service())
+
+        return await self.fetch_outputs(deadline)
 
     async def on_delete(self) -> None:
-        """Delete Qdrant deployment.
+        """Delete the client Service, the StatefulSet and the headless Service, and wait until each is gone.
 
-        Explicitly deletes child Kubernetes resources. Once PRA-137 is implemented,
-        this will be handled automatically via owner_references cascading deletes.
+        Note:
+            The stored vectors live on the StatefulSet's PersistentVolumeClaims; whether they are
+            deleted with the StatefulSet follows the kubernetes provider's StatefulSet.
         """
         client_svc = self._build_client_service()
         await client_svc.on_delete()
@@ -458,14 +514,6 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
         headless_svc = self._build_headless_service()
         await headless_svc.on_delete()
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
 
     async def health(self) -> HealthStatus:
         """Check Qdrant database health via StatefulSet status.
