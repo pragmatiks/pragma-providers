@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import Literal, cast
 
-from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
+from pragma_sdk import Config, Field, HealthStatus, ImmutableField, Outputs, Resource
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
+from qdrant_client.http.exceptions import UnexpectedResponse
+
+
+COLLECTION_STATUS_HEALTH: dict[models.CollectionStatus, Literal["healthy", "degraded", "unhealthy"]] = {
+    models.CollectionStatus.GREEN: "healthy",
+    models.CollectionStatus.YELLOW: "degraded",
+    models.CollectionStatus.GREY: "degraded",
+    models.CollectionStatus.RED: "unhealthy",
+}
 
 
 class VectorConfig(BaseModel):
@@ -29,16 +39,16 @@ class CollectionConfig(Config):
     Attributes:
         api_key: Qdrant Cloud API key. Use a FieldReference to inject from pragma/secret.
             Optional for local Qdrant instances.
-        url: Qdrant server URL.
+        url: Qdrant server URL. Immutable.
         name: Collection name within Qdrant.
-        vectors: Vector configuration including dimension and distance metric.
+        vectors: Vector configuration including dimension and distance metric. Immutable.
         on_disk: Store vectors on disk instead of memory for larger datasets.
     """
 
     api_key: Field[str] | None = None
-    url: Field[str] = "http://localhost:6333"
+    url: ImmutableField[str] = "http://localhost:6333"
     name: ImmutableField[str]
-    vectors: Field[VectorConfig]
+    vectors: ImmutableField[VectorConfig]
     on_disk: Field[bool] = False
 
 
@@ -47,15 +57,9 @@ class CollectionOutputs(Outputs):
 
     Attributes:
         name: Collection name.
-        indexed_vectors_count: Number of indexed vectors in the collection.
-        points_count: Total number of points in the collection.
-        status: Collection status (green, yellow, red, or unknown).
     """
 
     name: str
-    indexed_vectors_count: int
-    points_count: int
-    status: str
 
 
 class Collection(Resource[CollectionConfig, CollectionOutputs]):
@@ -66,7 +70,8 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
 
     Lifecycle:
         - on_create: Create collection if not exists
-        - on_update: Recreate if vector config changes (destructive)
+        - on_observe: Look up the collection by name
+        - on_update: Apply on_disk in place
         - on_delete: Delete collection
     """
 
@@ -96,22 +101,13 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         }
         return distance_map[self.config.vectors.distance]
 
-    async def _get_collection_info(self, client: AsyncQdrantClient) -> CollectionOutputs:
-        """Fetch collection info and build outputs.
-
-        Args:
-            client: Qdrant async client.
+    def build_outputs(self) -> CollectionOutputs:
+        """Build outputs for the configured collection.
 
         Returns:
-            CollectionOutputs with collection metadata.
+            CollectionOutputs naming the collection.
         """
-        info = await client.get_collection(self.config.name)
-        return CollectionOutputs(
-            name=self.config.name,
-            indexed_vectors_count=info.indexed_vectors_count or 0,
-            points_count=info.points_count or 0,
-            status=info.status.value if info.status else "unknown",
-        )
+        return CollectionOutputs(name=self.config.name)
 
     async def _create_collection(self, client: AsyncQdrantClient) -> None:
         """Create the collection with configured parameters."""
@@ -124,28 +120,28 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             ),
         )
 
-    def _vector_config_changed(self, previous_config: CollectionConfig) -> bool:
-        """Check if vector configuration changed (requires recreation).
+    def vector_config_changed(self, live_vectors: models.VectorsConfig | None) -> bool:
+        """Check whether the live vector size or distance differs from config.
 
         Args:
-            previous_config: The previous configuration before update.
+            live_vectors: Vector configuration read from the existing collection.
 
         Returns:
-            True if vector configuration changed.
+            True if the live collection does not hold one unnamed vector of the
+            configured size and distance.
         """
-        return (
-            previous_config.vectors.size != self.config.vectors.size
-            or previous_config.vectors.distance != self.config.vectors.distance
-            or previous_config.on_disk != self.config.on_disk
-        )
+        if not isinstance(live_vectors, models.VectorParams):
+            return True
+
+        return live_vectors.size != self.config.vectors.size or live_vectors.distance != self._get_distance()
 
     async def on_create(self) -> CollectionOutputs:
         """Create Qdrant collection if it doesn't exist.
 
-        Idempotent: If collection already exists, returns its current info.
+        Idempotent: If collection already exists, leaves it as is.
 
         Returns:
-            CollectionOutputs with collection metadata.
+            CollectionOutputs naming the collection.
         """
         client = self._get_client()
 
@@ -155,40 +151,60 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             if not exists:
                 await self._create_collection(client)
 
-            return await self._get_collection_info(client)
+            return self.build_outputs()
         finally:
             await client.close()
 
-    async def on_update(self, previous_config: CollectionConfig) -> CollectionOutputs:
-        """Update collection by recreating if vector config changed.
-
-        Vector configuration changes (size, distance, on_disk) require
-        deleting and recreating the collection. This is destructive and
-        will lose all existing vectors.
-
-        Args:
-            previous_config: The previous configuration before update.
+    async def on_observe(self) -> CollectionOutputs | None:
+        """Look up the configured collection.
 
         Returns:
-            CollectionOutputs with updated collection metadata.
-
-        Raises:
-            ValueError: If collection name changed (requires delete + create).
+            CollectionOutputs naming the collection, or ``None`` if it does not exist.
         """
-        if previous_config.name != self.config.name:
-            msg = "Cannot change collection name; delete and recreate resource"
-            raise ValueError(msg)
-
         client = self._get_client()
 
         try:
-            if self._vector_config_changed(previous_config):
-                exists = await client.collection_exists(self.config.name)
-                if exists:
-                    await client.delete_collection(self.config.name)
-                await self._create_collection(client)
+            if not await client.collection_exists(self.config.name):
+                return None
 
-            return await self._get_collection_info(client)
+            return self.build_outputs()
+        finally:
+            await client.close()
+
+    async def on_update(self, previous_config: CollectionConfig | None) -> CollectionOutputs:
+        """Apply the configured on_disk setting to the live collection in place.
+
+        Args:
+            previous_config: The previous configuration, if any.
+
+        Returns:
+            CollectionOutputs naming the collection.
+
+        Raises:
+            RuntimeError: If the live vector size or distance differs from config.
+        """
+        name = cast(str, self.config.name)
+        vectors = cast(VectorConfig, self.config.vectors)
+        on_disk = cast(bool, self.config.on_disk)
+        client = self._get_client()
+
+        try:
+            live_vectors = (await client.get_collection(name)).config.params.vectors
+
+            if self.vector_config_changed(live_vectors):
+                msg = (
+                    f"Collection {name!r} holds vectors other than the configured size {vectors.size} "
+                    f"and distance {vectors.distance}; vectors are immutable, so delete and recreate the resource"
+                )
+                raise RuntimeError(msg)
+
+            if bool(cast(models.VectorParams, live_vectors).on_disk) != on_disk:
+                await client.update_collection(
+                    collection_name=name,
+                    vectors_config={"": models.VectorParamsDiff(on_disk=on_disk)},
+                )
+
+            return self.build_outputs()
         finally:
             await client.close()
 
@@ -206,10 +222,37 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         finally:
             await client.close()
 
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+    async def health(self) -> HealthStatus:
+        """Report the live collection's status from Qdrant.
 
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+        Green is healthy, yellow and grey are degraded, red is unhealthy. The
+        point, indexed vector and segment counts go in the details.
+
+        Returns:
+            HealthStatus of the collection, unhealthy if it does not exist.
+
+        Raises:
+            UnexpectedResponse: If Qdrant fails the lookup for a reason other than a missing collection.
+        """
+        name = cast(str, self.config.name)
+        client = self._get_client()
+
+        try:
+            info = await client.get_collection(name)
+        except UnexpectedResponse as error:
+            if error.status_code != HTTPStatus.NOT_FOUND:
+                raise
+
+            return HealthStatus(status="unhealthy", message=f"Collection {name!r} not found")
+        finally:
+            await client.close()
+
+        return HealthStatus(
+            status=COLLECTION_STATUS_HEALTH[info.status],
+            message=f"Collection {name!r} is {info.status.value}",
+            details={
+                "points_count": info.points_count,
+                "indexed_vectors_count": info.indexed_vectors_count,
+                "segments_count": info.segments_count,
+            },
+        )
