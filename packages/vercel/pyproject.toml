@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-vercel-provider"
-version = "5.0.10"
+version = "6.0.0"
 description = "Vercel provider for Pragmatiks"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -30,7 +30,7 @@ tags = ["vercel", "hosting", "deployments", "domains", "frontend"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "5.0.10"
+version = "6.0.0"
 version_files = ["pyproject.toml:^version"]
 tag_format = "vercel-v$version"
 update_changelog_on_bump = true
