@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -28,11 +27,9 @@ from lightkube.resources.core_v1 import Pod
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import BaseModel
 
+from kubernetes_provider.objects import delete_object, fetch_object, wait_for_absence
 from kubernetes_provider.resources.config import KubernetesConfig
-
-
-_POLL_INTERVAL_SECONDS = 5.0
-_DEFAULT_TIMEOUT_SECONDS = 300.0
+from kubernetes_provider.rollout import build_replica_health, wait_for_rollout
 
 
 class HttpGetConfig(BaseModel):
@@ -168,15 +165,11 @@ class DeploymentOutputs(Outputs):
         name: Deployment name as created in the cluster.
         namespace: Kubernetes namespace containing the deployment.
         replicas: Desired number of pod replicas.
-        ready_replicas: Number of pods that have passed readiness checks.
-        available_replicas: Number of pods available to serve traffic.
     """
 
     name: str
     namespace: str
     replicas: int
-    ready_replicas: int
-    available_replicas: int
 
 
 class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
@@ -187,7 +180,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
     references to Kubernetes Secrets), and resource limits.
 
     Waits for all replicas to reach ready state before reporting success
-    (polls every 5s, default timeout 300s). Uses server-side apply with
+    (polls every 5s, timeout 300s). Uses server-side apply with
     ``field_manager="pragma-kubernetes"`` for idempotent operations.
 
     Supports fetching aggregated logs from all pods matching the label
@@ -195,8 +188,9 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
     Lifecycle:
         - on_create: Apply deployment, wait for all replicas ready
+        - on_observe: Look up the deployment by name and namespace
         - on_update: Apply updated deployment, wait for all replicas ready
-        - on_delete: Delete the deployment (idempotent)
+        - on_delete: Delete the deployment and wait until it is gone (idempotent)
     """
 
     @asynccontextmanager
@@ -268,8 +262,8 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
                 parts = secret_ref.rsplit(".", 1)
 
                 if len(parts) != 2:
-                    msg = f"Invalid secret reference '{secret_ref}': expected 'secret_name.key'"
-                    raise ValueError(msg)
+                    message = f"Invalid secret reference '{secret_ref}': expected 'secret_name.key'"
+                    raise ValueError(message)
 
                 secret_name, key = parts
                 env_vars.append(
@@ -360,22 +354,15 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             spec=spec,
         )
 
-    def _build_outputs(self, deployment: K8sDeployment) -> DeploymentOutputs:
-        """Build outputs from Kubernetes Deployment object.
+    def build_outputs(self, deployment: K8sDeployment) -> DeploymentOutputs:
+        """Build outputs from the Deployment as read from the cluster.
+
+        Args:
+            deployment: Deployment returned by the cluster.
 
         Returns:
             DeploymentOutputs with deployment details.
         """
-        ready = 0
-        available = 0
-
-        if deployment.status:
-            if deployment.status.readyReplicas:
-                ready = deployment.status.readyReplicas
-
-            if deployment.status.availableReplicas:
-                available = deployment.status.availableReplicas
-
         assert deployment.metadata is not None
         assert deployment.metadata.name is not None
         assert deployment.metadata.namespace is not None
@@ -385,48 +372,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             name=deployment.metadata.name,
             namespace=deployment.metadata.namespace,
             replicas=deployment.spec.replicas or 0,
-            ready_replicas=ready,
-            available_replicas=available,
         )
-
-    async def _wait_for_ready(
-        self,
-        client,
-        timeout: float = _DEFAULT_TIMEOUT_SECONDS,
-    ) -> K8sDeployment:
-        """Poll until Deployment has all replicas ready.
-
-        Args:
-            client: Lightkube async client.
-            timeout: Maximum seconds to wait for ready state.
-
-        Returns:
-            Deployment with ready replicas.
-
-        Raises:
-            TimeoutError: If replicas don't become ready in time.
-        """
-        max_attempts = int(timeout / _POLL_INTERVAL_SECONDS)
-
-        for _ in range(max_attempts):
-            deployment = await client.get(
-                K8sDeployment,
-                name=self.name,
-                namespace=self.config.namespace,
-            )
-
-            ready = 0
-
-            if deployment.status and deployment.status.readyReplicas:
-                ready = deployment.status.readyReplicas
-
-            if ready >= self.config.replicas:
-                return deployment
-
-            await asyncio.sleep(_POLL_INTERVAL_SECONDS)
-
-        msg = f"Deployment {self.name} did not become ready within {timeout}s"
-        raise TimeoutError(msg)
 
     async def on_create(self) -> DeploymentOutputs:
         """Create Kubernetes Deployment and wait for ready.
@@ -435,111 +381,70 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
         Returns:
             DeploymentOutputs with deployment details.
+
+        Raises:
+            TimeoutError: If the rollout does not complete within the rollout timeout.
         """
         async with self._get_client() as client:
-            deployment = self._build_deployment()
+            await client.apply(self._build_deployment(), field_manager="pragma-kubernetes")
 
-            await client.apply(deployment, field_manager="pragma-kubernetes")
+            deployment = await wait_for_rollout(client, K8sDeployment, self.name, self.config.namespace)
 
-            result = await self._wait_for_ready(client)
+        return self.build_outputs(deployment)
 
-            return self._build_outputs(result)
+    async def on_observe(self) -> DeploymentOutputs | None:
+        """Look up the Kubernetes Deployment named after this resource.
 
-    async def on_update(self, previous_config: DeploymentConfig) -> DeploymentOutputs:
-        """Update Kubernetes Deployment and wait for ready.
+        Returns:
+            DeploymentOutputs, or ``None`` if the deployment does not exist.
+        """
+        async with self._get_client() as client:
+            deployment = await fetch_object(client, K8sDeployment, self.name, self.config.namespace)
+
+        if deployment is None:
+            return None
+
+        return self.build_outputs(deployment)
+
+    async def on_update(self, previous_config: DeploymentConfig | None) -> DeploymentOutputs:
+        """Apply the full desired deployment configuration and wait for ready.
 
         Args:
-            previous_config: The previous configuration before update.
+            previous_config: The previous configuration, if any.
 
         Returns:
             DeploymentOutputs with updated deployment details.
         """
-        async with self._get_client() as client:
-            deployment = self._build_deployment()
-
-            await client.apply(deployment, field_manager="pragma-kubernetes")
-
-            result = await self._wait_for_ready(client)
-
-            return self._build_outputs(result)
+        return await self.on_create()
 
     async def on_delete(self) -> None:
-        """Delete Kubernetes Deployment.
+        """Delete Kubernetes Deployment and wait until it is gone.
 
         Idempotent: Succeeds if deployment doesn't exist.
 
         Raises:
-            ApiError: If deletion fails for reasons other than not found.
+            TimeoutError: If the deployment is still present after the deletion timeout.
         """
         async with self._get_client() as client:
-            try:
-                await client.delete(
-                    K8sDeployment,
-                    name=self.name,
-                    namespace=self.config.namespace,
-                )
-            except ApiError as e:
-                if e.status.code != 404:
-                    raise
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+            await delete_object(client, K8sDeployment, self.name, self.config.namespace)
+            await wait_for_absence(client, K8sDeployment, self.name, self.config.namespace)
 
     async def health(self) -> HealthStatus:
         """Check Deployment health by comparing ready replicas to desired.
 
         Returns:
             HealthStatus indicating healthy/degraded/unhealthy.
-
-        Raises:
-            ApiError: If health check fails for reasons other than not found.
         """
         async with self._get_client() as client:
-            try:
-                deployment = await client.get(
-                    K8sDeployment,
-                    name=self.name,
-                    namespace=self.config.namespace,
-                )
-            except ApiError as e:
-                if e.status.code == 404:
-                    return HealthStatus(
-                        status="unhealthy",
-                        message="Deployment not found",
-                    )
-                raise
+            deployment = await fetch_object(client, K8sDeployment, self.name, self.config.namespace)
 
-            ready = 0
-
-            if deployment.status and deployment.status.readyReplicas:
-                ready = deployment.status.readyReplicas
-
-            desired = deployment.spec.replicas or 0
-
-            if ready >= desired and desired > 0:
-                return HealthStatus(
-                    status="healthy",
-                    message=f"All {ready} replicas ready",
-                    details={"ready_replicas": ready, "desired_replicas": desired},
-                )
-
-            if ready > 0:
-                return HealthStatus(
-                    status="degraded",
-                    message=f"{ready}/{desired} replicas ready",
-                    details={"ready_replicas": ready, "desired_replicas": desired},
-                )
-
+        if deployment is None:
             return HealthStatus(
                 status="unhealthy",
-                message=f"No replicas ready (desired: {desired})",
-                details={"ready_replicas": 0, "desired_replicas": desired},
+                message=f"Deployment {self.name} not found",
             )
+
+        return build_replica_health(deployment)
 
     async def logs(
         self,

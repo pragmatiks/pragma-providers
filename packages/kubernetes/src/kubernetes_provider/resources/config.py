@@ -15,6 +15,7 @@ all downstream kubernetes resources. Supports three authentication modes:
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -38,14 +39,14 @@ from pydantic import model_validator
 from kubernetes_provider.client import build_kubeconfig_from_gke
 
 
-_SERVICE_ACCOUNT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount"
-_KUBECONFIG_ALLOWED_ROOT = Path("/etc/pragma-kubeconfig")
+SERVICE_ACCOUNT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount"
+KUBECONFIG_ALLOWED_ROOT = Path("/etc/pragma-kubeconfig")
 
 
 def _validate_kubeconfig_path(raw_path: str) -> Path:
     """Validate a kubeconfig file path against the allowed root.
 
-    Kubeconfig files must live under :data:`_KUBECONFIG_ALLOWED_ROOT` to
+    Kubeconfig files must live under :data:`KUBECONFIG_ALLOWED_ROOT` to
     prevent the config resource from reading arbitrary files on disk (for
     example, user-level kubeconfigs or tokens mounted for other workloads).
     Symlinks are rejected outright: they could traverse outside the
@@ -65,25 +66,25 @@ def _validate_kubeconfig_path(raw_path: str) -> Path:
     path = Path(raw_path)
 
     if not path.is_absolute():
-        msg = f"kubeconfig_path must be absolute and live under {_KUBECONFIG_ALLOWED_ROOT}: {raw_path}"
-        raise ValueError(msg)
+        message = f"kubeconfig_path must be absolute and live under {KUBECONFIG_ALLOWED_ROOT}: {raw_path}"
+        raise ValueError(message)
 
     if path.is_symlink():
-        msg = f"kubeconfig_path must not be a symlink: {raw_path}"
-        raise ValueError(msg)
+        message = f"kubeconfig_path must not be a symlink: {raw_path}"
+        raise ValueError(message)
 
     resolved = path.resolve()
-    resolved_root = _KUBECONFIG_ALLOWED_ROOT.resolve()
+    resolved_root = KUBECONFIG_ALLOWED_ROOT.resolve()
 
     try:
         resolved.relative_to(resolved_root)
     except ValueError as exc:
-        msg = f"kubeconfig_path must live under {_KUBECONFIG_ALLOWED_ROOT}: {raw_path}"
-        raise ValueError(msg) from exc
+        message = f"kubeconfig_path must live under {KUBECONFIG_ALLOWED_ROOT}: {raw_path}"
+        raise ValueError(message) from exc
 
     if not resolved.is_file():
-        msg = f"kubeconfig file not found: {resolved}"
-        raise FileNotFoundError(msg)
+        message = f"kubeconfig file not found: {resolved}"
+        raise FileNotFoundError(message)
 
     return resolved
 
@@ -118,30 +119,30 @@ class ConfigConfig(Config):
         """
         if self.mode == "in_cluster":
             if self.cluster is not None:
-                msg = "cluster must not be set when mode=in_cluster"
-                raise ValueError(msg)
+                message = "cluster must not be set when mode=in_cluster"
+                raise ValueError(message)
 
             if self.kubeconfig_path is not None:
-                msg = "kubeconfig_path must not be set when mode=in_cluster"
-                raise ValueError(msg)
+                message = "kubeconfig_path must not be set when mode=in_cluster"
+                raise ValueError(message)
 
         if self.mode == "gke_cluster":
             if self.cluster is None:
-                msg = "cluster is required when mode=gke_cluster"
-                raise ValueError(msg)
+                message = "cluster is required when mode=gke_cluster"
+                raise ValueError(message)
 
             if self.kubeconfig_path is not None:
-                msg = "kubeconfig_path must not be set when mode=gke_cluster"
-                raise ValueError(msg)
+                message = "kubeconfig_path must not be set when mode=gke_cluster"
+                raise ValueError(message)
 
         if self.mode == "kubeconfig_file":
             if not self.kubeconfig_path:
-                msg = "kubeconfig_path is required when mode=kubeconfig_file"
-                raise ValueError(msg)
+                message = "kubeconfig_path is required when mode=kubeconfig_file"
+                raise ValueError(message)
 
             if self.cluster is not None:
-                msg = "cluster must not be set when mode=kubeconfig_file"
-                raise ValueError(msg)
+                message = "cluster must not be set when mode=kubeconfig_file"
+                raise ValueError(message)
 
         return self
 
@@ -174,6 +175,8 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
         - on_delete: No-op. Config resources own no external state.
     """
 
+    computed = True
+
     async def _validate(self) -> None:
         """Validate that the configured mode can produce a client.
 
@@ -185,11 +188,11 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
             try:
                 KubeConfig.from_service_account()
             except ConfigError as exc:
-                msg = (
+                message = (
                     "in_cluster mode requires a pod-mounted service account at "
-                    f"{_SERVICE_ACCOUNT_PATH}; no credentials found"
+                    f"{SERVICE_ACCOUNT_PATH}; no credentials found"
                 )
-                raise RuntimeError(msg) from exc
+                raise RuntimeError(message) from exc
             return
 
         if self.config.mode == "gke_cluster":
@@ -197,8 +200,8 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
             cluster = await self.config.cluster.resolve()
 
             if cluster.outputs is None:
-                msg = "GKE cluster outputs not available"
-                raise RuntimeError(msg)
+                message = "GKE cluster outputs not available"
+                raise RuntimeError(message)
             return
 
         if self.config.mode == "kubeconfig_file":
@@ -227,11 +230,11 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
             try:
                 kubeconfig = KubeConfig.from_service_account()
             except ConfigError as exc:
-                msg = (
+                message = (
                     "in_cluster mode requires a pod-mounted service account at "
-                    f"{_SERVICE_ACCOUNT_PATH}; no credentials found"
+                    f"{SERVICE_ACCOUNT_PATH}; no credentials found"
                 )
-                raise RuntimeError(msg) from exc
+                raise RuntimeError(message) from exc
             return AsyncClient(config=kubeconfig)
 
         if self.config.mode == "gke_cluster":
@@ -239,10 +242,10 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
             cluster = await self.config.cluster.resolve()
 
             if cluster.outputs is None:
-                msg = "GKE cluster outputs not available"
-                raise RuntimeError(msg)
+                message = "GKE cluster outputs not available"
+                raise RuntimeError(message)
 
-            kubeconfig = build_kubeconfig_from_gke(cluster.outputs, cluster.config.credentials)
+            kubeconfig = await asyncio.to_thread(build_kubeconfig_from_gke, cluster.outputs, cluster.config.credentials)
             return AsyncClient(config=kubeconfig)
 
         if self.config.mode == "kubeconfig_file":
@@ -251,8 +254,8 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
             kubeconfig = KubeConfig.from_file(str(resolved))
             return AsyncClient(config=kubeconfig)
 
-        msg = f"Unknown mode: {self.config.mode}"
-        raise RuntimeError(msg)
+        message = f"Unknown mode: {self.config.mode}"
+        raise RuntimeError(message)
 
     @asynccontextmanager
     async def build_client(self) -> AsyncIterator[AsyncClient]:
@@ -283,11 +286,11 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
 
         return ConfigOutputs(mode=self.config.mode)
 
-    async def on_update(self, previous_config: ConfigConfig) -> ConfigOutputs:
+    async def on_update(self, previous_config: ConfigConfig | None) -> ConfigOutputs:
         """Re-validate the cluster config.
 
         Args:
-            previous_config: The previous configuration before update.
+            previous_config: The previous configuration, if any.
 
         Returns:
             ConfigOutputs with the mode.
@@ -299,14 +302,6 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
     async def on_delete(self) -> None:
         """No external state to clean up."""
         return
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
 
     async def health(self) -> HealthStatus:
         """Check config health by attempting to build a client.

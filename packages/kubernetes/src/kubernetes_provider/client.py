@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from gcp_provider import GKEOutputs
 
 
-_SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
+SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 
 
 def _get_access_token(credentials: dict[str, Any] | str) -> str:
@@ -40,12 +40,12 @@ def _get_access_token(credentials: dict[str, Any] | str) -> str:
     if cred_type == "authorized_user":
         creds = user_credentials.Credentials.from_authorized_user_info(
             credentials,
-            scopes=_SCOPES,
+            scopes=SCOPES,
         )
     else:
         creds = service_account.Credentials.from_service_account_info(
             credentials,
-            scopes=_SCOPES,
+            scopes=SCOPES,
         )
 
     creds.refresh(Request())

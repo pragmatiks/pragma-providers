@@ -100,7 +100,7 @@ resources:
 
 ### Deployment
 
-Manages stateless workloads with configurable replicas, rolling update strategy, health probes, environment variables, and resource limits. Waits for all replicas to be ready before reporting success (default timeout: 300s).
+Manages stateless workloads with configurable replicas, rolling update strategy, health probes, environment variables, and resource limits. Waits for all replicas to be ready before reporting success (timeout: 300s).
 
 **Config:**
 - `config` (dependency) -- `kubernetes/config` resource for cluster access
@@ -112,7 +112,7 @@ Manages stateless workloads with configurable replicas, rolling update strategy,
 - `strategy` (`"RollingUpdate"` | `"Recreate"`, default: `"RollingUpdate"`) -- Update strategy
 
 **Outputs:**
-- `name`, `namespace`, `replicas`, `ready_replicas`, `available_replicas`
+- `name`, `namespace`, `replicas`
 
 ```yaml
 resources:
@@ -152,19 +152,19 @@ resources:
 
 ### StatefulSet
 
-Manages stateful workloads with stable pod identity, persistent storage via PVC templates, and ordered deployment. Associates with a headless service for DNS-based pod discovery. Waits for all replicas to be ready before reporting success.
+Manages stateful workloads with stable pod identity, persistent storage via PVC templates, and ordered deployment. Associates with a headless service for DNS-based pod discovery. Waits for all replicas to be ready before reporting success. Deleting a StatefulSet also deletes the PersistentVolumeClaims created from its templates, with their data.
 
 **Config:**
 - `config` (dependency) -- `kubernetes/config` resource for cluster access
 - `namespace` (string, default: `"default"`) -- Target namespace (immutable)
 - `replicas` (int, default: `1`) -- Desired pod replicas
 - `service_name` (string) -- Headless service for pod DNS (immutable)
-- `selector` (dict, optional) -- Label selector; defaults to `{"app": "<name>"}`
+- `selector` (dict, optional) -- Label selector; defaults to `{"app": "<name>"}` (immutable)
 - `containers` (list) -- Container specs: image, ports, env, volume mounts, probes
-- `volume_claim_templates` (list, optional) -- PVC templates for persistent storage
+- `volume_claim_templates` (list, optional) -- PVC templates for persistent storage (immutable)
 
 **Outputs:**
-- `name`, `namespace`, `replicas`, `ready_replicas`, `service_name`
+- `name`, `namespace`, `replicas`, `service_name`
 
 ```yaml
 resources:
@@ -211,7 +211,7 @@ resources:
 
 ### Service
 
-Exposes workloads via ClusterIP, NodePort, LoadBalancer, or Headless service types. Services are immediately ready after apply (no polling). Headless services automatically set `clusterIP: None`.
+Exposes workloads via ClusterIP, NodePort, LoadBalancer, or Headless service types. Services are immediately ready after apply (no polling). Headless services automatically set `clusterIP: None`. An update cannot make the service in the cluster headless, or stop it being headless, whether through `type: Headless` or `cluster_ip: "None"`: the cluster IP of an existing service cannot change.
 
 **Config:**
 - `config` (dependency) -- `kubernetes/config` resource for cluster access
@@ -219,7 +219,7 @@ Exposes workloads via ClusterIP, NodePort, LoadBalancer, or Headless service typ
 - `type` (`"ClusterIP"` | `"NodePort"` | `"LoadBalancer"` | `"Headless"`, default: `"ClusterIP"`) -- Service type
 - `selector` (dict) -- Label selector for target pods
 - `ports` (list) -- Port mappings: port, target_port, protocol, name
-- `cluster_ip` (string, optional) -- Explicit cluster IP
+- `cluster_ip` (string, optional) -- Explicit cluster IP (immutable)
 
 **Outputs:**
 - `name`, `namespace`, `cluster_ip`, `type`
