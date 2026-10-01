@@ -642,7 +642,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "6.0.7"
+version = "7.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-python-client" },
@@ -652,14 +652,14 @@ dependencies = [
     { name = "google-cloud-secret-manager" },
     { name = "pragmatiks-sdk" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f6/7d/eaa9fad430e9fda9adb29d05c485628a08314e56a7bf93b830d1dc661325/pragmatiks_gcp_provider-6.0.7.tar.gz", hash = "sha256:58a0c5153ea8a309171ca9cbff9e6aa68aa3fcedad520d1776056e8d1564c4a1", size = 15212, upload-time = "2026-07-24T14:43:27.561Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ae/bc/b5f6701413285106f9760569e8d1bf89b9bccb7e8e4cda3e610e5d21dd82/pragmatiks_gcp_provider-7.0.0.tar.gz", hash = "sha256:088b98b7083068973523d1fc9d599797fc551657d7445d50c23d9b11037f1851", size = 21505, upload-time = "2026-10-01T19:11:27.47Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/86/22/f85a1c5666e620090ad03883ac943cafae33bcf62bb014abd1cca01f13fd/pragmatiks_gcp_provider-6.0.7-py3-none-any.whl", hash = "sha256:b3eef71567f551055cf28bdc14cc5eb00f6faf2045fe3f6f42f9e5d020427870", size = 22326, upload-time = "2026-07-24T14:43:26.607Z" },
+    { url = "https://files.pythonhosted.org/packages/db/03/19da6745cf8700186d4c3dd2ce38642ff4a86b0b3ca11e5db74844c8074d/pragmatiks_gcp_provider-7.0.0-py3-none-any.whl", hash = "sha256:c36050352dfea15b77df4d94e16ea325c0d0fea2b3dd8123ddf95cc78f154956", size = 28767, upload-time = "2026-10-01T19:11:26.493Z" },
 ]
 
 [[package]]
 name = "pragmatiks-kubernetes-provider"
-version = "1.0.5"
+version = "2.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-auth" },
@@ -668,14 +668,14 @@ dependencies = [
     { name = "pragmatiks-sdk" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/12/38/5b812fc13a4150bc15ead0ea57188542c30d8dace6c8f4a9dc59b1e915dd/pragmatiks_kubernetes_provider-1.0.5.tar.gz", hash = "sha256:c5205d9567c712bf6828488002a7430cad688661136761c20136671dcb0a5fe5", size = 20181, upload-time = "2026-07-24T14:44:20.586Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/68/5c/7d68eb150342a824b0eabbed895e27b3fd2ccda29da4b28ae1a81781fbc2/pragmatiks_kubernetes_provider-2.0.1.tar.gz", hash = "sha256:db7172beb78d512a995e8689f92d2445c79590e0a4d3499c73536b30984badcf", size = 23135, upload-time = "2026-10-01T20:57:58.358Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c9/d1/e8437e44a5d98f00d0dcab4af90eeddbcf51aa1f04a59f9982671e4a45b5/pragmatiks_kubernetes_provider-1.0.5-py3-none-any.whl", hash = "sha256:9bfd6f27808304375049e9ce2478c06a9e2e9d95d97271b5686783aca0a32167", size = 30137, upload-time = "2026-07-24T14:44:19.695Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/09/bb98a0d3ed50aa0cdf058357076f2ba0af6dd2588edcfd898fee7f73b71d/pragmatiks_kubernetes_provider-2.0.1-py3-none-any.whl", hash = "sha256:fe3f6d562c178dbb4639b3e7fa5f9ac05ba0555f64c70d026852a69f77769d7d", size = 33901, upload-time = "2026-10-01T20:57:57.297Z" },
 ]
 
 [[package]]
 name = "pragmatiks-qdrant-provider"
-version = "7.0.8"
+version = "8.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "pragmatiks-kubernetes-provider" },
@@ -691,7 +691,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "pragmatiks-kubernetes-provider", specifier = ">=0.171.0" },
+    { name = "pragmatiks-kubernetes-provider", specifier = ">=2.0.1" },
     { name = "pragmatiks-sdk", specifier = ">=14.0.0" },
     { name = "qdrant-client", specifier = ">=1.12.0" },
 ]
