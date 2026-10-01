@@ -6,11 +6,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from lightkube import ApiError
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import ConfigMap as K8sConfigMap
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 
+from kubernetes_provider.objects import delete_object, fetch_object, wait_for_absence
 from kubernetes_provider.resources.config import KubernetesConfig
 
 
@@ -54,8 +54,9 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
 
     Lifecycle:
         - on_create: Apply configmap configuration
+        - on_observe: Look up the configmap by name and namespace
         - on_update: Apply updated configmap configuration
-        - on_delete: Delete the configmap (idempotent)
+        - on_delete: Delete the configmap and wait until it is gone (idempotent)
     """
 
     @asynccontextmanager
@@ -84,8 +85,11 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
             data=self.config.data,
         )
 
-    def _build_outputs(self) -> ConfigMapOutputs:
-        """Build outputs.
+    def build_outputs(self, configmap: K8sConfigMap) -> ConfigMapOutputs:
+        """Build outputs from the ConfigMap as stored in the cluster.
+
+        Args:
+            configmap: ConfigMap returned by the cluster.
 
         Returns:
             ConfigMapOutputs with configmap details.
@@ -93,7 +97,7 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
         return ConfigMapOutputs(
             name=self.name,
             namespace=self.config.namespace,
-            data=self.config.data,
+            data=configmap.data or {},
         )
 
     async def on_create(self) -> ConfigMapOutputs:
@@ -105,87 +109,69 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
             ConfigMapOutputs with configmap details.
         """
         async with self._get_client() as client:
-            configmap = self._build_configmap()
+            configmap = await client.apply(self._build_configmap(), field_manager="pragma-kubernetes")
 
-            await client.apply(configmap, field_manager="pragma-kubernetes")
+            return self.build_outputs(configmap)
 
-            return self._build_outputs()
+    async def on_observe(self) -> ConfigMapOutputs | None:
+        """Look up the Kubernetes ConfigMap named after this resource.
 
-    async def on_update(self, previous_config: ConfigMapConfig) -> ConfigMapOutputs:
-        """Update Kubernetes ConfigMap.
+        Returns:
+            ConfigMapOutputs, or ``None`` if the configmap does not exist.
+        """
+        async with self._get_client() as client:
+            configmap = await fetch_object(client, K8sConfigMap, self.name, self.config.namespace)
+
+        if configmap is None:
+            return None
+
+        return self.build_outputs(configmap)
+
+    async def on_update(self, previous_config: ConfigMapConfig | None) -> ConfigMapOutputs:
+        """Apply the full desired configmap configuration.
 
         Args:
-            previous_config: The previous configuration before update.
+            previous_config: The previous configuration, if any.
 
         Returns:
             ConfigMapOutputs with updated configmap details.
         """
-        async with self._get_client() as client:
-            configmap = self._build_configmap()
-
-            await client.apply(configmap, field_manager="pragma-kubernetes")
-
-            return self._build_outputs()
+        return await self.on_create()
 
     async def on_delete(self) -> None:
-        """Delete Kubernetes ConfigMap.
+        """Delete Kubernetes ConfigMap and wait until it is gone.
 
         Idempotent: Succeeds if configmap doesn't exist.
 
         Raises:
-            ApiError: If deletion fails for reasons other than not found.
+            TimeoutError: If the configmap is still present after the deletion timeout.
         """
         async with self._get_client() as client:
-            try:
-                await client.delete(
-                    K8sConfigMap,
-                    name=self.name,
-                    namespace=self.config.namespace,
-                )
-            except ApiError as e:
-                if e.status.code != 404:
-                    raise
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+            await delete_object(client, K8sConfigMap, self.name, self.config.namespace)
+            await wait_for_absence(client, K8sConfigMap, self.name, self.config.namespace)
 
     async def health(self) -> HealthStatus:
         """Check ConfigMap health by verifying it exists.
 
         Returns:
             HealthStatus indicating healthy/unhealthy.
-
-        Raises:
-            ApiError: If health check fails for reasons other than not found.
         """
         async with self._get_client() as client:
-            try:
-                configmap = await client.get(
-                    K8sConfigMap,
-                    name=self.name,
-                    namespace=self.config.namespace,
-                )
+            configmap = await fetch_object(client, K8sConfigMap, self.name, self.config.namespace)
 
-                key_count = len(configmap.data) if configmap.data else 0
+        if configmap is None:
+            return HealthStatus(
+                status="unhealthy",
+                message=f"ConfigMap {self.name} not found",
+            )
 
-                return HealthStatus(
-                    status="healthy",
-                    message=f"ConfigMap exists with {key_count} key(s)",
-                    details={"key_count": key_count},
-                )
+        key_count = len(configmap.data) if configmap.data else 0
 
-            except ApiError as e:
-                if e.status.code == 404:
-                    return HealthStatus(
-                        status="unhealthy",
-                        message="ConfigMap not found",
-                    )
-                raise
+        return HealthStatus(
+            status="healthy",
+            message=f"ConfigMap exists with {key_count} key(s)",
+            details={"key_count": key_count},
+        )
 
     async def logs(
         self,

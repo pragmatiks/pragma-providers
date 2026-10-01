@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Literal
 
 from lightkube import ApiError
-from lightkube.core.client import CascadeType
-from lightkube.models.apps_v1 import StatefulSetSpec
+from lightkube.models.apps_v1 import StatefulSetPersistentVolumeClaimRetentionPolicy, StatefulSetSpec
 from lightkube.models.core_v1 import (
     Container,
     ContainerPort,
@@ -32,11 +30,9 @@ from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, Immutab
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
+from kubernetes_provider.objects import delete_object, fetch_object, wait_for_absence
 from kubernetes_provider.resources.config import KubernetesConfig
-
-
-_POLL_INTERVAL_SECONDS = 5
-_MAX_POLL_ATTEMPTS = 60
+from kubernetes_provider.rollout import build_replica_health, wait_for_rollout
 
 
 class ContainerPortConfig(BaseModel):
@@ -180,18 +176,18 @@ class StatefulSetConfig(Config):
         namespace: Kubernetes namespace (immutable after creation).
         replicas: Number of pod replicas to maintain.
         service_name: Name of the headless service for stable pod DNS (immutable after creation).
-        selector: Label selector for pods; defaults to ``{"app": "<name>"}`` if not set.
+        selector: Label selector for pods; defaults to ``{"app": "<name>"}`` if not set (immutable after creation).
         containers: List of container specifications defining the pod template.
-        volume_claim_templates: PVC templates for persistent storage per replica.
+        volume_claim_templates: PVC templates for persistent storage per replica (immutable after creation).
     """
 
     config: ImmutableDependency[KubernetesConfig]
     namespace: ImmutableField[str] = "default"
     replicas: Field[int] = 1
     service_name: ImmutableField[str]
-    selector: Field[dict[str, str]] | None = None
+    selector: ImmutableField[dict[str, str]] | None = None
     containers: Field[list[ContainerConfig]]
-    volume_claim_templates: Field[list[VolumeClaimTemplateConfig]] | None = None
+    volume_claim_templates: ImmutableField[list[VolumeClaimTemplateConfig]] | None = None
 
 
 class StatefulSetOutputs(Outputs):
@@ -201,14 +197,12 @@ class StatefulSetOutputs(Outputs):
         name: StatefulSet name as created in the cluster.
         namespace: Kubernetes namespace containing the statefulset.
         replicas: Desired number of pod replicas.
-        ready_replicas: Number of pods that have passed readiness checks.
         service_name: Associated headless service name for pod DNS.
     """
 
     name: str
     namespace: str
     replicas: int
-    ready_replicas: int
     service_name: str
 
 
@@ -226,12 +220,14 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
 
     Uses server-side apply with ``field_manager="pragma-kubernetes"`` for
     idempotent create and update operations. Deletes use background cascade
-    to clean up owned pods and PVCs.
+    to clean up owned pods, and the cluster then deletes the PersistentVolumeClaims
+    created from ``volume_claim_templates``, with their data.
 
     Lifecycle:
         - on_create: Apply statefulset, wait for ready
+        - on_observe: Look up the statefulset by name and namespace
         - on_update: Apply updated statefulset, wait for ready
-        - on_delete: Delete statefulset with background cascade
+        - on_delete: Delete statefulset with background cascade and wait until it is gone
     """
 
     @asynccontextmanager
@@ -349,6 +345,7 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
             replicas=self.config.replicas,
             serviceName=self.config.service_name,
             selector=LabelSelector(matchLabels=labels),
+            persistentVolumeClaimRetentionPolicy=StatefulSetPersistentVolumeClaimRetentionPolicy(whenDeleted="Delete"),
             template=PodTemplateSpec(
                 metadata=ObjectMeta(labels=labels),
                 spec=PodSpec(containers=containers),
@@ -366,61 +363,27 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
             spec=spec,
         )
 
-    def _build_outputs(self, sts: K8sStatefulSet) -> StatefulSetOutputs:
-        """Build outputs from Kubernetes StatefulSet object.
+    def build_outputs(self, statefulset: K8sStatefulSet) -> StatefulSetOutputs:
+        """Build outputs from the StatefulSet as read from the cluster.
+
+        Args:
+            statefulset: StatefulSet returned by the cluster.
 
         Returns:
             StatefulSetOutputs with statefulset details.
         """
-        ready = 0
-
-        if sts.status and sts.status.readyReplicas:
-            ready = sts.status.readyReplicas
-
-        assert sts.metadata is not None
-        assert sts.metadata.name is not None
-        assert sts.metadata.namespace is not None
-        assert sts.spec is not None
-        assert sts.spec.serviceName is not None
+        assert statefulset.metadata is not None
+        assert statefulset.metadata.name is not None
+        assert statefulset.metadata.namespace is not None
+        assert statefulset.spec is not None
+        assert statefulset.spec.serviceName is not None
 
         return StatefulSetOutputs(
-            name=sts.metadata.name,
-            namespace=sts.metadata.namespace,
-            replicas=sts.spec.replicas or 0,
-            ready_replicas=ready,
-            service_name=sts.spec.serviceName,
+            name=statefulset.metadata.name,
+            namespace=statefulset.metadata.namespace,
+            replicas=statefulset.spec.replicas or 0,
+            service_name=statefulset.spec.serviceName,
         )
-
-    async def _wait_for_ready(self, client) -> K8sStatefulSet:
-        """Poll until StatefulSet has all replicas ready.
-
-        Args:
-            client: Lightkube async client.
-
-        Returns:
-            StatefulSet with ready replicas.
-
-        Raises:
-            TimeoutError: If replicas don't become ready in time.
-        """
-        for _ in range(_MAX_POLL_ATTEMPTS):
-            sts = await client.get(
-                K8sStatefulSet,
-                name=self.name,
-                namespace=self.config.namespace,
-            )
-
-            ready = 0
-            if sts.status and sts.status.readyReplicas:
-                ready = sts.status.readyReplicas
-
-            if ready >= self.config.replicas:
-                return sts
-
-            await asyncio.sleep(_POLL_INTERVAL_SECONDS)
-
-        msg = f"StatefulSet {self.name} did not become ready within {_MAX_POLL_ATTEMPTS * _POLL_INTERVAL_SECONDS}s"
-        raise TimeoutError(msg)
 
     async def on_create(self) -> StatefulSetOutputs:
         """Create Kubernetes StatefulSet and wait for ready.
@@ -429,112 +392,71 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
 
         Returns:
             StatefulSetOutputs with statefulset details.
+
+        Raises:
+            TimeoutError: If the rollout does not complete within the rollout timeout.
         """
         async with self._get_client() as client:
-            sts = self._build_statefulset()
+            await client.apply(self._build_statefulset(), field_manager="pragma-kubernetes")
 
-            await client.apply(sts, field_manager="pragma-kubernetes")
+            statefulset = await wait_for_rollout(client, K8sStatefulSet, self.name, self.config.namespace)
 
-            result = await self._wait_for_ready(client)
+        return self.build_outputs(statefulset)
 
-            return self._build_outputs(result)
+    async def on_observe(self) -> StatefulSetOutputs | None:
+        """Look up the Kubernetes StatefulSet named after this resource.
 
-    async def on_update(self, previous_config: StatefulSetConfig) -> StatefulSetOutputs:
-        """Update Kubernetes StatefulSet and wait for ready.
+        Returns:
+            StatefulSetOutputs, or ``None`` if the statefulset does not exist.
+        """
+        async with self._get_client() as client:
+            statefulset = await fetch_object(client, K8sStatefulSet, self.name, self.config.namespace)
+
+        if statefulset is None:
+            return None
+
+        return self.build_outputs(statefulset)
+
+    async def on_update(self, previous_config: StatefulSetConfig | None) -> StatefulSetOutputs:
+        """Apply the full desired statefulset configuration and wait for ready.
 
         Args:
-            previous_config: The previous configuration before update.
+            previous_config: The previous configuration, if any.
 
         Returns:
             StatefulSetOutputs with updated statefulset details.
         """
-        async with self._get_client() as client:
-            sts = self._build_statefulset()
-
-            await client.apply(sts, field_manager="pragma-kubernetes")
-
-            result = await self._wait_for_ready(client)
-
-            return self._build_outputs(result)
+        return await self.on_create()
 
     async def on_delete(self) -> None:
-        """Delete Kubernetes StatefulSet with cascade.
+        """Delete Kubernetes StatefulSet with background cascade and wait until it is gone.
 
-        Idempotent: Succeeds if statefulset doesn't exist.
+        Idempotent: Succeeds if statefulset doesn't exist. The cluster then deletes the
+        PersistentVolumeClaims created from ``volume_claim_templates``, with their data.
 
         Raises:
-            ApiError: If deletion fails for reasons other than not found.
+            TimeoutError: If the statefulset is still present after the deletion timeout.
         """
         async with self._get_client() as client:
-            try:
-                await client.delete(
-                    K8sStatefulSet,
-                    name=self.name,
-                    namespace=self.config.namespace,
-                    cascade=CascadeType.BACKGROUND,
-                )
-            except ApiError as e:
-                if e.status.code != 404:
-                    raise
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+            await delete_object(client, K8sStatefulSet, self.name, self.config.namespace)
+            await wait_for_absence(client, K8sStatefulSet, self.name, self.config.namespace)
 
     async def health(self) -> HealthStatus:
         """Check StatefulSet health by comparing ready replicas to desired.
 
         Returns:
             HealthStatus indicating healthy/degraded/unhealthy.
-
-        Raises:
-            ApiError: If health check fails for reasons other than not found.
         """
         async with self._get_client() as client:
-            try:
-                sts = await client.get(
-                    K8sStatefulSet,
-                    name=self.name,
-                    namespace=self.config.namespace,
-                )
-            except ApiError as e:
-                if e.status.code == 404:
-                    return HealthStatus(
-                        status="unhealthy",
-                        message="StatefulSet not found",
-                    )
-                raise
+            statefulset = await fetch_object(client, K8sStatefulSet, self.name, self.config.namespace)
 
-            ready = 0
-
-            if sts.status and sts.status.readyReplicas:
-                ready = sts.status.readyReplicas
-
-            desired = sts.spec.replicas or 0
-
-            if ready >= desired and desired > 0:
-                return HealthStatus(
-                    status="healthy",
-                    message=f"All {ready} replicas ready",
-                    details={"ready_replicas": ready, "desired_replicas": desired},
-                )
-
-            if ready > 0:
-                return HealthStatus(
-                    status="degraded",
-                    message=f"{ready}/{desired} replicas ready",
-                    details={"ready_replicas": ready, "desired_replicas": desired},
-                )
-
+        if statefulset is None:
             return HealthStatus(
                 status="unhealthy",
-                message=f"No replicas ready (desired: {desired})",
-                details={"ready_replicas": 0, "desired_replicas": desired},
+                message=f"StatefulSet {self.name} not found",
             )
+
+        return build_replica_health(statefulset)
 
     async def logs(
         self,
