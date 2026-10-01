@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import secrets
 import string
 from collections.abc import AsyncIterator
@@ -10,7 +9,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from google.cloud.logging_v2 import Client as LoggingClient
-from pragma_sdk import Config, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
+from pragma_sdk import Config, Dependency, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import field_validator
 
 from gcp_provider.resources.cloudsql.helpers import (
@@ -19,11 +18,9 @@ from gcp_provider.resources.cloudsql.helpers import (
     get_credentials,
     get_sqladmin_service,
     run_in_executor,
+    run_instance_operation,
 )
-
-
-_POLL_INTERVAL_SECONDS = 30
-_MAX_POLL_ATTEMPTS = 30
+from gcp_provider.resources.polling import compute_operation_deadline, poll_until
 
 
 class DatabaseInstanceConfig(Config):
@@ -107,7 +104,6 @@ class DatabaseInstanceOutputs(Outputs):
         connection_name: Cloud SQL connection name (project:region:instance).
         public_ip: Public IP address (if enabled).
         private_ip: Private IP address (if enabled).
-        ready: Whether the instance is running and accessible.
         console_url: URL to view instance in GCP Console.
         logs_url: URL to view instance logs in Cloud Logging.
     """
@@ -115,9 +111,21 @@ class DatabaseInstanceOutputs(Outputs):
     connection_name: str
     public_ip: str | None = None
     private_ip: str | None = None
-    ready: bool
     console_url: str
     logs_url: str
+
+
+async def resolve_instance_config(instance: Dependency[DatabaseInstance]) -> DatabaseInstanceConfig:
+    """Resolve a dependency on a Cloud SQL instance to the instance's configuration.
+
+    Args:
+        instance: Dependency on the hosting ``cloudsql/database_instance`` resource.
+
+    Returns:
+        Configuration of the hosting instance.
+    """
+    resolved = await instance.resolve()
+    return resolved.config
 
 
 class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]):
@@ -131,8 +139,9 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
 
     Lifecycle:
         - on_create: Creates the instance with a randomly generated root password
-          and polls until RUNNABLE (up to 15 minutes). Idempotent -- if the
+          and polls until RUNNABLE (up to 19 minutes). Idempotent -- if the
           instance already exists, waits for RUNNABLE and returns current state.
+        - on_observe: Reads the instance by ``project_id`` and ``instance_name``.
         - on_update: Patches mutable settings (tier, availability_type, backups,
           network config, deletion_protection) and waits for RUNNABLE.
         - on_delete: Deletes the instance. Respects ``deletion_protection`` --
@@ -172,7 +181,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         Returns:
             DatabaseInstanceOutputs with instance details.
         """
-        service = get_sqladmin_service(get_credentials(self.config.credentials))
+        service = await get_sqladmin_service(get_credentials(self.config.credentials))
 
         existing = await execute(
             service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
@@ -182,32 +191,61 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         if existing is None:
             await execute(service.instances().insert(project=self.config.project_id, body=self._build_instance_body()))
 
-        instance = await self._wait_for_runnable(service)
+        instance = await self._wait_for_runnable(service, compute_operation_deadline())
 
         return self._build_outputs(instance)
 
-    async def on_update(self, previous_config: DatabaseInstanceConfig) -> DatabaseInstanceOutputs:
-        """Update instance configuration.
+    async def on_observe(self) -> DatabaseInstanceOutputs | None:
+        """Read the instance named by ``project_id`` and ``instance_name``.
 
-        Updates mutable settings (tier, availability, backups, network config).
+        Returns:
+            DatabaseInstanceOutputs for the instance, or None if it does not exist.
+        """
+        service = await get_sqladmin_service(get_credentials(self.config.credentials))
+
+        instance = await execute(
+            service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
+            ignore_404=True,
+        )
+
+        if instance is None:
+            return None
+
+        return self._build_outputs(instance)
+
+    async def on_update(self, previous_config: DatabaseInstanceConfig | None) -> DatabaseInstanceOutputs:
+        """Apply every mutable setting of the configuration to the instance.
 
         Args:
-            previous_config: The previous configuration before update.
+            previous_config: The previous configuration, if any.
 
         Returns:
             DatabaseInstanceOutputs with updated instance state.
-        """
-        service = get_sqladmin_service(get_credentials(self.config.credentials))
 
-        await execute(
-            service.instances().patch(
-                project=self.config.project_id,
-                instance=self.config.instance_name,
-                body=self._build_patch_body(),
-            )
+        Raises:
+            RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
+                or the operation finished with errors.
+            TimeoutError: If a pending operation, the write's operation, or the instance reaching RUNNABLE
+                is not done by the operation deadline.
+        """
+        service = await get_sqladmin_service(get_credentials(self.config.credentials))
+        deadline = compute_operation_deadline()
+
+        await run_instance_operation(
+            service,
+            self.config,
+            self.name,
+            lambda: execute(
+                service.instances().patch(
+                    project=self.config.project_id,
+                    instance=self.config.instance_name,
+                    body=self._build_patch_body(),
+                )
+            ),
+            deadline,
         )
 
-        instance = await self._wait_for_runnable(service)
+        instance = await self._wait_for_runnable(service, deadline)
 
         return self._build_outputs(instance)
 
@@ -217,24 +255,29 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         Idempotent: Succeeds if instance doesn't exist.
 
         Note: Respects deletion_protection setting on the instance.
-        """
-        service = get_sqladmin_service(get_credentials(self.config.credentials))
 
-        result = await execute(
-            service.instances().delete(project=self.config.project_id, instance=self.config.instance_name),
-            ignore_404=True,
+        Raises:
+            HttpError: If Cloud SQL refuses the delete for another reason, such as deletion protection.
+            RuntimeError: If Cloud SQL refuses the delete because another operation runs on the instance,
+                or the delete operation finished with errors.
+            TimeoutError: If a pending operation, the delete operation or the deletion is not done by the operation
+                deadline.
+        """
+        service = await get_sqladmin_service(get_credentials(self.config.credentials))
+        deadline = compute_operation_deadline()
+
+        await run_instance_operation(
+            service,
+            self.config,
+            self.name,
+            lambda: execute(
+                service.instances().delete(project=self.config.project_id, instance=self.config.instance_name),
+                ignore_404=True,
+            ),
+            deadline,
         )
 
-        if result is not None:
-            await self._wait_for_deletion(service)
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+        await self._wait_for_deletion(service, deadline)
 
     async def health(self) -> HealthStatus:
         """Check instance health by querying instance status.
@@ -242,7 +285,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         Returns:
             HealthStatus indicating instance health.
         """
-        service = get_sqladmin_service(get_credentials(self.config.credentials))
+        service = await get_sqladmin_service(get_credentials(self.config.credentials))
 
         instance = await execute(
             service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
@@ -360,22 +403,25 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             connection_name=f"{self.config.project_id}:{self.config.region}:{self.config.instance_name}",
             public_ip=public_ip,
             private_ip=private_ip,
-            ready=instance.get("state") == "RUNNABLE",
             console_url=console_url,
             logs_url=logs_url,
         )
 
-    async def _wait_for_runnable(self, service: Any) -> dict:
+    async def _wait_for_runnable(self, service: Any, deadline: float) -> dict:
         """Poll instance until it reaches RUNNABLE state.
+
+        Args:
+            service: Cloud SQL Admin API service.
+            deadline: Deadline on the ``time.monotonic`` clock, shared by the handler's waits.
 
         Returns:
             Instance dict in RUNNABLE state.
 
         Raises:
             RuntimeError: If instance not found or enters FAILED/SUSPENDED state.
-            TimeoutError: If instance doesn't reach RUNNABLE in time.
+            TimeoutError: If the instance does not reach RUNNABLE by ``deadline``.
         """
-        for _ in range(_MAX_POLL_ATTEMPTS):
+        async for _ in poll_until(deadline):
             instance = await execute(
                 service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
                 ignore_404=True,
@@ -392,19 +438,20 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             if state in ("FAILED", "SUSPENDED"):
                 raise RuntimeError(f"Instance entered {state} state")
 
-            await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+        msg = f"Instance {self.config.instance_name} did not reach RUNNABLE state by the operation deadline"
+        raise TimeoutError(msg)
 
-        raise TimeoutError(
-            f"Instance did not reach RUNNABLE state within {_MAX_POLL_ATTEMPTS * _POLL_INTERVAL_SECONDS} seconds"
-        )
-
-    async def _wait_for_deletion(self, service: Any) -> None:
+    async def _wait_for_deletion(self, service: Any, deadline: float) -> None:
         """Poll until instance is deleted.
 
+        Args:
+            service: Cloud SQL Admin API service.
+            deadline: Deadline on the ``time.monotonic`` clock, shared by the handler's waits.
+
         Raises:
-            TimeoutError: If instance doesn't delete in time.
+            TimeoutError: If the instance is not deleted by ``deadline``.
         """
-        for _ in range(_MAX_POLL_ATTEMPTS):
+        async for _ in poll_until(deadline):
             instance = await execute(
                 service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
                 ignore_404=True,
@@ -413,9 +460,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             if instance is None:
                 return
 
-            await asyncio.sleep(_POLL_INTERVAL_SECONDS)
-
-        msg = f"Instance was not deleted within {_MAX_POLL_ATTEMPTS * _POLL_INTERVAL_SECONDS} seconds"
+        msg = f"Instance {self.config.instance_name} was not deleted by the operation deadline"
         raise TimeoutError(msg)
 
     def _build_instance_body(self) -> dict:
@@ -465,10 +510,8 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
 
         ip_configuration: dict[str, Any] = {
             "ipv4Enabled": self.config.enable_public_ip,
+            "authorizedNetworks": authorized_networks,
         }
-
-        if authorized_networks:
-            ip_configuration["authorizedNetworks"] = authorized_networks
 
         settings: dict[str, Any] = {
             "tier": self.config.tier,

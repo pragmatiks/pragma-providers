@@ -2,23 +2,29 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
+import logging
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, cast
 
-from google.api_core.exceptions import AlreadyExists, NotFound
+from google.api_core.exceptions import AlreadyExists, FailedPrecondition, NotFound
 from google.cloud.container_v1 import ClusterManagerAsyncClient
 from google.cloud.container_v1.types import (
     Autopilot,
     Cluster,
+    ClusterUpdate,
     CreateClusterRequest,
     DeleteClusterRequest,
     GetClusterRequest,
+    GetOperationRequest,
+    ListOperationsRequest,
     NodeConfig,
     NodePool,
+    Operation,
+    ReleaseChannel,
+    UpdateClusterRequest,
 )
 from google.cloud.logging_v2 import Client as LoggingClient
 from google.oauth2 import service_account
@@ -26,8 +32,190 @@ from pragma_sdk import Config, Field, HealthStatus, ImmutableField, LogEntry, Ou
 from pydantic import Field as PydanticField
 from pydantic import field_validator, model_validator
 
+from gcp_provider.resources.polling import compute_operation_deadline, poll_until
+
+
+logger = logging.getLogger(__name__)
 
 _CLUSTER_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,38}[a-z0-9]$|^[a-z]$")
+
+
+def targets_cluster(target_link: str, cluster_name: str) -> bool:
+    """Tell whether an operation's target is the cluster or one of its node pools.
+
+    Args:
+        target_link: The operation's ``target_link``.
+        cluster_name: Name of the cluster.
+
+    Returns:
+        True if the target is the cluster itself or a resource under it.
+    """
+    cluster_suffix = f"/clusters/{cluster_name}"
+    return target_link.endswith(cluster_suffix) or f"{cluster_suffix}/" in target_link
+
+
+async def wait_for_operation_done(client: ClusterManagerAsyncClient, operation_path: str, deadline: float) -> Operation:
+    """Wait until a GKE operation is done, whatever its outcome.
+
+    Args:
+        client: Cluster Manager client.
+        operation_path: Operation resource path
+            (``projects/{project}/locations/{location}/operations/{operation}``).
+        deadline: Deadline on the ``time.monotonic`` clock, shared by the handler's waits.
+
+    Returns:
+        The finished operation, including any error it ended with.
+
+    Raises:
+        TimeoutError: If the operation is not done by ``deadline``.
+    """
+    operation = Operation()
+
+    async for _ in poll_until(deadline):
+        operation = await client.get_operation(request=GetOperationRequest(name=operation_path))
+
+        if operation.status == Operation.Status.DONE:
+            return operation
+
+    msg = (
+        f"GKE {operation.operation_type.name} operation {operation_path} was still "
+        f"{operation.status.name} at the operation deadline"
+    )
+    raise TimeoutError(msg)
+
+
+async def wait_for_operation_success(client: ClusterManagerAsyncClient, operation_path: str, deadline: float) -> None:
+    """Wait until a GKE operation is done and require that it succeeded.
+
+    Args:
+        client: Cluster Manager client.
+        operation_path: Operation resource path
+            (``projects/{project}/locations/{location}/operations/{operation}``).
+        deadline: Deadline on the ``time.monotonic`` clock, shared by the handler's waits.
+
+    Raises:
+        RuntimeError: If the operation finished with an error.
+        TimeoutError: If the operation is not done by ``deadline``.
+    """
+    operation = await wait_for_operation_done(client, operation_path, deadline)
+
+    if operation.error.code:
+        msg = f"GKE {operation.operation_type.name} operation {operation_path} failed: {operation.error.message}"
+        raise RuntimeError(msg)
+
+
+async def wait_for_pending_operations(
+    client: ClusterManagerAsyncClient,
+    config: GKEConfig,
+    resource_name: str,
+    deadline: float,
+) -> None:
+    """Wait until every operation on a GKE cluster and its node pools is done, whatever its outcome.
+
+    Logs ``gke_pending_operation_wait`` at WARNING before each wait, then ``gke_pending_operation_done``,
+    or ``gke_pending_operation_failed`` with the error the operation ended with. That error is not raised.
+
+    Args:
+        client: Cluster Manager client.
+        config: Configuration that locates the cluster.
+        resource_name: Name of the Pragmatiks resource waiting, logged with each event.
+        deadline: Deadline on the ``time.monotonic`` clock, shared by the handler's waits.
+
+    Raises:
+        TimeoutError: If a pending operation is not done by ``deadline``.
+    """
+    parent_path = f"projects/{config.project_id}/locations/{config.location}"
+    response = await client.list_operations(request=ListOperationsRequest(parent=parent_path))
+    pending = [
+        operation
+        for operation in response.operations
+        if operation.status != Operation.Status.DONE and targets_cluster(operation.target_link, cast(str, config.name))
+    ]
+
+    for operation in pending:
+        operation_path = f"{parent_path}/operations/{operation.name}"
+        operation_type = operation.operation_type.name
+        logger.warning(
+            "gke_pending_operation_wait resource=%s operation_type=%s operation=%s",
+            resource_name,
+            operation_type,
+            operation_path,
+        )
+        finished = await wait_for_operation_done(client, operation_path, deadline)
+
+        if finished.error.code:
+            logger.warning(
+                "gke_pending_operation_failed resource=%s operation_type=%s operation=%s error=%s",
+                resource_name,
+                operation_type,
+                operation_path,
+                finished.error.message,
+            )
+        else:
+            logger.warning(
+                "gke_pending_operation_done resource=%s operation_type=%s operation=%s",
+                resource_name,
+                operation_type,
+                operation_path,
+            )
+
+
+def is_cluster_busy(error: FailedPrecondition) -> bool:
+    """Tell whether GKE refused a write because another operation runs on the cluster.
+
+    Args:
+        error: Error GKE raised for the write.
+
+    Returns:
+        True when the error carries the reason ``CLUSTER_ALREADY_HAS_OPERATION``, or, without that reason,
+        a message GKE uses for a concurrent operation.
+    """
+    if error.reason == "CLUSTER_ALREADY_HAS_OPERATION":
+        return True
+
+    return "running incompatible operation" in error.message or "try again once it is done" in error.message
+
+
+async def run_cluster_operation(
+    client: ClusterManagerAsyncClient,
+    config: GKEConfig,
+    resource_name: str,
+    write: Callable[[], Awaitable[Operation | None]],
+    deadline: float,
+) -> None:
+    """Send a write to a GKE cluster once its pending operations are done, and wait until it succeeds.
+
+    Args:
+        client: Cluster Manager client.
+        config: Configuration that locates the cluster.
+        resource_name: Name of the Pragmatiks resource writing, logged with each pending-operation event.
+        write: Sends the write and returns its operation, or None when no write was needed.
+        deadline: Deadline on the ``time.monotonic`` clock, shared by the handler's waits.
+
+    Raises:
+        RuntimeError: If GKE refuses the write because another operation runs on the cluster,
+            or the write's operation finished with an error.
+        FailedPrecondition: If GKE refuses the write for any other precondition.
+        TimeoutError: If a pending operation, or the write's operation, is not done by ``deadline``.
+    """
+    await wait_for_pending_operations(client, config, resource_name, deadline)
+
+    try:
+        operation = await write()
+    except FailedPrecondition as error:
+        if is_cluster_busy(error):
+            message = (
+                f"Cluster projects/{config.project_id}/locations/{config.location}/clusters/{config.name} "
+                "is busy with another operation"
+            )
+            raise RuntimeError(message) from error
+        raise
+
+    if operation is None:
+        return
+
+    operation_path = f"projects/{config.project_id}/locations/{config.location}/operations/{operation.name}"
+    await wait_for_operation_success(client, operation_path, deadline)
 
 
 class GKEConfig(Config):
@@ -54,11 +242,11 @@ class GKEConfig(Config):
     name: ImmutableField[str]
     autopilot: ImmutableField[bool] = True
     network: ImmutableField[str] = "default"
-    subnetwork: Field[str] | None = None
+    subnetwork: ImmutableField[str] | None = None
     release_channel: Field[Literal["RAPID", "REGULAR", "STABLE"]] = "REGULAR"
-    initial_node_count: Field[int] = PydanticField(default=1, ge=1)
-    machine_type: Field[str] = "e2-medium"
-    disk_size_gb: Field[int] = PydanticField(default=100, ge=10)
+    initial_node_count: ImmutableField[int] = PydanticField(default=1, ge=1)
+    machine_type: ImmutableField[str] = "e2-medium"
+    disk_size_gb: ImmutableField[int] = PydanticField(default=100, ge=10)
 
     @field_validator("name")
     @classmethod
@@ -103,7 +291,6 @@ class GKEOutputs(Outputs):
         endpoint: Cluster API server endpoint URL.
         cluster_ca_certificate: Base64-encoded cluster CA certificate.
         location: Cluster location (region or zone).
-        status: Cluster status (RUNNING, PROVISIONING, etc.).
         console_url: URL to view cluster in GCP Console.
         logs_url: URL to view cluster logs in Cloud Logging.
     """
@@ -112,13 +299,8 @@ class GKEOutputs(Outputs):
     endpoint: str
     cluster_ca_certificate: str
     location: str
-    status: str
     console_url: str
     logs_url: str
-
-
-_POLL_INTERVAL_SECONDS = 30
-_MAX_POLL_ATTEMPTS = 40  # 40 * 30s = 20 minutes max wait
 
 
 class GKE(Resource[GKEConfig, GKEOutputs]):
@@ -136,10 +318,13 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
           and disk size. Set ``autopilot: false`` to use this mode.
 
     Lifecycle:
-        - on_create: Creates the cluster and polls until RUNNING (up to 20 min).
-          Idempotent -- if the cluster already exists, waits for RUNNING.
-        - on_update: Returns current cluster state. Immutable fields (name,
-          location, autopilot, network) require delete and recreate.
+        - on_create: Creates the cluster and polls until it serves, in RUNNING
+          or DEGRADED state (up to 19 min). Idempotent -- if the cluster
+          already exists, waits for it to serve.
+        - on_observe: Reads the cluster by project, location and name.
+        - on_update: Applies ``release_channel`` when it differs and waits for
+          the cluster to serve. ``credentials`` is mutable too; every other field
+          is immutable and requires delete and recreate.
         - on_delete: Deletes the cluster and polls until fully removed.
           Idempotent -- succeeds silently if the cluster does not exist.
 
@@ -222,63 +407,63 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
             endpoint=cluster.endpoint,
             cluster_ca_certificate=cluster.master_auth.cluster_ca_certificate,
             location=cluster.location,
-            status=Cluster.Status(cluster.status).name,
             console_url=console_url,
             logs_url=logs_url,
         )
 
-    async def _wait_for_running(self, client: ClusterManagerAsyncClient) -> Cluster:
-        """Poll cluster until it reaches RUNNING state.
+    async def wait_for_serving(self, client: ClusterManagerAsyncClient, deadline: float) -> Cluster:
+        """Poll the cluster until it serves, in RUNNING or DEGRADED state.
 
         Args:
             client: Cluster Manager client.
+            deadline: Deadline on the ``time.monotonic`` clock, shared by the handler's waits.
 
         Returns:
-            Cluster in RUNNING state.
+            Cluster in RUNNING or DEGRADED state.
 
         Raises:
-            TimeoutError: If cluster doesn't reach RUNNING in time.
-            RuntimeError: If cluster enters ERROR state.
+            TimeoutError: If the cluster does not serve by ``deadline``; the message names the last status seen.
+            RuntimeError: If the cluster enters ERROR or STOPPING state.
         """
-        for _ in range(_MAX_POLL_ATTEMPTS):
+        cluster = Cluster()
+
+        async for _ in poll_until(deadline):
             cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
 
-            if cluster.status == Cluster.Status.RUNNING:
+            if cluster.status in (Cluster.Status.RUNNING, Cluster.Status.DEGRADED):
                 return cluster
 
             if cluster.status == Cluster.Status.ERROR:
                 msg = f"Cluster entered ERROR state: {cluster.status_message}"
                 raise RuntimeError(msg)
 
-            if cluster.status in (
-                Cluster.Status.STOPPING,
-                Cluster.Status.DEGRADED,
-            ):
+            if cluster.status == Cluster.Status.STOPPING:
                 msg = f"Cluster in unexpected state: {cluster.status.name}"
                 raise RuntimeError(msg)
 
-            await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+        message = (
+            f"Cluster {self._cluster_path()} did not start serving by the operation deadline; "
+            f"last status: {cluster.status.name} ({cluster.status_message or 'no status message'})"
+        )
+        raise TimeoutError(message)
 
-        msg = f"Cluster did not reach RUNNING state within {_MAX_POLL_ATTEMPTS * _POLL_INTERVAL_SECONDS} seconds"
-        raise TimeoutError(msg)
-
-    async def _wait_for_deletion(self, client: ClusterManagerAsyncClient) -> None:
-        """Poll until cluster is deleted.
+    async def _wait_for_deletion(self, client: ClusterManagerAsyncClient, deadline: float) -> None:
+        """Poll until the cluster is deleted.
 
         Args:
             client: Cluster Manager client.
+            deadline: Deadline on the ``time.monotonic`` clock, shared by the handler's waits.
 
         Raises:
-            TimeoutError: If cluster doesn't delete in time.
+            TimeoutError: If the cluster is not deleted by ``deadline``.
         """
-        for _ in range(_MAX_POLL_ATTEMPTS):
+        async for _ in poll_until(deadline):
             try:
                 await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
-                await asyncio.sleep(_POLL_INTERVAL_SECONDS)
             except NotFound:
                 return
 
-        msg = f"Cluster was not deleted within {_MAX_POLL_ATTEMPTS * _POLL_INTERVAL_SECONDS} seconds"
+        msg = f"Cluster {self._cluster_path()} was not deleted by the operation deadline"
         raise TimeoutError(msg)
 
     def _build_cluster_config(self) -> Cluster:
@@ -313,7 +498,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
         return cluster
 
     async def on_create(self) -> GKEOutputs:
-        """Create GKE cluster and wait for RUNNING state.
+        """Create GKE cluster and wait until it serves, in RUNNING or DEGRADED state.
 
         Idempotent: If cluster already exists, returns its current state.
 
@@ -332,47 +517,100 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
         except AlreadyExists:
             pass
 
-        cluster = await self._wait_for_running(client)
+        cluster = await self.wait_for_serving(client, compute_operation_deadline())
 
         return self._build_outputs(cluster)
 
-    async def on_update(self, previous_config: GKEConfig) -> GKEOutputs:
-        """Update cluster configuration.
+    async def on_observe(self) -> GKEOutputs | None:
+        """Read the cluster named by ``project_id``, ``location`` and ``name``.
+
+        Returns:
+            GKEOutputs for the cluster, or None if it does not exist.
+        """
+        client = self._get_client()
+
+        try:
+            cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
+        except NotFound:
+            return None
+
+        return self._build_outputs(cluster)
+
+    async def on_update(self, previous_config: GKEConfig | None) -> GKEOutputs:
+        """Apply ``release_channel`` to the cluster when its live channel differs, and wait until it serves.
+
+        Waits for the cluster's pending operations, then reads the live channel and updates it when it differs.
+        Either way, waits until the cluster serves, in RUNNING or DEGRADED state.
 
         Args:
-            previous_config: The previous configuration before update.
+            previous_config: The previous configuration, if any.
 
         Returns:
             GKEOutputs with current cluster state.
+
+        Raises:
+            TimeoutError: If a pending operation, the release-channel update or the cluster serving
+                does not finish by the operation deadline.
+            RuntimeError: If GKE refuses the release-channel update because another operation runs on the cluster,
+                the update fails, or the cluster is in ERROR or STOPPING state.
         """
-        if self.outputs is not None:
-            return self.outputs
-
         client = self._get_client()
-        cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
+        deadline = compute_operation_deadline()
 
-        return self._build_outputs(cluster)
+        await run_cluster_operation(
+            client, self.config, self.name, lambda: self.apply_release_channel(client), deadline
+        )
+        serving_cluster = await self.wait_for_serving(client, deadline)
+
+        return self._build_outputs(serving_cluster)
+
+    async def apply_release_channel(self, client: ClusterManagerAsyncClient) -> Operation | None:
+        """Update the cluster to the configured ``release_channel`` when its live channel differs.
+
+        Args:
+            client: Cluster Manager client.
+
+        Returns:
+            The operation GKE started for the update, or None when the live channel already matches.
+        """
+        channel = ReleaseChannel.Channel[cast(str, self.config.release_channel)]
+        live_cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
+
+        if live_cluster.release_channel.channel == channel:
+            return None
+
+        return await client.update_cluster(
+            request=UpdateClusterRequest(
+                name=self._cluster_path(),
+                update=ClusterUpdate(desired_release_channel=ReleaseChannel(channel=channel)),
+            )
+        )
 
     async def on_delete(self) -> None:
         """Delete cluster and wait for completion.
 
         Idempotent: Succeeds if cluster doesn't exist.
+
+        Raises:
+            RuntimeError: If GKE refuses the delete because another operation runs on the cluster,
+                or the delete operation finished with an error.
+            TimeoutError: If a pending operation, the delete operation or the deletion does not finish by the
+                operation deadline.
         """
         client = self._get_client()
+        deadline = compute_operation_deadline()
 
         try:
-            await client.delete_cluster(request=DeleteClusterRequest(name=self._cluster_path()))
-            await self._wait_for_deletion(client)
+            await run_cluster_operation(
+                client,
+                self.config,
+                self.name,
+                lambda: client.delete_cluster(request=DeleteClusterRequest(name=self._cluster_path())),
+                deadline,
+            )
+            await self._wait_for_deletion(client, deadline)
         except NotFound:
             pass
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
 
     async def health(self) -> HealthStatus:
         """Check cluster health by querying cluster status.
@@ -397,6 +635,12 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
                 status="healthy",
                 message="Cluster is running",
                 details={"node_count": sum(np.initial_node_count for np in cluster.node_pools)},
+            )
+
+        if status == Cluster.Status.DEGRADED:
+            return HealthStatus(
+                status="degraded",
+                message=f"Cluster is serving but degraded: {cluster.status_message or 'no reason reported'}",
             )
 
         if status in (Cluster.Status.PROVISIONING, Cluster.Status.RECONCILING):

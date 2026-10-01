@@ -4,16 +4,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from pragma_sdk import Config, Dependency, ImmutableField, Outputs, Resource
+from pragma_sdk import Config, ImmutableDependency, ImmutableField, Outputs, Resource
 
-from gcp_provider.resources.cloudsql.database_instance import DatabaseInstance
+from gcp_provider.resources.cloudsql.database_instance import (
+    DatabaseInstance,
+    DatabaseInstanceConfig,
+    resolve_instance_config,
+)
 from gcp_provider.resources.cloudsql.helpers import (
     connection_info,
     execute,
     extract_ips,
     get_credentials,
     get_sqladmin_service,
+    run_instance_operation,
 )
+from gcp_provider.resources.polling import compute_operation_deadline
 
 
 class DatabaseConfig(Config):
@@ -24,7 +30,7 @@ class DatabaseConfig(Config):
         database_name: Name of the database to create.
     """
 
-    instance: Dependency[DatabaseInstance]
+    instance: ImmutableDependency[DatabaseInstance]
     database_name: ImmutableField[str]
 
 
@@ -56,8 +62,8 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
     Lifecycle:
         - on_create: Creates the database in the target instance. Idempotent --
           succeeds if the database already exists.
-        - on_update: If the instance dependency changes, deletes from the old
-          instance and creates in the new one. Otherwise returns current state.
+        - on_observe: Reads the database by ``database_name``.
+        - on_update: Returns current state; ``instance`` and ``database_name`` are immutable.
         - on_delete: Drops the database from the instance. Idempotent --
           succeeds silently if the database does not exist.
 
@@ -79,97 +85,135 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
     """
 
     async def on_create(self) -> DatabaseOutputs:
-        """Create database in the Cloud SQL instance.
+        """Create the database in the Cloud SQL instance and wait until it exists.
 
-        Idempotent: If database already exists, returns its current state.
+        Idempotent: If the database already exists, returns its current state.
 
         Returns:
             DatabaseOutputs with database details.
-        """
-        instance_resource = await self.config.instance.resolve()
-        inst = instance_resource.config
-        service = get_sqladmin_service(get_credentials(inst.credentials))
 
-        await execute(
-            service.databases().insert(
-                project=inst.project_id,
-                instance=inst.instance_name,
-                body={
-                    "name": self.config.database_name,
-                    "project": inst.project_id,
-                    "instance": inst.instance_name,
-                },
+        Raises:
+            RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
+                or the operation finished with errors.
+            TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.
+        """
+        instance_config = await resolve_instance_config(self.config.instance)
+        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+
+        await run_instance_operation(
+            service,
+            instance_config,
+            self.name,
+            lambda: execute(
+                service.databases().insert(
+                    project=instance_config.project_id,
+                    instance=instance_config.instance_name,
+                    body={
+                        "name": self.config.database_name,
+                        "project": instance_config.project_id,
+                        "instance": instance_config.instance_name,
+                    },
+                ),
+                ignore_exists=True,
             ),
-            ignore_exists=True,
+            compute_operation_deadline(),
         )
 
-        return await self._build_outputs(inst, service)
+        return await self.fetch_outputs(instance_config, service)
 
-    async def on_update(self, previous_config: DatabaseConfig) -> DatabaseOutputs:
-        """Handle database updates.
-
-        If instance changed, delete from old instance and create in new one.
+    async def on_observe(self) -> DatabaseOutputs | None:
+        """Read the database named ``database_name`` in the resolved instance.
 
         Returns:
-            DatabaseOutputs with database details.
+            DatabaseOutputs for the database, or None if it does not exist.
         """
-        if previous_config.instance != self.config.instance:
-            await self._delete(previous_config)
-            return await self.on_create()
+        instance_config = await resolve_instance_config(self.config.instance)
+        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
 
-        instance_resource = await self.config.instance.resolve()
-        inst = instance_resource.config
-        service = get_sqladmin_service(get_credentials(inst.credentials))
-
-        return await self._build_outputs(inst, service)
-
-    async def on_delete(self) -> None:
-        """Delete database. Idempotent: succeeds if database doesn't exist."""
-        await self._delete(self.config)
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    async def _delete(self, config: DatabaseConfig) -> None:
-        """Delete database from instance. Idempotent: succeeds if not found."""
-        instance_resource = await config.instance.resolve()
-        inst = instance_resource.config
-        service = get_sqladmin_service(get_credentials(inst.credentials))
-
-        await execute(
-            service.databases().delete(
-                project=inst.project_id,
-                instance=inst.instance_name,
-                database=config.database_name,
+        database = await execute(
+            service.databases().get(
+                project=instance_config.project_id,
+                instance=instance_config.instance_name,
+                database=self.config.database_name,
             ),
             ignore_404=True,
         )
 
-    async def _build_outputs(self, inst: Any, service: Any) -> DatabaseOutputs:
+        if database is None:
+            return None
+
+        return await self.fetch_outputs(instance_config, service)
+
+    async def on_update(self, previous_config: DatabaseConfig | None) -> DatabaseOutputs:
+        """Return the current state of the database.
+
+        Args:
+            previous_config: The previous configuration, if any.
+
+        Returns:
+            DatabaseOutputs with database details.
+        """
+        instance_config = await resolve_instance_config(self.config.instance)
+        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+
+        return await self.fetch_outputs(instance_config, service)
+
+    async def on_delete(self) -> None:
+        """Drop the database and wait until it is gone.
+
+        Idempotent: Succeeds if the database does not exist.
+
+        Raises:
+            RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
+                or the operation finished with errors.
+            TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.
+        """
+        instance_config = await resolve_instance_config(self.config.instance)
+        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+
+        await run_instance_operation(
+            service,
+            instance_config,
+            self.name,
+            lambda: execute(
+                service.databases().delete(
+                    project=instance_config.project_id,
+                    instance=instance_config.instance_name,
+                    database=self.config.database_name,
+                ),
+                ignore_404=True,
+            ),
+            compute_operation_deadline(),
+        )
+
+    async def fetch_outputs(self, instance_config: DatabaseInstanceConfig, service: Any) -> DatabaseOutputs:
         """Fetch instance info and build outputs.
+
+        Args:
+            instance_config: Configuration of the hosting Cloud SQL instance.
+            service: Cloud SQL Admin API service.
 
         Returns:
             DatabaseOutputs with connection details.
         """
         instance = await execute(
             service.instances().get(
-                project=inst.project_id,
-                instance=inst.instance_name,
+                project=instance_config.project_id,
+                instance=instance_config.instance_name,
             )
         )
 
         public_ip, private_ip = extract_ips(instance)
         db_type, db_port = connection_info(instance.get("databaseVersion", "POSTGRES_15"))
-        host = public_ip or private_ip or f"{inst.project_id}:{instance.get('region')}:{inst.instance_name}"
+        host = (
+            public_ip
+            or private_ip
+            or f"{instance_config.project_id}:{instance.get('region')}:{instance_config.instance_name}"
+        )
 
         return DatabaseOutputs(
             database_name=self.config.database_name,
-            instance_name=inst.instance_name,
+            instance_name=instance_config.instance_name,
             host=host,
             port=int(db_port),
             url=f"{db_type}://{host}:{db_port}/{self.config.database_name}",

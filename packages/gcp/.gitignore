@@ -31,12 +31,6 @@ ENV/
 *.swp
 *.swo
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
 # mise
 .mise.local.toml
 
