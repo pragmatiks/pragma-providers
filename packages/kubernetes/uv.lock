@@ -590,7 +590,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "6.0.7"
+version = "7.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-python-client" },
@@ -600,14 +600,14 @@ dependencies = [
     { name = "google-cloud-secret-manager" },
     { name = "pragmatiks-sdk" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f6/7d/eaa9fad430e9fda9adb29d05c485628a08314e56a7bf93b830d1dc661325/pragmatiks_gcp_provider-6.0.7.tar.gz", hash = "sha256:58a0c5153ea8a309171ca9cbff9e6aa68aa3fcedad520d1776056e8d1564c4a1", size = 15212, upload-time = "2026-07-24T14:43:27.561Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ae/bc/b5f6701413285106f9760569e8d1bf89b9bccb7e8e4cda3e610e5d21dd82/pragmatiks_gcp_provider-7.0.0.tar.gz", hash = "sha256:088b98b7083068973523d1fc9d599797fc551657d7445d50c23d9b11037f1851", size = 21505, upload-time = "2026-10-01T19:11:27.47Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/86/22/f85a1c5666e620090ad03883ac943cafae33bcf62bb014abd1cca01f13fd/pragmatiks_gcp_provider-6.0.7-py3-none-any.whl", hash = "sha256:b3eef71567f551055cf28bdc14cc5eb00f6faf2045fe3f6f42f9e5d020427870", size = 22326, upload-time = "2026-07-24T14:43:26.607Z" },
+    { url = "https://files.pythonhosted.org/packages/db/03/19da6745cf8700186d4c3dd2ce38642ff4a86b0b3ca11e5db74844c8074d/pragmatiks_gcp_provider-7.0.0-py3-none-any.whl", hash = "sha256:c36050352dfea15b77df4d94e16ea325c0d0fea2b3dd8123ddf95cc78f154956", size = 28767, upload-time = "2026-10-01T19:11:26.493Z" },
 ]
 
 [[package]]
 name = "pragmatiks-kubernetes-provider"
-version = "1.0.5"
+version = "2.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-auth" },
@@ -627,7 +627,7 @@ dev = [
 requires-dist = [
     { name = "google-auth", specifier = ">=2.30.0" },
     { name = "lightkube", specifier = ">=0.15.0" },
-    { name = "pragmatiks-gcp-provider", specifier = ">=0.55.0" },
+    { name = "pragmatiks-gcp-provider", specifier = ">=7.0.0" },
     { name = "pragmatiks-sdk", specifier = ">=14.0.0" },
     { name = "requests", specifier = ">=2.32.0" },
 ]
