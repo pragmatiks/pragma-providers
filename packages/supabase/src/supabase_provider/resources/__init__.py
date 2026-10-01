@@ -3,13 +3,8 @@
 Import and export your Resource classes here for discovery by the runtime.
 """
 
-from supabase_provider.resources.auth import (
-    Auth,
-    AuthConfig,
-    AuthOutputs,
-    ExternalProviderConfig,
-)
 from supabase_provider.resources.project import (
+    ExternalProviderConfig,
     Project,
     ProjectConfig,
     ProjectOutputs,
@@ -17,9 +12,6 @@ from supabase_provider.resources.project import (
 
 
 __all__ = [
-    "Auth",
-    "AuthConfig",
-    "AuthOutputs",
     "ExternalProviderConfig",
     "Project",
     "ProjectConfig",

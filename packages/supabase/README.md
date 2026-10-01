@@ -4,8 +4,7 @@ Manage Supabase projects and configuration through declarative resources using t
 
 ## Resources
 
-- **Project** - Create and manage Supabase projects
-- **Auth** - Configure authentication settings (providers, signups, JWT expiry)
+- **Project** - Create and manage Supabase projects, including their authentication settings (providers, signups, JWT expiry)
 
 ## Authentication
 
