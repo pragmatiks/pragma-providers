@@ -10,6 +10,38 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v8.0.0 (2026-10-01)
+
+### BREAKING CHANGE
+
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- providers require pragmatiks-sdk>=14.0.0.
+
+### Feat
+
+- **vercel**: observe-then-act handlers on pragmatiks-sdk 14
+- **supabase**: observe-then-act handlers on pragmatiks-sdk 14
+- **pragma**: observe-then-act handlers on pragmatiks-sdk 14
+- **github**: observe-then-act handlers on pragmatiks-sdk 14
+- **agno**: observe-then-act handlers on pragmatiks-sdk 14
+- **qdrant**: observe-then-act handlers on pragmatiks-sdk 14
+- **kubernetes**: observe-then-act handlers on pragmatiks-sdk 14
+- **gcp**: observe-then-act handlers on pragmatiks-sdk 14
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v14.0.0 (#107)
+
+
+- drop provider test suites, pin ruff/ty/uv, template observe-then-act on SDK 14
+
 ## qdrant-v7.0.8 (2026-09-01)
 
 ### Fix

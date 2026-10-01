@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-qdrant-provider"
-version = "7.0.8"
+version = "8.0.0"
 description = "Qdrant provider for Pragmatiks"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -32,7 +32,7 @@ entrypoint = ["python", "-m", "pragma_runtime.entrypoint"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "7.0.8"
+version = "8.0.0"
 version_files = ["pyproject.toml:^version"]
 tag_format = "qdrant-v$version"
 update_changelog_on_bump = true
