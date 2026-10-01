@@ -15,12 +15,8 @@ authors = [
 
 [dependency-groups]
 dev = [
-    "pytest>=8.4.1",
-    "pytest-asyncio>=1.0.0",
-    "pytest-cov>=7.0.0",
-    "pytest-mock>=3.14.0",
-    "respx>=0.22.0",
-    "ty>=0.0.14",
+    "ruff==0.16.8",
+    "ty==0.0.63",
 ]
 
 [tool.pragma]
@@ -31,10 +27,6 @@ display_name = "Supabase"
 description = "Manage Supabase projects and configuration through declarative resources using the Management API."
 icon_url = "https://cdn.simpleicons.org/supabase"
 tags = ["supabase", "database", "authentication", "backend-as-a-service"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
