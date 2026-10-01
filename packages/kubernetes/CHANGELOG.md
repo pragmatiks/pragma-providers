@@ -1,3 +1,37 @@
+## kubernetes-v2.0.0 (2026-10-01)
+
+### BREAKING CHANGE
+
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- requires pragmatiks-sdk>=14.0.0.
+- providers require pragmatiks-sdk>=14.0.0.
+
+### Feat
+
+- **vercel**: observe-then-act handlers on pragmatiks-sdk 14
+- **supabase**: observe-then-act handlers on pragmatiks-sdk 14
+- **pragma**: observe-then-act handlers on pragmatiks-sdk 14
+- **github**: observe-then-act handlers on pragmatiks-sdk 14
+- **agno**: observe-then-act handlers on pragmatiks-sdk 14
+- **qdrant**: observe-then-act handlers on pragmatiks-sdk 14
+- **kubernetes**: observe-then-act handlers on pragmatiks-sdk 14
+- **gcp**: observe-then-act handlers on pragmatiks-sdk 14
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v14.0.0 (#107)
+- **deps**: update pragmatiks-sdk to v13.0.0 (#105)
+- **deps**: update pragmatiks-sdk to v12.0.0 (#104)
+
+
+- drop provider test suites, pin ruff/ty/uv, template observe-then-act on SDK 14
+
 ## kubernetes-v1.0.5 (2026-07-24)
 
 ### Fix
