@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField
+from typing import Literal
 
-from vercel_provider.client import create_vercel_client, raise_for_status
+from pragma_sdk import Config, Field, HealthStatus, ImmutableField, Outputs, Resource, SensitiveField
+
+from vercel_provider.client import create_vercel_client, fetch_optional_json, raise_for_status
 
 
 class DomainConfig(Config):
@@ -16,20 +18,20 @@ class DomainConfig(Config):
         domain: Custom domain name (e.g., ``example.com``, ``app.example.com``).
         redirect: Optional domain to redirect to. When set, requests to this
             domain are redirected to the target domain.
-        redirect_status_code: HTTP status code for the redirect (301 or 307).
-            Only applies when ``redirect`` is set.
+        redirect_status_code: HTTP status code for the redirect (301, 302, 307
+            or 308). Only applies when ``redirect`` is set.
         git_branch: Optional Git branch to associate with this domain.
             When set, deployments from this branch are served on the domain.
-        team_id: Vercel team ID. Required for team-owned projects.
+        team_id: Vercel team ID. Required for team-owned projects. Immutable.
     """
 
     access_token: SensitiveField[str]
     project_id: ImmutableField[str]
     domain: ImmutableField[str]
     redirect: Field[str] | None = None
-    redirect_status_code: Field[int] | None = None
+    redirect_status_code: Field[Literal[301, 302, 307, 308]] | None = None
     git_branch: Field[str] | None = None
-    team_id: Field[str] | None = None
+    team_id: ImmutableField[str] | None = None
 
 
 class DomainOutputs(Outputs):
@@ -38,14 +40,12 @@ class DomainOutputs(Outputs):
     Attributes:
         domain: The configured domain name.
         project_id: Project ID the domain is attached to.
-        verified: Whether the domain has been verified for use.
         redirect: Redirect target domain, if configured.
         git_branch: Associated Git branch, if configured.
     """
 
     domain: str
     project_id: str
-    verified: bool
     redirect: str
     git_branch: str
 
@@ -55,15 +55,16 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
 
     Adds and manages custom domains on Vercel projects via the REST API.
     Domains can serve project deployments directly or redirect to another
-    domain.
+    domain. The domain is located by ``project_id``, ``domain`` and
+    ``team_id``, all immutable.
 
     Lifecycle:
         - on_create: Adds the domain to the project. Verification may be
           required before the domain is active.
-        - on_update: Updates the domain configuration (redirect, git branch).
-          Domain name and project are immutable.
-        - on_delete: Removes the domain from the project. Idempotent --
-          succeeds if the domain is not attached.
+        - on_observe: Reads the domain from the project.
+        - on_update: Applies the redirect and git branch settings.
+        - on_delete: Removes the domain from the project. Succeeds if the
+          domain is not attached.
 
     Example::
 
@@ -110,123 +111,112 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
         return DomainOutputs(
             domain=data.get("name", self.config.domain),
             project_id=self.config.project_id,
-            verified=data.get("verified", False),
             redirect=data.get("redirect") or "",
             git_branch=data.get("gitBranch") or "",
         )
+
+    def build_settings_body(self) -> dict:
+        """Build the redirect and git branch request fields.
+
+        Unset settings are sent as ``null`` so an update clears them.
+
+        Returns:
+            Request body fields for adding or updating a project domain.
+        """
+        return {
+            "redirect": self.config.redirect,
+            "redirectStatusCode": self.config.redirect_status_code,
+            "gitBranch": self.config.git_branch,
+        }
+
+    def domain_path(self) -> str:
+        """Build the API path of this domain on its project.
+
+        Returns:
+            Path of the project domain endpoint.
+        """
+        return f"/v9/projects/{self.config.project_id}/domains/{self.config.domain}"
 
     async def on_create(self) -> DomainOutputs:
         """Add a custom domain to the Vercel project.
 
         Returns:
-            DomainOutputs with domain details and verification status.
+            DomainOutputs with domain details.
         """
-        client = create_vercel_client(self.config.access_token)
-
-        try:
-            body: dict = {"name": self.config.domain}
-
-            if self.config.redirect is not None:
-                body["redirect"] = self.config.redirect
-
-            if self.config.redirect_status_code is not None:
-                body["redirectStatusCode"] = self.config.redirect_status_code
-
-            if self.config.git_branch is not None:
-                body["gitBranch"] = self.config.git_branch
-
+        async with create_vercel_client(self.config.access_token) as client:
             response = await client.post(
                 f"/v10/projects/{self.config.project_id}/domains",
                 params=self._query_params(),
-                json=body,
+                json={"name": self.config.domain, **self.build_settings_body()},
             )
             await raise_for_status(response)
 
             return self._build_outputs(response.json())
-        finally:
-            await client.aclose()
 
-    async def on_update(self, previous_config: DomainConfig) -> DomainOutputs:
-        """Update the domain configuration.
+    async def on_observe(self) -> DomainOutputs | None:
+        """Read the domain from its project.
 
-        Removes and re-adds the domain to apply changes, since the Vercel
-        API does not support PATCH on project domains.
+        Returns:
+            DomainOutputs, or ``None`` if the domain is not attached.
+        """
+        async with create_vercel_client(self.config.access_token) as client:
+            domain = await fetch_optional_json(client, self.domain_path(), self._query_params())
+
+        if domain is None:
+            return None
+
+        return self._build_outputs(domain)
+
+    async def on_update(self, previous_config: DomainConfig | None) -> DomainOutputs:
+        """Apply the redirect and git branch settings to the attached domain.
 
         Args:
-            previous_config: The previous configuration before update.
+            previous_config: The previous configuration, if any.
 
         Returns:
             DomainOutputs with updated domain details.
-
-        Raises:
-            RuntimeError: If no existing outputs are available for the domain.
         """
-        if self.outputs is None:
-            msg = "Cannot update domain without existing outputs"
-            raise RuntimeError(msg)
-
-        client = create_vercel_client(self.config.access_token)
-
-        try:
-            params = self._query_params()
-
-            delete_response = await client.delete(
-                f"/v9/projects/{self.config.project_id}/domains/{self.config.domain}",
-                params=params,
+        async with create_vercel_client(self.config.access_token) as client:
+            response = await client.patch(
+                self.domain_path(),
+                params=self._query_params(),
+                json=self.build_settings_body(),
             )
+            await raise_for_status(response)
 
-            if delete_response.status_code != 404:
-                await raise_for_status(delete_response)
-
-            body: dict = {"name": self.config.domain}
-
-            if self.config.redirect is not None:
-                body["redirect"] = self.config.redirect
-
-            if self.config.redirect_status_code is not None:
-                body["redirectStatusCode"] = self.config.redirect_status_code
-
-            if self.config.git_branch is not None:
-                body["gitBranch"] = self.config.git_branch
-
-            create_response = await client.post(
-                f"/v10/projects/{self.config.project_id}/domains",
-                params=params,
-                json=body,
-            )
-            await raise_for_status(create_response)
-
-            return self._build_outputs(create_response.json())
-        finally:
-            await client.aclose()
+            return self._build_outputs(response.json())
 
     async def on_delete(self) -> None:
         """Remove the custom domain from the project.
 
-        Idempotent: Succeeds if the domain is not attached to the project.
+        Succeeds if the domain is not attached to the project.
         """
-        if self.outputs is None:
-            return
-
-        client = create_vercel_client(self.config.access_token)
-
-        try:
-            response = await client.delete(
-                f"/v9/projects/{self.config.project_id}/domains/{self.config.domain}",
-                params=self._query_params(),
-            )
+        async with create_vercel_client(self.config.access_token) as client:
+            response = await client.delete(self.domain_path(), params=self._query_params())
 
             if response.status_code == 404:
                 return
 
             await raise_for_status(response)
-        finally:
-            await client.aclose()
 
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+    async def health(self) -> HealthStatus:
+        """Report whether Vercel has verified the domain.
 
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+        Returns:
+            ``healthy`` when verified, ``degraded`` while verification is pending,
+            ``unhealthy`` when the domain is not attached.
+        """
+        async with create_vercel_client(self.config.access_token) as client:
+            data = await fetch_optional_json(client, self.domain_path(), self._query_params())
+
+        if data is None:
+            return HealthStatus(status="unhealthy", message=f"Domain {self.config.domain} is not attached")
+
+        if data["verified"]:
+            return HealthStatus(status="healthy")
+
+        return HealthStatus(
+            status="degraded",
+            message=f"Domain {self.config.domain} is not verified yet",
+            details={"verification": data.get("verification", [])},
+        )
