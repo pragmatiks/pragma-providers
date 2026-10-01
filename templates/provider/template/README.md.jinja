@@ -4,65 +4,45 @@
 
 ## Resources
 
-Define your resources in `src/{{ package_name }}/resources/example.py`:
+Define your resources in `src/{{ package_name }}/resources/`:
 
 ```python
-from pragma_sdk import Resource, Config, Outputs, Field
+from pragma_sdk import Config, Field, Outputs, Resource
+
 
 class MyResourceConfig(Config):
     name: Field[str]
-    size: Field[int] = 10
+
 
 class MyResourceOutputs(Outputs):
     url: str
-    created_at: str
+
 
 class MyResource(Resource[MyResourceConfig, MyResourceOutputs]):
-    async def on_create(self) -> MyResourceOutputs:
-        # Create the resource
-        return MyResourceOutputs(url="...", created_at="...")
+    async def on_create(self) -> MyResourceOutputs: ...
 
-    async def on_update(self, previous_config: MyResourceConfig) -> MyResourceOutputs:
-        # Update the resource
-        return self.outputs
+    async def on_observe(self) -> MyResourceOutputs | None: ...
 
-    async def on_delete(self) -> None:
-        # Delete the resource
-        pass
+    async def on_update(self, previous_config: MyResourceConfig | None) -> MyResourceOutputs: ...
+
+    async def on_delete(self) -> None: ...
 ```
 
-## Development
-
-### Testing
-
-Test your resource lifecycle methods with ProviderHarness:
-
-```bash
-# Install dependencies
-uv sync --dev
-
-# Run tests
-uv run pytest tests/
-```
-
-### Writing Tests
-
-Use `ProviderHarness` to test lifecycle methods:
+Then register them on the provider in `src/{{ package_name }}/__init__.py`:
 
 ```python
-from pragma_sdk.provider import ProviderHarness
-from {{ package_name }} import ExampleResource, ExampleConfig
+from pragma_sdk import Provider
 
-async def test_create():
-    harness = ProviderHarness()
-    result = await harness.invoke_create(
-        ExampleResource,
-        name="test",
-        config=ExampleConfig(name="my-resource", size=10),
-    )
-    assert result.success
-    assert result.outputs.url is not None
+from {{ package_name }}.resources import MyResource
+
+{{ name | replace('-', '_') }} = Provider()
+
+{{ name | replace('-', '_') }}.resource("my_resource")(MyResource)
 ```
+
+- `on_observe` locates the external object from the resource identity and config alone, returns `None` when it does not exist, and otherwise returns the same outputs the write path returns. Never read `self.outputs`.
+- `on_update` receives `previous_config=None` when the object already existed at create.
+- A resource with no external object of its own declares `computed = True` and needs no `on_observe`.
 
 ## Deployment
 

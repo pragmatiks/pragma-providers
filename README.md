@@ -96,12 +96,7 @@ Reference provider resources in your configurations:
 from pragma_sdk import FieldReference
 
 config = AppConfig(
-    database_password=FieldReference(
-        provider="gcp",
-        resource="secret",
-        name="db-password",
-        field="data"
-    )
+    database_password=FieldReference(provider="gcp", resource="secret", name="db-password", field="data")
 )
 ```
 
@@ -144,27 +139,35 @@ Each provider contains:
 
 - **Provider namespace** - Groups related resources (e.g., `gcp`)
 - **Resource types** - Individual resource definitions with Config and Outputs
-- **Lifecycle methods** - `on_create`, `on_update`, `on_delete` implementations
+- **Lifecycle methods** - `on_create`, `on_observe`, `on_update`, `on_delete` implementations; `on_observe` locates the external object from identity and config alone and returns `None` when it does not exist
+- **Computed types** - resources with no external object of their own declare `computed = True` and need no `on_observe`
 
 ```python
 from pragma_sdk import Resource, Config, Outputs
+
 
 class SecretConfig(Config):
     project_id: str
     secret_id: str
     data: str
 
+
 class SecretOutputs(Outputs):
     resource_name: str
     version_id: str
+
 
 class Secret(Resource[SecretConfig, SecretOutputs]):
     async def on_create(self) -> SecretOutputs:
         # Create secret in GCP Secret Manager
         ...
 
-    async def on_update(self, previous_config: SecretConfig) -> SecretOutputs:
-        # Update secret version
+    async def on_observe(self) -> SecretOutputs | None:
+        # Read the secret from GCP Secret Manager, None when absent
+        ...
+
+    async def on_update(self, previous_config: SecretConfig | None) -> SecretOutputs:
+        # Add a secret version; previous_config is None when the secret already exists at create
         ...
 
     async def on_delete(self) -> None:
@@ -178,14 +181,10 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 # Install dependencies
 task install
 
-# Run all tests
-task test
-
 # Run all checks
 task check
 
 # Provider-specific tasks
-task gcp:test
 task gcp:check
 ```
 

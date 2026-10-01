@@ -1,42 +1,97 @@
 """Example resource for {{ name }} provider.
 
-This is a starter template - replace with your actual resource implementation.
+A stand-in whose external object is a JSON file in the temporary directory
+of the provider's pod, so it runs without any account. The file survives a
+worker restart inside the same pod but not a new pod, and it is not
+crash-safe: a write interrupted by a crash can leave a truncated file that
+makes ``on_observe`` fail. Replace it with a resource whose external object
+lives in a service located by its config.
 """
 
-from datetime import UTC, datetime
+import asyncio
+import json
+import tempfile
+from pathlib import Path
+
 from pragma_sdk import Config, Field, Outputs, Resource
 
 
 class ExampleConfig(Config):
-    """Configuration for example resource."""
+    """Configuration for the example resource.
 
-    name: Field[str]
-    size: Field[int] = 10
+    Attributes:
+        value: Integer stored in the example object.
+    """
+
+    value: Field[int]
 
 
 class ExampleOutputs(Outputs):
-    """Outputs from example resource."""
+    """Outputs of the example resource.
 
-    url: str
-    created_at: str
+    Attributes:
+        value: Integer the example object holds.
+    """
+
+    value: int
 
 
 class ExampleResource(Resource[ExampleConfig, ExampleOutputs]):
-    """Example resource - replace with your implementation."""
+    """Single-process stand-in resource backed by a worker-local JSON file located from its identity."""
+
+    @property
+    def object_path(self) -> Path:
+        """Path of the JSON file this resource owns.
+
+        Returns:
+            File path derived from project, provider, resource type and name.
+        """
+        return (
+            Path(tempfile.gettempdir())
+            / "pragma-objects"
+            / self.project_id
+            / self.provider
+            / self.resource
+            / f"{self.name}.json"
+        )
 
     async def on_create(self) -> ExampleOutputs:
-        """Create the resource."""
-        return ExampleOutputs(
-            url=f"https://example.com/{self.config.name}",
-            created_at=datetime.now(UTC).isoformat(),
-        )
+        """Write the configured value to the object file.
 
-    async def on_update(self, previous_config: ExampleConfig) -> ExampleOutputs:
-        """Update the resource."""
-        return ExampleOutputs(
-            url=f"https://example.com/{self.config.name}",
-            created_at=self.outputs.created_at,
-        )
+        Returns:
+            Outputs describing the written object.
+        """
+        path = self.object_path
+        await asyncio.to_thread(path.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(path.write_text, json.dumps({"value": self.config.value}))
+
+        return ExampleOutputs(value=self.config.value)
+
+    async def on_observe(self) -> ExampleOutputs | None:
+        """Read the object file.
+
+        Returns:
+            Outputs describing the object, or None when the file does not exist.
+        """
+        try:
+            text = await asyncio.to_thread(self.object_path.read_text)
+        except FileNotFoundError:
+            return None
+
+        return ExampleOutputs(value=json.loads(text)["value"])
+
+    async def on_update(self, previous_config: ExampleConfig | None) -> ExampleOutputs:
+        """Rewrite the object file with the current configuration.
+
+        Args:
+            previous_config: Configuration last applied, or None when unknown.
+                The file is rewritten either way.
+
+        Returns:
+            Outputs describing the updated object.
+        """
+        return await self.on_create()
 
     async def on_delete(self) -> None:
-        """Delete the resource."""
+        """Delete the object file; succeeds when it is already absent."""
+        await asyncio.to_thread(self.object_path.unlink, missing_ok=True)

@@ -33,18 +33,6 @@ tasks:
     desc: Install all provider dependencies
     cmd: uv sync --all-groups
 
-  test:
-    desc: Run all tests across all packages
-    deps:
-      - gcp:test
-      - kubernetes:test
-      - qdrant:test
-      - agno:test
-      - supabase:test
-      - vercel:test
-      - github:test
-      - pragma:test
-
   format:
     desc: Format all Python code
     deps:

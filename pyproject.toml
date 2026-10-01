@@ -5,6 +5,9 @@ description = "Pragma-managed cloud providers"
 readme = "README.md"
 requires-python = ">=3.13"
 
+[tool.uv]
+required-version = "==0.12.20"
+
 [tool.ruff]
 target-version = "py313"
 line-length = 120
@@ -20,8 +23,8 @@ select = [
     "UP",      # Pyupgrade
     "D",       # pydocstyle - docstring conventions
     "DOC",     # Ruff's docstring checks (parameters match signature)
-    "PT",      # pytest rules
 ]
+ignore = ["DOC502"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -29,61 +32,12 @@ convention = "google"
 [tool.ruff.lint.isort]
 lines-after-imports = 2
 
-[tool.ruff.lint.per-file-ignores]
-"**/tests/**/*.py" = [
-    "D100",  # Missing docstring in public module
-    "D101",  # Missing docstring in public class
-    "D102",  # Missing docstring in public method
-    "D103",  # Missing docstring in public function
-    "D104",  # Missing docstring in public package
-    "D107",  # Missing docstring in __init__
-    "DOC",   # Docstring content rules (Returns, Raises, Yields sections)
-]
-
 [tool.ruff.format]
 preview = true
-
-[tool.ty.environment]
-python-version = "3.13"
-extra-paths = [
-    "packages/gcp/src",
-    "packages/kubernetes/src",
-    "packages/qdrant/src",
-    "packages/agno/src",
-    "packages/supabase/src",
-    "packages/vercel/src",
-    "packages/pragma/src",
-]
-root = [
-    "packages/gcp/src",
-    "packages/kubernetes/src",
-    "packages/qdrant/src",
-    "packages/agno/src",
-    "packages/supabase/src",
-    "packages/vercel/src",
-    "packages/pragma/src",
-]
-
-[tool.ty.src]
-include = [
-    "packages/gcp/src",
-    "packages/kubernetes/src",
-    "packages/qdrant/src",
-    "packages/agno/src",
-    "packages/supabase/src",
-    "packages/vercel/src",
-    "packages/pragma/src",
-]
-exclude = ["**/tests/**", "**/__pycache__/**"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
-addopts = ["-v"]
 
 [dependency-groups]
 dev = [
     "commitizen>=4.11.0",
     "pre-commit>=4.0.0",
-    "ruff>=0.11.0",
+    "ruff==0.16.8",
 ]

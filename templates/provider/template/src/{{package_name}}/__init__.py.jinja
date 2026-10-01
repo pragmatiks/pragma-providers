@@ -1,12 +1,16 @@
-"""{{ name }} provider for Pragmatiks.
+"""{{ name }} provider for Pragmatiks: the provider instance and its registered Resource classes."""
 
-Export your Resource classes here for discovery by the runtime.
-"""
+from pragma_sdk import Provider
 
 from {{ package_name }}.resources import ExampleConfig, ExampleOutputs, ExampleResource
+
+{{ name | replace('-', '_') }} = Provider()
+
+{{ name | replace('-', '_') }}.resource("example")(ExampleResource)
 
 __all__ = [
     "ExampleConfig",
     "ExampleOutputs",
     "ExampleResource",
+    "{{ name | replace('-', '_') }}",
 ]

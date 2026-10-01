@@ -9,11 +9,6 @@ __pycache__/
 dist/
 build/
 
-# Testing
-.coverage
-.pytest_cache/
-htmlcov/
-
 # IDE
 .idea/
 .vscode/
