@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from google.api_core.exceptions import AlreadyExists, NotFound
-from google.cloud.secretmanager_v1 import SecretManagerServiceAsyncClient
+from google.cloud.secretmanager_v1 import SecretManagerServiceAsyncClient, SecretVersion
 from google.oauth2 import service_account
 from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
 
@@ -34,13 +34,13 @@ class SecretOutputs(Outputs):
 
     Attributes:
         resource_name: Full GCP resource name (projects/{project}/secrets/{id}).
-        version_name: Full version resource name including version number.
-        version_id: The version number as a string.
+        version_name: Full resource name of the latest enabled version, if any.
+        version_id: The latest enabled version number as a string, if any.
     """
 
     resource_name: str
-    version_name: str
-    version_id: str
+    version_name: str | None
+    version_id: str | None
 
 
 class Secret(Resource[SecretConfig, SecretOutputs]):
@@ -53,8 +53,9 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
     Lifecycle:
         - on_create: Creates the secret and an initial version. Idempotent --
           if the secret already exists, adds a new version instead.
-        - on_update: Adds a new secret version when ``data`` changes.
-          Previous versions are retained. No-ops if data is unchanged.
+        - on_observe: Reads the secret and its latest enabled version.
+        - on_update: Adds a new secret version when ``data`` differs from the
+          latest enabled version. Previous versions are retained.
         - on_delete: Deletes the secret and all its versions. Idempotent --
           succeeds silently if the secret does not exist.
 
@@ -105,6 +106,83 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         """
         return f"projects/{self.config.project_id}/secrets/{self.config.secret_id}"
 
+    def encode_payload(self) -> bytes:
+        """Encode ``data`` as the payload bytes Secret Manager stores.
+
+        Returns:
+            The UTF-8 encoding of ``data``.
+        """
+        return cast(str, self.config.data).encode("utf-8")
+
+    async def add_version(self, client: SecretManagerServiceAsyncClient, secret_name: str) -> SecretVersion:
+        """Add a version holding ``data`` to the secret.
+
+        Args:
+            client: Secret Manager client.
+            secret_name: Full resource name of the secret receiving the version.
+
+        Returns:
+            The new secret version.
+        """
+        return await client.add_secret_version(
+            request={
+                "parent": secret_name,
+                "payload": {"data": self.encode_payload()},
+            }
+        )
+
+    async def fetch_latest_enabled_version(self, client: SecretManagerServiceAsyncClient) -> SecretVersion | None:
+        """Fetch the newest enabled version of the secret.
+
+        Args:
+            client: Secret Manager client.
+
+        Returns:
+            The newest enabled version, or None if the secret has none.
+        """
+        versions = await client.list_secret_versions(
+            request={"parent": self._secret_path(), "filter": "state:ENABLED", "page_size": 1}
+        )
+
+        async for version in versions:
+            return version
+
+        return None
+
+    @staticmethod
+    async def fetch_payload(client: SecretManagerServiceAsyncClient, version: SecretVersion) -> bytes:
+        """Fetch the payload a secret version holds.
+
+        Args:
+            client: Secret Manager client.
+            version: Version to read.
+
+        Returns:
+            The version's payload bytes.
+        """
+        response = await client.access_secret_version(name=version.name)
+        return response.payload.data
+
+    @staticmethod
+    def build_outputs(secret_name: str, version: SecretVersion | None) -> SecretOutputs:
+        """Build outputs from the secret name and its current version.
+
+        Args:
+            secret_name: Full resource name of the secret.
+            version: Latest enabled version of the secret, or None if it has none.
+
+        Returns:
+            SecretOutputs with resource name and version info.
+        """
+        if version is None:
+            return SecretOutputs(resource_name=secret_name, version_name=None, version_id=None)
+
+        return SecretOutputs(
+            resource_name=secret_name,
+            version_name=version.name,
+            version_id=version.name.split("/")[-1],
+        )
+
     async def on_create(self) -> SecretOutputs:
         """Create GCP secret with initial version.
 
@@ -127,44 +205,44 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         except AlreadyExists:
             secret = await client.get_secret(name=self._secret_path())
 
-        version = await client.add_secret_version(
-            request={
-                "parent": secret.name,
-                "payload": {"data": self.config.data.encode("utf-8")},
-            }
-        )
+        version = await self.add_version(client, secret.name)
 
-        return SecretOutputs(
-            resource_name=secret.name,
-            version_name=version.name,
-            version_id=version.name.split("/")[-1],
-        )
+        return self.build_outputs(secret.name, version)
 
-    async def on_update(self, previous_config: SecretConfig) -> SecretOutputs:
-        """Update secret by creating new version if data changed.
-
-        Args:
-            previous_config: The previous configuration before update.
+    async def on_observe(self) -> SecretOutputs | None:
+        """Read the secret and its latest enabled version.
 
         Returns:
-            SecretOutputs with updated version info.
+            SecretOutputs for the secret, or None if it does not exist.
         """
-        if previous_config.data == self.config.data and self.outputs is not None:
-            return self.outputs
-
         client = self._get_client()
-        version = await client.add_secret_version(
-            request={
-                "parent": self._secret_path(),
-                "payload": {"data": self.config.data.encode("utf-8")},
-            }
-        )
 
-        return SecretOutputs(
-            resource_name=self._secret_path(),
-            version_name=version.name,
-            version_id=version.name.split("/")[-1],
-        )
+        try:
+            secret = await client.get_secret(name=self._secret_path())
+        except NotFound:
+            return None
+
+        version = await self.fetch_latest_enabled_version(client)
+
+        return self.build_outputs(secret.name, version)
+
+    async def on_update(self, previous_config: SecretConfig | None) -> SecretOutputs:
+        """Add a secret version when the latest enabled payload differs from ``data``.
+
+        Args:
+            previous_config: The previous configuration, if any.
+
+        Returns:
+            SecretOutputs with the current version info.
+        """
+        client = self._get_client()
+        secret = await client.get_secret(name=self._secret_path())
+        version = await self.fetch_latest_enabled_version(client)
+
+        if version is None or await self.fetch_payload(client, version) != self.encode_payload():
+            version = await self.add_version(client, secret.name)
+
+        return self.build_outputs(secret.name, version)
 
     async def on_delete(self) -> None:
         """Delete secret and all versions.
@@ -177,11 +255,3 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             await client.delete_secret(name=self._secret_path())
         except NotFound:
             pass
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs

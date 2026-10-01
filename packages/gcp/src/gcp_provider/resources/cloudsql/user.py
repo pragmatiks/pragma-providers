@@ -4,10 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from pragma_sdk import Config, Dependency, Field, ImmutableField, Outputs, Resource
+from pragma_sdk import Config, Field, ImmutableDependency, ImmutableField, Outputs, Resource
 
-from gcp_provider.resources.cloudsql.database_instance import DatabaseInstance
-from gcp_provider.resources.cloudsql.helpers import execute, get_credentials, get_sqladmin_service
+from gcp_provider.resources.cloudsql.database_instance import (
+    DatabaseInstance,
+    DatabaseInstanceConfig,
+    resolve_instance_config,
+)
+from gcp_provider.resources.cloudsql.helpers import (
+    execute,
+    get_credentials,
+    get_sqladmin_service,
+    run_instance_operation,
+)
+from gcp_provider.resources.polling import compute_operation_deadline
 
 
 class UserConfig(Config):
@@ -19,7 +29,7 @@ class UserConfig(Config):
         password: Password for the database user. Use Field[str] for secret injection.
     """
 
-    instance: Dependency[DatabaseInstance]
+    instance: ImmutableDependency[DatabaseInstance]
     username: ImmutableField[str]
     password: Field[str]
 
@@ -48,9 +58,8 @@ class User(Resource[UserConfig, UserOutputs]):
     Lifecycle:
         - on_create: Creates the user in the target instance. Idempotent --
           succeeds if the user already exists.
-        - on_update: Password changes are applied in-place. If the instance
-          dependency changes, deletes from the old instance and creates in
-          the new one.
+        - on_observe: Reads the user by ``username``.
+        - on_update: Applies the password in place; ``instance`` and ``username`` are immutable.
         - on_delete: Drops the user from the instance. Idempotent --
           succeeds silently if the user does not exist.
 
@@ -74,121 +83,184 @@ class User(Resource[UserConfig, UserOutputs]):
     """
 
     async def on_create(self) -> UserOutputs:
-        """Create user in the Cloud SQL instance.
+        """Create the user in the Cloud SQL instance and wait until it exists.
 
-        Idempotent: If user already exists, returns its current state.
+        Idempotent: If the user already exists, returns its current state.
 
         Returns:
             UserOutputs with user details.
+
+        Raises:
+            RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
+                or the operation finished with errors.
+            TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.
         """
-        instance_resource = await self.config.instance.resolve()
-        inst = instance_resource.config
-        service = get_sqladmin_service(get_credentials(inst.credentials))
+        instance_config = await resolve_instance_config(self.config.instance)
+        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
 
-        await execute(
-            service.users().insert(
-                project=inst.project_id,
-                instance=inst.instance_name,
-                body={
-                    "name": self.config.username,
-                    "password": self.config.password,
-                    "project": inst.project_id,
-                    "instance": inst.instance_name,
-                },
+        await run_instance_operation(
+            service,
+            instance_config,
+            self.name,
+            lambda: execute(
+                service.users().insert(
+                    project=instance_config.project_id,
+                    instance=instance_config.instance_name,
+                    body={
+                        "name": self.config.username,
+                        "password": self.config.password,
+                        "project": instance_config.project_id,
+                        "instance": instance_config.instance_name,
+                    },
+                ),
+                ignore_exists=True,
             ),
-            ignore_exists=True,
+            compute_operation_deadline(),
         )
 
-        user = await self._find_user(inst, service)
+        return await self.fetch_outputs(instance_config, service)
 
-        return UserOutputs(
-            username=user.get("name", self.config.username) if user else self.config.username,
-            instance_name=inst.instance_name,
-            host=user.get("host", "%") if user else "%",
-        )
+    async def on_observe(self) -> UserOutputs | None:
+        """Read the user named ``username`` in the resolved instance.
 
-    async def on_update(self, previous_config: UserConfig) -> UserOutputs:
-        """Handle user updates.
+        Returns:
+            UserOutputs for the user, or None if it does not exist.
+        """
+        instance_config = await resolve_instance_config(self.config.instance)
+        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
 
-        If instance changed, delete from old instance and create in new one.
-        Password changes are applied in place.
+        user = await self.find_user(instance_config, service)
+
+        if user is None:
+            return None
+
+        return self.build_outputs(instance_config, user)
+
+    async def on_update(self, previous_config: UserConfig | None) -> UserOutputs:
+        """Apply the configured password when it changed or the previous configuration is unknown.
+
+        Args:
+            previous_config: The previous configuration, if any.
 
         Returns:
             UserOutputs with updated user details.
 
         Raises:
-            RuntimeError: If user not found after update.
+            RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
+                or the operation finished with errors.
+            TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.
         """
-        if previous_config.instance != self.config.instance:
-            await self._delete(previous_config)
-            return await self.on_create()
+        instance_config = await resolve_instance_config(self.config.instance)
+        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
 
-        instance_resource = await self.config.instance.resolve()
-        inst = instance_resource.config
-        service = get_sqladmin_service(get_credentials(inst.credentials))
-
-        if previous_config.password != self.config.password:
-            await execute(
-                service.users().update(
-                    project=inst.project_id,
-                    instance=inst.instance_name,
-                    name=self.config.username,
-                    body={
-                        "name": self.config.username,
-                        "password": self.config.password,
-                    },
-                )
+        if previous_config is None or previous_config.password != self.config.password:
+            await run_instance_operation(
+                service,
+                instance_config,
+                self.name,
+                lambda: execute(
+                    service.users().update(
+                        project=instance_config.project_id,
+                        instance=instance_config.instance_name,
+                        name=self.config.username,
+                        body={
+                            "name": self.config.username,
+                            "password": self.config.password,
+                        },
+                    )
+                ),
+                compute_operation_deadline(),
             )
 
-        user = await self._find_user(inst, service)
+        return await self.fetch_outputs(instance_config, service)
+
+    async def on_delete(self) -> None:
+        """Drop the user from the host it lives on and wait until it is gone.
+
+        Idempotent: Succeeds if the user does not exist.
+
+        Raises:
+            RuntimeError: If users on several hosts share the username, Cloud SQL refuses the write because
+                another operation runs on the instance, or the operation finished with errors.
+            TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.
+        """
+        instance_config = await resolve_instance_config(self.config.instance)
+        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+        user = await self.find_user(instance_config, service)
+
+        if user is None:
+            return
+
+        await run_instance_operation(
+            service,
+            instance_config,
+            self.name,
+            lambda: execute(
+                service.users().delete(
+                    project=instance_config.project_id,
+                    instance=instance_config.instance_name,
+                    name=self.config.username,
+                    host=user.get("host"),
+                ),
+                ignore_404=True,
+            ),
+            compute_operation_deadline(),
+        )
+
+    async def fetch_outputs(self, instance_config: DatabaseInstanceConfig, service: Any) -> UserOutputs:
+        """Read the user and build its outputs.
+
+        Args:
+            instance_config: Configuration of the hosting Cloud SQL instance.
+            service: Cloud SQL Admin API service.
+
+        Returns:
+            UserOutputs with user details.
+
+        Raises:
+            RuntimeError: If the user does not exist.
+        """
+        user = await self.find_user(instance_config, service)
 
         if user is None:
             msg = f"User '{self.config.username}' not found"
             raise RuntimeError(msg)
 
+        return self.build_outputs(instance_config, user)
+
+    def build_outputs(self, instance_config: DatabaseInstanceConfig, user: dict) -> UserOutputs:
+        """Build outputs from a user dict.
+
+        Args:
+            instance_config: Configuration of the hosting Cloud SQL instance.
+            user: User as the Cloud SQL Admin API returns it.
+
+        Returns:
+            UserOutputs with user details.
+        """
         return UserOutputs(
-            username=user.get("name", self.config.username),
-            instance_name=inst.instance_name,
+            username=user["name"],
+            instance_name=instance_config.instance_name,
             host=user.get("host", "%"),
         )
 
-    async def on_delete(self) -> None:
-        """Delete user. Idempotent: succeeds if user doesn't exist."""
-        await self._delete(self.config)
+    async def find_user(self, instance_config: DatabaseInstanceConfig, service: Any) -> dict | None:
+        """Find the user in the instance by username.
 
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    async def _delete(self, config: UserConfig) -> None:
-        """Delete user from instance. Idempotent: succeeds if not found."""
-        instance_resource = await config.instance.resolve()
-        inst = instance_resource.config
-        service = get_sqladmin_service(get_credentials(inst.credentials))
-
-        await execute(
-            service.users().delete(
-                project=inst.project_id,
-                instance=inst.instance_name,
-                name=config.username,
-            ),
-            ignore_404=True,
-        )
-
-    async def _find_user(self, inst: Any, service: Any) -> dict | None:
-        """Find user in instance by username.
+        Args:
+            instance_config: Configuration of the hosting Cloud SQL instance.
+            service: Cloud SQL Admin API service.
 
         Returns:
             User dict if found, None otherwise.
+
+        Raises:
+            RuntimeError: If users on several hosts share the username.
         """
         result = await execute(
             service.users().list(
-                project=inst.project_id,
-                instance=inst.instance_name,
+                project=instance_config.project_id,
+                instance=instance_config.instance_name,
             ),
             ignore_404=True,
         )
@@ -196,8 +268,13 @@ class User(Resource[UserConfig, UserOutputs]):
         if result is None:
             return None
 
-        for user in result.get("items", []):
-            if user.get("name") == self.config.username:
-                return user
+        matches = [user for user in result.get("items", []) if user.get("name") == self.config.username]
 
-        return None
+        if len(matches) > 1:
+            msg = (
+                f"{len(matches)} users named '{self.config.username}' exist on different hosts; "
+                "delete all but one of them in the Cloud SQL console"
+            )
+            raise RuntimeError(msg)
+
+        return matches[0] if matches else None

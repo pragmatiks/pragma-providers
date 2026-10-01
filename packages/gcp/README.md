@@ -47,7 +47,7 @@ Manages secrets in GCP Secret Manager. Creates versioned secrets with automatic 
 | `data` | string | yes | yes | Secret payload to store |
 | `credentials` | object/string | yes | yes | GCP service account credentials JSON |
 
-**Outputs:** `resource_name`, `version_name`, `version_id`
+**Outputs:** `resource_name`, `version_name`, `version_id` (`version_name` and `version_id` are null when the secret has no enabled version)
 
 **Example:**
 
@@ -66,7 +66,8 @@ resources:
 
 **Behavior:**
 - Create: Creates the secret and an initial version. Idempotent -- if the secret already exists, adds a new version.
-- Update: Adds a new secret version when `data` changes. Previous versions are retained.
+- Observe: Reads the secret and its latest enabled version.
+- Update: Adds a new secret version when `data` differs from the latest enabled version. Previous versions are retained.
 - Delete: Deletes the secret and all its versions.
 
 ---
@@ -85,13 +86,13 @@ Manages GKE clusters in either Autopilot (default) or Standard mode. Includes he
 | `name` | string | yes | no | -- | Cluster name (lowercase, 1-40 chars) |
 | `autopilot` | bool | no | no | `true` | Use Autopilot mode |
 | `network` | string | no | no | `"default"` | VPC network name |
-| `subnetwork` | string | no | yes | -- | VPC subnetwork name |
+| `subnetwork` | string | no | no | -- | VPC subnetwork name |
 | `release_channel` | string | no | yes | `"REGULAR"` | Release channel: `RAPID`, `REGULAR`, `STABLE` |
-| `initial_node_count` | int | no | yes | `1` | Nodes in default pool (Standard only) |
-| `machine_type` | string | no | yes | `"e2-medium"` | Node machine type (Standard only) |
-| `disk_size_gb` | int | no | yes | `100` | Boot disk size in GB (Standard only) |
+| `initial_node_count` | int | no | no | `1` | Nodes in default pool (Standard only) |
+| `machine_type` | string | no | no | `"e2-medium"` | Node machine type (Standard only) |
+| `disk_size_gb` | int | no | no | `100` | Boot disk size in GB (Standard only) |
 
-**Outputs:** `name`, `endpoint`, `cluster_ca_certificate`, `location`, `status`, `console_url`, `logs_url`
+**Outputs:** `name`, `endpoint`, `cluster_ca_certificate`, `location`, `console_url`, `logs_url`
 
 **Example (Autopilot):**
 
@@ -130,10 +131,11 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the cluster and polls until it reaches RUNNING state (up to 20 minutes). Idempotent -- if the cluster already exists, waits for RUNNING.
-- Update: Returns current cluster state. Immutable fields (name, location, autopilot, network) require delete and recreate.
+- Create: Creates the cluster and polls until it serves, in RUNNING or DEGRADED state (up to 19 minutes). Idempotent -- if the cluster already exists, waits for it to serve.
+- Observe: Reads the cluster by project, location and name.
+- Update: Waits for the cluster's pending operations; when the live channel differs, moves the cluster to the configured `release_channel` and waits for the update. Either way, waits for the cluster to serve, in RUNNING or DEGRADED state. `credentials` is mutable too; every other field is immutable and requires delete and recreate.
 - Delete: Deletes the cluster and polls until fully removed.
-- Health: Reports `healthy` (RUNNING), `degraded` (PROVISIONING/RECONCILING), or `unhealthy` (ERROR/not found).
+- Health: Reports `healthy` (RUNNING), `degraded` (DEGRADED/PROVISIONING/RECONCILING), or `unhealthy` (ERROR/not found).
 - Logs: Streams cluster logs from Cloud Logging.
 
 ---
@@ -158,7 +160,7 @@ Manages Cloud SQL instances for PostgreSQL, MySQL, and SQL Server. Supports conf
 | `authorized_networks` | list[string] | no | yes | `[]` | CIDR ranges allowed to connect |
 | `enable_public_ip` | bool | no | yes | `true` | Assign a public IP address |
 
-**Outputs:** `connection_name`, `public_ip`, `private_ip`, `ready`, `console_url`, `logs_url`
+**Outputs:** `connection_name`, `public_ip`, `private_ip`, `console_url`, `logs_url`
 
 **Example:**
 
@@ -183,8 +185,9 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the instance and polls until RUNNABLE (up to 15 minutes). Generates a random root password. Idempotent.
-- Update: Patches mutable settings (tier, availability, backups, network config) and waits for RUNNABLE.
+- Create: Creates the instance and polls until RUNNABLE (up to 19 minutes). Generates a random root password. Idempotent.
+- Observe: Reads the instance by project and instance name.
+- Update: Patches mutable settings (tier, availability, backups, network config), waits for the patch operation, then for RUNNABLE.
 - Delete: Deletes the instance. Respects `deletion_protection` -- disable it first to allow deletion.
 - Health: Reports `healthy` (RUNNABLE), `degraded` (PENDING_CREATE/MAINTENANCE), or `unhealthy`.
 - Logs: Streams instance logs from Cloud Logging.
@@ -199,7 +202,7 @@ Creates a database within a Cloud SQL instance. Requires a dependency on a `gcp/
 
 | Field | Type | Required | Mutable | Description |
 |-------|------|----------|---------|-------------|
-| `instance` | Dependency | yes | yes | Reference to a `cloudsql/database_instance` resource |
+| `instance` | Dependency | yes | no | Reference to a `cloudsql/database_instance` resource |
 | `database_name` | string | yes | no | Name of the database to create |
 
 **Outputs:** `database_name`, `instance_name`, `host`, `port`, `url`
@@ -228,9 +231,10 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the database in the target instance. Idempotent.
-- Update: If the instance dependency changes, deletes from the old instance and creates in the new one.
-- Delete: Drops the database from the instance.
+- Create: Creates the database in the target instance and waits for the operation. Idempotent.
+- Observe: Reads the database by `database_name`.
+- Update: Returns current database state. Every field is immutable.
+- Delete: Drops the database from the instance and waits for the operation.
 - Outputs include a connection URL in the format `postgresql://host:port/database_name`.
 
 ---
@@ -243,7 +247,7 @@ Creates a database user within a Cloud SQL instance. Requires a dependency on a 
 
 | Field | Type | Required | Mutable | Description |
 |-------|------|----------|---------|-------------|
-| `instance` | Dependency | yes | yes | Reference to a `cloudsql/database_instance` resource |
+| `instance` | Dependency | yes | no | Reference to a `cloudsql/database_instance` resource |
 | `username` | string | yes | no | Database username |
 | `password` | string | yes | yes | Database password |
 
@@ -275,9 +279,10 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the user in the target instance. Idempotent.
-- Update: Password changes are applied in-place. If the instance dependency changes, deletes from the old instance and creates in the new one.
-- Delete: Drops the user from the instance.
+- Create: Creates the user in the target instance and waits for the operation. Idempotent.
+- Observe: Reads the user by `username`.
+- Update: Password changes are applied in place and waited on.
+- Delete: Drops the user from the instance and waits for the operation.
 
 ---
 
@@ -338,9 +343,6 @@ The provider uses explicit credentials (not Application Default Credentials) to 
 ## Development
 
 ```bash
-# Run tests
-task gcp:test
-
 # Lint and type check
 task gcp:check
 
