@@ -1,3 +1,9 @@
+## agno-v2.0.1 (2026-10-01)
+
+### Fix
+
+- **qdrant,agno**: require kubernetes-provider 2.0.1 and gcp-provider 7 for observe-then-act
+
 ## agno-v2.0.0 (2026-10-01)
 
 ### BREAKING CHANGE
