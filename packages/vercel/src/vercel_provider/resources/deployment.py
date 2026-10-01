@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 import httpx
@@ -22,7 +23,7 @@ class DeploymentConfig(Config):
         git_ref: Git reference (branch, tag, or SHA) to deploy.
             When None, deploys the default branch.
         target: Deployment target environment (``production`` or ``preview``).
-        team_id: Vercel team ID. Required for team-owned projects.
+        team_id: Vercel team ID. Required for team-owned projects. Immutable.
     """
 
     access_token: SensitiveField[str]
@@ -30,7 +31,7 @@ class DeploymentConfig(Config):
     project_name: ImmutableField[str]
     git_ref: Field[str] | None = None
     target: Field[str] = "production"
-    team_id: Field[str] | None = None
+    team_id: ImmutableField[str] | None = None
 
 
 class DeploymentOutputs(Outputs):
@@ -51,25 +52,27 @@ class DeploymentOutputs(Outputs):
     project_id: str
 
 
-_POLL_INTERVAL_SECONDS = 10
-_MAX_POLL_ATTEMPTS = 60  # 60 * 10s = 10 minutes max wait
+POLL_INTERVAL_SECONDS = 10
+READY_TIMEOUT_SECONDS = 900
+RESOURCE_ID_META_KEY = "pragma_resource"
+GIT_REF_META_KEY = "pragma_git_ref"
+TARGET_META_KEY = "pragma_target"
+IN_FLIGHT_STATES = frozenset({"QUEUED", "INITIALIZING", "BUILDING"})
+TERMINAL_STATES = frozenset({"READY", "ERROR", "CANCELED"})
+CURRENT_STATES = frozenset({"READY", *IN_FLIGHT_STATES})
 
 
 class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
     """Vercel deployment resource.
 
-    Triggers and manages deployments for a Vercel project via the REST API.
-    Deployments are triggered by creating a new deployment with a Git reference
-    or by redeploying the latest deployment.
+    Triggers and manages one deployment for a Vercel project via the REST API.
+    The deployment is located by its ``meta.pragma_resource`` stamp, set to the resource ID.
 
     Lifecycle:
-        - on_create: Triggers a new deployment and polls until it reaches a
-          terminal state (READY or ERROR). Not idempotent -- duplicate calls
-          create duplicate deployments.
-        - on_update: Triggers a new deployment with the updated configuration.
-          Vercel deployments are immutable; updates create new deployments.
-        - on_delete: Deletes the deployment. Idempotent -- succeeds if the
-          deployment does not exist.
+        - on_create: Triggers a new deployment and polls until it is READY.
+        - on_observe: Finds this resource's deployment.
+        - on_update: Keeps the deployment if it is current, otherwise replaces it.
+        - on_delete: Deletes the deployment. Succeeds if there is none.
 
     Example::
 
@@ -121,32 +124,45 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
         Raises:
             RuntimeError: If the deployment reaches a non-READY terminal state
-                (ERROR or CANCELED).
-            TimeoutError: If the deployment does not reach a terminal state in time.
+                (ERROR or CANCELED); the message carries Vercel's error code and message.
+            TimeoutError: If the deployment is not in a terminal state within ``READY_TIMEOUT_SECONDS``; the
+                message carries the last ready state and the last HTTP status.
+            httpx.HTTPStatusError: If Vercel answers 401, 403 or 404.
         """
-        terminal_states = {"READY", "ERROR", "CANCELED"}
+        last_http_status: int | None = None
+        last_ready_state: str | None = None
+        deadline = time.monotonic() + READY_TIMEOUT_SECONDS
 
-        for _ in range(_MAX_POLL_ATTEMPTS):
+        while True:
             response = await client.get(f"/v13/deployments/{deployment_id}", params=self._query_params())
 
             if response.status_code in {401, 403, 404}:
                 await raise_for_status(response)
 
+            last_http_status = response.status_code
+
             if response.is_success:
                 data = response.json()
-                ready_state = data.get("readyState", "")
+                last_ready_state = data.get("readyState")
 
-                if ready_state in terminal_states:
-                    if ready_state != "READY":
-                        msg = f"Deployment {deployment_id} reached terminal state {ready_state}"
-                        raise RuntimeError(msg)
-
+                if last_ready_state == "READY":
                     return data
 
-            await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+                if last_ready_state in TERMINAL_STATES:
+                    msg = (
+                        f"Deployment {deployment_id} reached terminal state {last_ready_state} "
+                        f"(errorCode={data.get('errorCode')} errorMessage={data.get('errorMessage')})"
+                    )
+                    raise RuntimeError(msg)
+
+            if time.monotonic() >= deadline:
+                break
+
+            await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
         msg = (
-            f"Deployment {deployment_id} did not complete within {_MAX_POLL_ATTEMPTS * _POLL_INTERVAL_SECONDS} seconds"
+            f"Deployment {deployment_id} did not complete within {READY_TIMEOUT_SECONDS} seconds "
+            f"(last_ready_state={last_ready_state} last_http_status={last_http_status})"
         )
         raise TimeoutError(msg)
 
@@ -167,37 +183,145 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             project_id=data.get("projectId", self.config.project_id),
         )
 
-    async def _trigger_deployment(self) -> DeploymentOutputs:
+    async def _trigger_deployment(self, client: httpx.AsyncClient) -> DeploymentOutputs:
         """Trigger a new deployment and wait for completion.
+
+        Args:
+            client: Authenticated Vercel API client.
 
         Returns:
             DeploymentOutputs with deployment details.
         """
-        client = create_vercel_client(self.config.access_token)
+        body: dict[str, Any] = {
+            "name": self.config.project_name,
+            "project": self.config.project_id,
+            "target": self.config.target,
+            "meta": {
+                RESOURCE_ID_META_KEY: self.id,
+                GIT_REF_META_KEY: self.config.git_ref or "",
+                TARGET_META_KEY: self.config.target,
+            },
+        }
 
-        try:
-            body: dict[str, Any] = {
-                "name": self.config.project_name,
-                "project": self.config.project_id,
-                "target": self.config.target,
+        if self.config.git_ref is not None:
+            body["gitSource"] = {
+                "ref": self.config.git_ref,
+                "type": "github",
             }
 
-            if self.config.git_ref is not None:
-                body["gitSource"] = {
-                    "ref": self.config.git_ref,
-                    "type": "github",
-                }
+        response = await client.post("/v13/deployments", params=self._query_params(), json=body)
+        await raise_for_status(response)
+        deployment_data = response.json()
+        deployment_id = deployment_data["id"]
 
-            response = await client.post("/v13/deployments", params=self._query_params(), json=body)
+        deployment_data = await self._wait_for_ready(client, deployment_id)
+
+        return self._build_outputs(deployment_data)
+
+    def is_live_stamped_deployment(self, deployment: dict[str, Any]) -> bool:
+        """Tell whether a listed deployment carries this resource's ID and is not deleted.
+
+        Args:
+            deployment: Deployment entry from the Vercel deployments list.
+
+        Returns:
+            ``True`` when it carries this resource's ID and is not deleted.
+        """
+        meta = deployment.get("meta", {})
+
+        return meta.get(RESOURCE_ID_META_KEY) == self.id and deployment.get("readyState") != "DELETED"
+
+    def is_current(self, deployment: dict[str, Any]) -> bool:
+        """Tell whether a deployment is READY or in flight, built from the current configuration.
+
+        Args:
+            deployment: Deployment data from the Vercel API.
+
+        Returns:
+            ``True`` when READY, queued or building, and built from the configured ``git_ref`` and ``target``.
+        """
+        meta = deployment.get("meta", {})
+
+        return (
+            deployment.get("readyState") in CURRENT_STATES
+            and meta.get(GIT_REF_META_KEY) == (self.config.git_ref or "")
+            and meta.get(TARGET_META_KEY) == self.config.target
+        )
+
+    async def find_deployment_id(self, client: httpx.AsyncClient) -> str | None:
+        """Find the ID of the deployment stamped with this resource's ID.
+
+        Args:
+            client: Authenticated Vercel API client.
+
+        Returns:
+            The deployment ID, or ``None`` when the project has no such deployment.
+
+        Raises:
+            RuntimeError: If more than one deployment carries this resource's ID.
+        """
+        params = {
+            **self._query_params(),
+            "projectId": self.config.project_id,
+            f"meta-{RESOURCE_ID_META_KEY}": self.id,
+            "limit": "100",
+        }
+        stamped: list[str] = []
+
+        while True:
+            response = await client.get("/v7/deployments", params=params)
             await raise_for_status(response)
-            deployment_data = response.json()
-            deployment_id = deployment_data["id"]
+            page = response.json()
 
-            deployment_data = await self._wait_for_ready(client, deployment_id)
+            stamped.extend(
+                deployment["uid"] for deployment in page["deployments"] if self.is_live_stamped_deployment(deployment)
+            )
 
-            return self._build_outputs(deployment_data)
-        finally:
-            await client.aclose()
+            next_page = page["pagination"]["next"]
+
+            if next_page is None:
+                break
+
+            params["until"] = str(next_page)
+
+        if len(stamped) > 1:
+            msg = f"Found {len(stamped)} Vercel deployments for {self.id}: {', '.join(stamped)}; expected at most one"
+            raise RuntimeError(msg)
+
+        return stamped[0] if stamped else None
+
+    async def fetch_deployment(self, client: httpx.AsyncClient) -> dict[str, Any] | None:
+        """Fetch the deployment stamped with this resource's ID.
+
+        Args:
+            client: Authenticated Vercel API client.
+
+        Returns:
+            Deployment data from the Vercel API, or ``None`` when there is none.
+        """
+        deployment_id = await self.find_deployment_id(client)
+
+        if deployment_id is None:
+            return None
+
+        response = await client.get(f"/v13/deployments/{deployment_id}", params=self._query_params())
+        await raise_for_status(response)
+
+        return response.json()
+
+    async def delete_deployment(self, client: httpx.AsyncClient, deployment_id: str) -> None:
+        """Delete a deployment; succeeds if Vercel no longer has it.
+
+        Args:
+            client: Authenticated Vercel API client.
+            deployment_id: ID of the deployment to delete.
+        """
+        response = await client.delete(f"/v13/deployments/{deployment_id}", params=self._query_params())
+
+        if response.status_code == 404:
+            return
+
+        await raise_for_status(response)
 
     async def on_create(self) -> DeploymentOutputs:
         """Trigger a new deployment and wait until complete.
@@ -205,49 +329,57 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         Returns:
             DeploymentOutputs with deployment details.
         """
-        return await self._trigger_deployment()
+        async with create_vercel_client(self.config.access_token) as client:
+            return await self._trigger_deployment(client)
 
-    async def on_update(self, previous_config: DeploymentConfig) -> DeploymentOutputs:
-        """Trigger a new deployment with updated configuration.
-
-        Vercel deployments are immutable, so updates always create a new
-        deployment.
-
-        Args:
-            previous_config: The previous configuration before update.
+    async def on_observe(self) -> DeploymentOutputs | None:
+        """Read the deployment stamped with this resource's ID.
 
         Returns:
-            DeploymentOutputs with new deployment details.
+            DeploymentOutputs of that deployment, or ``None`` when there is none.
         """
-        return await self._trigger_deployment()
+        async with create_vercel_client(self.config.access_token) as client:
+            deployment = await self.fetch_deployment(client)
+
+        if deployment is None:
+            return None
+
+        return self._build_outputs(deployment)
+
+    async def on_update(self, previous_config: DeploymentConfig | None) -> DeploymentOutputs:
+        """Keep the current deployment if it is up to date, otherwise replace it.
+
+        A current deployment still in flight is awaited until READY rather than replaced.
+        Replacement deletes the old deployment first, so nothing is served until the new one is READY.
+
+        Args:
+            previous_config: The previous configuration, if any.
+
+        Returns:
+            DeploymentOutputs of the kept or new deployment.
+        """
+        async with create_vercel_client(self.config.access_token) as client:
+            deployment = await self.fetch_deployment(client)
+
+            if deployment is None:
+                return await self._trigger_deployment(client)
+
+            if not self.is_current(deployment):
+                await self.delete_deployment(client, deployment["id"])
+
+                return await self._trigger_deployment(client)
+
+            if deployment.get("readyState") in IN_FLIGHT_STATES:
+                deployment = await self._wait_for_ready(client, deployment["id"])
+
+            return self._build_outputs(deployment)
 
     async def on_delete(self) -> None:
-        """Delete the Vercel deployment.
+        """Delete this resource's deployment; succeeds if there is none."""
+        async with create_vercel_client(self.config.access_token) as client:
+            deployment_id = await self.find_deployment_id(client)
 
-        Idempotent: Succeeds if the deployment does not exist.
-        """
-        if self.outputs is None:
-            return
-
-        client = create_vercel_client(self.config.access_token)
-
-        try:
-            response = await client.delete(
-                f"/v13/deployments/{self.outputs.deployment_id}",
-                params=self._query_params(),
-            )
-
-            if response.status_code == 404:
+            if deployment_id is None:
                 return
 
-            await raise_for_status(response)
-        finally:
-            await client.aclose()
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+            await self.delete_deployment(client, deployment_id)

@@ -61,3 +61,27 @@ async def raise_for_status(response: httpx.Response) -> None:
         request=response.request,
         response=response,
     )
+
+
+async def fetch_optional_json(client: httpx.AsyncClient, path: str, params: dict[str, str]) -> dict[str, Any] | None:
+    """Fetch the JSON object at ``path``, or ``None`` when Vercel reports it does not exist.
+
+    Args:
+        client: Authenticated Vercel API client.
+        path: REST path of the object to read.
+        params: Query parameters, such as the team ID.
+
+    Returns:
+        The response body, or ``None`` when Vercel answers 404.
+
+    Raises:
+        httpx.HTTPStatusError: If Vercel answers with any other error status.
+    """
+    response = await client.get(path, params=params)
+
+    if response.status_code == 404:
+        return None
+
+    await raise_for_status(response)
+
+    return response.json()
