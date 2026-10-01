@@ -45,6 +45,8 @@ class ConfigResource(Resource[ConfigResourceConfig, ConfigResourceOutputs]):
         GCP resources reference: pragma/config/gcp#outputs.project_id
     """
 
+    computed = True
+
     async def on_create(self) -> ConfigResourceOutputs:
         """Store configuration data.
 
@@ -61,11 +63,11 @@ class ConfigResource(Resource[ConfigResourceConfig, ConfigResourceOutputs]):
 
         return ConfigResourceOutputs(**data)
 
-    async def on_update(self, previous_config: ConfigResourceConfig) -> ConfigResourceOutputs:
+    async def on_update(self, previous_config: ConfigResourceConfig | None) -> ConfigResourceOutputs:
         """Update configuration data.
 
         Args:
-            previous_config: Previous configuration.
+            previous_config: Previous configuration, if any.
 
         Returns:
             Outputs containing the updated configuration key-value pairs.

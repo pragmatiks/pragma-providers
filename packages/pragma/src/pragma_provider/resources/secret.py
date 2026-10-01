@@ -32,6 +32,8 @@ class SecretOutputs(Outputs):
 class Secret(Resource[SecretConfig, SecretOutputs]):
     """Platform-managed secret for storing sensitive key-value data."""
 
+    computed = True
+
     async def on_create(self) -> SecretOutputs:
         """Store secret data.
 
@@ -48,11 +50,11 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
         return SecretOutputs(**data)
 
-    async def on_update(self, previous_config: SecretConfig) -> SecretOutputs:
+    async def on_update(self, previous_config: SecretConfig | None) -> SecretOutputs:
         """Update secret data.
 
         Args:
-            previous_config: Previous secret configuration.
+            previous_config: Previous secret configuration, if any.
 
         Returns:
             Outputs containing the updated secret key-value pairs.
