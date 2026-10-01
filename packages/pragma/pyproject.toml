@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-pragma-provider"
-version = "5.1.7"
+version = "5.1.8"
 description = "Built-in platform provider for Pragmatiks"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -29,7 +29,7 @@ tags = ["platform", "secrets", "configuration", "files"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "5.1.7"
+version = "5.1.8"
 version_files = ["pyproject.toml:^version"]
 tag_format = "pragma-v$version"
 update_changelog_on_bump = true
