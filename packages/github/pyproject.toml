@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-github-provider"
-version = "5.0.9"
+version = "5.0.10"
 description = "GitHub provider for Pragmatiks"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -31,7 +31,7 @@ tags = ["github", "repositories", "secrets", "environments", "source-control"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "5.0.9"
+version = "5.0.10"
 version_files = ["pyproject.toml:^version"]
 tag_format = "github-v$version"
 update_changelog_on_bump = true
