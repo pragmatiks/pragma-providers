@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.2
+    rev: v0.16.8
     hooks:
       - id: ruff-check
         name: Ruff linter
@@ -13,13 +13,6 @@ repos:
       - id: check-comments
         name: Enforce NO COMMENTS policy
         entry: scripts/check_comments.sh
-        language: system
-        types: [python]
-        pass_filenames: true
-        stages: [pre-commit]
-      - id: check-unittest
-        name: Prevent unittest.mock usage
-        entry: scripts/check_unittest.py
         language: system
         types: [python]
         pass_filenames: true

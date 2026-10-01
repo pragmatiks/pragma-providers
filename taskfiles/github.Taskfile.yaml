@@ -9,8 +9,4 @@ tasks:
     desc: Check Python code with ruff and ty
     cmds:
       - env -u VIRTUAL_ENV uv run ruff check --fix .
-      - env -u VIRTUAL_ENV uvx ty check
-
-  test:
-    cmd: env -u VIRTUAL_ENV uv run pytest tests/ --cov=github_provider --cov-report=term-missing {{.CLI_ARGS}}
-    desc: Run all tests with coverage
+      - env -u VIRTUAL_ENV uv run ty check

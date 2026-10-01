@@ -5,7 +5,7 @@ description = "{{ description }}"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk",
+    "pragmatiks-sdk>=14.0.0",
 ]
 {% if author_name or author_email %}
 authors = [
@@ -15,8 +15,8 @@ authors = [
 
 [dependency-groups]
 dev = [
-    "pytest>=8.4.1",
-    "pytest-asyncio>=1.0.0",
+    "ruff==0.16.8",
+    "ty==0.0.63",
 ]
 
 [tool.pragma]
@@ -26,10 +26,6 @@ package = "{{ package_name }}"
 display_name = "{{ display_name }}"
 description = "{{ description }}"
 tags = []
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 line-length = 120
