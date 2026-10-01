@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
+import httpx
 from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField
 
-from github_provider.client import create_github_client, raise_for_status
+from github_provider.client import create_github_client, delete_if_present, fetch_optional_json, raise_for_status
 
 
 class RepositoryConfig(Config):
@@ -18,7 +19,9 @@ class RepositoryConfig(Config):
         owner: GitHub user or organization that owns the repository.
         name: Repository name. Must be unique within the owner's account.
         description: Short description of the repository.
-        visibility: Repository visibility (``public`` or ``private``).
+        visibility: Repository visibility (``public``, ``private``, or ``internal``).
+            ``internal`` requires an organization owner on GitHub Enterprise Cloud;
+            a repository under the token's user is created private instead.
         default_branch: Default branch name. Only applied on creation
             when ``auto_init`` is True.
         has_issues: Whether to enable the Issues feature.
@@ -37,7 +40,7 @@ class RepositoryConfig(Config):
     owner: ImmutableField[str]
     name: ImmutableField[str]
     description: Field[str] = ""
-    visibility: Field[str] = "private"
+    visibility: Field[Literal["public", "private", "internal"]] = "private"
     default_branch: Field[str] = "main"
     has_issues: Field[bool] = True
     has_wiki: Field[bool] = False
@@ -79,11 +82,14 @@ def _build_create_body(config: RepositoryConfig) -> dict[str, Any]:
 
     Returns:
         Dictionary suitable for POST /orgs/{org}/repos or POST /user/repos.
+        The organization endpoint honors ``visibility``; the user endpoint
+        only reads ``private``.
     """
     return {
         "name": config.name,
         "description": config.description,
-        "private": config.visibility == "private",
+        "private": config.visibility != "public",
+        "visibility": config.visibility,
         "auto_init": config.auto_init,
         "has_issues": config.has_issues,
         "has_wiki": config.has_wiki,
@@ -108,7 +114,7 @@ def _build_update_body(config: RepositoryConfig) -> dict[str, Any]:
     """
     return {
         "description": config.description,
-        "private": config.visibility == "private",
+        "visibility": config.visibility,
         "has_issues": config.has_issues,
         "has_wiki": config.has_wiki,
         "has_projects": config.has_projects,
@@ -139,6 +145,24 @@ def _build_outputs(data: dict[str, Any]) -> RepositoryOutputs:
     )
 
 
+async def fetch_token_user_login(client: httpx.AsyncClient) -> str:
+    """Fetch the login of the user the client's token authenticates as.
+
+    Args:
+        client: Authenticated GitHub API client.
+
+    Returns:
+        The token user's GitHub login.
+
+    Raises:
+        httpx.HTTPStatusError: If GitHub rejects the request.
+    """
+    response = await client.get("/user")
+    await raise_for_status(response)
+
+    return response.json()["login"]
+
+
 class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
     """GitHub repository resource.
 
@@ -148,12 +172,16 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
 
     Lifecycle:
         - on_create: Creates a new repository. Uses the organization endpoint
-          when the owner is an organization, or the user endpoint otherwise.
-          Not idempotent -- duplicate calls create duplicate repositories.
-        - on_update: Updates mutable repository settings (description,
+          when the owner is an organization, or the user endpoint when the
+          owner is the token's user. Fails when the repository already exists.
+        - on_observe: Reads the repository at ``owner/name``.
+        - on_update: Applies every mutable repository setting (description,
           visibility, features, merge options). Owner and name are immutable.
         - on_delete: Deletes the repository. Idempotent -- succeeds if the
           repository does not exist.
+
+    A repository renamed or transferred away from ``owner/name`` counts as absent:
+    it is never read, changed, or deleted at its new location.
 
     Example::
 
@@ -176,82 +204,86 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
               has_wiki: false
     """
 
+    def repository_path(self) -> str:
+        """Build the REST path of this repository.
+
+        Returns:
+            Path of the form ``/repos/{owner}/{name}``.
+        """
+        return f"/repos/{self.config.owner}/{self.config.name}"
+
     async def on_create(self) -> RepositoryOutputs:
         """Create a GitHub repository.
 
         Returns:
             RepositoryOutputs with repository details.
-        """
-        client = create_github_client(self.config.access_token)
 
-        try:
+        Raises:
+            ValueError: If ``owner`` is neither a usable organization nor the token's user.
+        """
+        async with create_github_client(self.config.access_token) as client:
             body = _build_create_body(self.config)
 
             response = await client.post(f"/orgs/{self.config.owner}/repos", json=body)
 
             if response.status_code == 404:
+                login = await fetch_token_user_login(client)
+
+                if login.casefold() != self.config.owner.casefold():
+                    msg = (
+                        f"owner {self.config.owner!r} is not an organization the token can create repositories in "
+                        f"(GitHub answered {response.text}), and not the token's user {login!r}"
+                    )
+                    raise ValueError(msg)
+
                 response = await client.post("/user/repos", json=body)
 
             await raise_for_status(response)
 
             return _build_outputs(response.json())
-        finally:
-            await client.aclose()
 
-    async def on_update(self, previous_config: RepositoryConfig) -> RepositoryOutputs:
-        """Update the repository settings if changed.
+    async def on_observe(self) -> RepositoryOutputs | None:
+        """Read the repository at ``owner/name``.
+
+        Returns:
+            RepositoryOutputs, or ``None`` when the repository does not exist.
+        """
+        async with create_github_client(self.config.access_token) as client:
+            repository = await fetch_optional_json(client, self.repository_path())
+
+        if repository is None:
+            return None
+
+        return _build_outputs(repository)
+
+    async def on_update(self, previous_config: RepositoryConfig | None) -> RepositoryOutputs:
+        """Apply every mutable repository setting.
 
         Args:
-            previous_config: The previous configuration before update.
+            previous_config: The previous configuration, if any.
 
         Returns:
             RepositoryOutputs with current repository state.
 
         Raises:
-            RuntimeError: If no existing outputs are available for the repository.
+            httpx.HTTPStatusError: If GitHub rejects the update or reports the
+                repository moved to another owner or name.
         """
-        if self.outputs is None:
-            msg = "Cannot update repository without existing outputs"
-            raise RuntimeError(msg)
-
-        client = create_github_client(self.config.access_token)
-
-        try:
+        async with create_github_client(self.config.access_token) as client:
             update_body = _build_update_body(self.config)
-            response = await client.patch(
-                f"/repos/{self.config.owner}/{self.config.name}",
-                json=update_body,
-            )
+            response = await client.patch(self.repository_path(), json=update_body)
             await raise_for_status(response)
 
             return _build_outputs(response.json())
-        finally:
-            await client.aclose()
 
     async def on_delete(self) -> None:
         """Delete the GitHub repository.
 
-        Idempotent: Succeeds if the repository does not exist.
+        Idempotent: Succeeds if no repository exists at ``owner/name``, including one
+        renamed or transferred away, which is left untouched.
+
+        Raises:
+            httpx.HTTPStatusError: If GitHub rejects the deletion.
         """
-        if self.outputs is None:
-            return
-
-        client = create_github_client(self.config.access_token)
-
-        try:
-            response = await client.delete(f"/repos/{self.config.owner}/{self.config.name}")
-
-            if response.status_code == 404:
-                return
-
-            await raise_for_status(response)
-        finally:
-            await client.aclose()
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+        async with create_github_client(self.config.access_token) as client:
+            await delete_if_present(client, self.repository_path())

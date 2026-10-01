@@ -7,9 +7,9 @@ from typing import Any
 
 from nacl.encoding import Base64Encoder
 from nacl.public import PublicKey, SealedBox
-from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField
+from pragma_sdk import Config, ImmutableField, Outputs, Resource, SensitiveField
 
-from github_provider.client import create_github_client, raise_for_status
+from github_provider.client import create_github_client, delete_if_present, fetch_optional_json, raise_for_status
 
 
 class SecretConfig(Config):
@@ -36,7 +36,7 @@ class SecretConfig(Config):
     repository: ImmutableField[str]
     secret_name: ImmutableField[str]
     secret_value: SensitiveField[str]
-    environment_name: Field[str] | None = None
+    environment_name: ImmutableField[str] | None = None
 
 
 class SecretOutputs(Outputs):
@@ -90,10 +90,15 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         - on_create: Fetches the public key, encrypts the secret value,
           and creates or replaces the secret. Idempotent -- creating an
           existing secret replaces its value.
+        - on_observe: Reads the secret's metadata.
         - on_update: Re-encrypts and replaces the secret value using PUT.
           Same operation as create.
         - on_delete: Deletes the secret. Idempotent -- succeeds if the
           secret does not exist.
+
+    A secret on a repository renamed or transferred away from ``owner/repository``
+    counts as absent: on_create and on_update fail, and on_delete succeeds without
+    touching the repository at its new location.
 
     Example::
 
@@ -144,6 +149,20 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         """
         return self.config.environment_name is not None
 
+    def secret_path(self) -> str:
+        """Build the REST path of this secret.
+
+        Returns:
+            The environment secret path when ``environment_name`` is set,
+            otherwise the repository Actions secret path.
+        """
+        repository_path = f"/repos/{self.config.owner}/{self.config.repository}"
+
+        if self._is_environment_secret():
+            return f"{repository_path}/environments/{self.config.environment_name}/secrets/{self.config.secret_name}"
+
+        return f"{repository_path}/actions/secrets/{self.config.secret_name}"
+
     async def _fetch_public_key(self, client: Any) -> tuple[str, str]:
         """Fetch the public key for secret encryption.
 
@@ -184,18 +203,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             "key_id": key_id,
         }
 
-        if self._is_environment_secret():
-            response = await client.put(
-                f"/repos/{self.config.owner}/{self.config.repository}"
-                f"/environments/{self.config.environment_name}/secrets/{self.config.secret_name}",
-                json=body,
-            )
-        else:
-            response = await client.put(
-                f"/repos/{self.config.owner}/{self.config.repository}/actions/secrets/{self.config.secret_name}",
-                json=body,
-            )
-
+        response = await client.put(self.secret_path(), json=body)
         await raise_for_status(response)
 
     async def _fetch_secret_metadata(self, client: Any) -> dict[str, Any]:
@@ -207,16 +215,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         Returns:
             Secret metadata dictionary from the API.
         """
-        if self._is_environment_secret():
-            response = await client.get(
-                f"/repos/{self.config.owner}/{self.config.repository}"
-                f"/environments/{self.config.environment_name}/secrets/{self.config.secret_name}",
-            )
-        else:
-            response = await client.get(
-                f"/repos/{self.config.owner}/{self.config.repository}/actions/secrets/{self.config.secret_name}",
-            )
-
+        response = await client.get(self.secret_path())
         await raise_for_status(response)
 
         return response.json()
@@ -246,17 +245,13 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         Returns:
             SecretOutputs with secret metadata.
         """
-        client = create_github_client(self.config.access_token)
-
-        try:
+        async with create_github_client(self.config.access_token) as client:
             key_b64, key_id = await self._fetch_public_key(client)
             encrypted_value = _encrypt_secret(key_b64, self.config.secret_value)
             await self._put_secret(client, encrypted_value, key_id)
             metadata = await self._fetch_secret_metadata(client)
 
             return self._build_outputs(metadata)
-        finally:
-            await client.aclose()
 
     async def on_create(self) -> SecretOutputs:
         """Create or replace a GitHub secret.
@@ -266,14 +261,28 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         """
         return await self._apply_secret()
 
-    async def on_update(self, previous_config: SecretConfig) -> SecretOutputs:
+    async def on_observe(self) -> SecretOutputs | None:
+        """Read the secret's metadata.
+
+        Returns:
+            SecretOutputs, or ``None`` when the secret does not exist.
+        """
+        async with create_github_client(self.config.access_token) as client:
+            metadata = await fetch_optional_json(client, self.secret_path())
+
+        if metadata is None:
+            return None
+
+        return self._build_outputs(metadata)
+
+    async def on_update(self, previous_config: SecretConfig | None) -> SecretOutputs:
         """Update the secret value.
 
         Secrets are replaced entirely on every update since the value
         cannot be read back for comparison.
 
         Args:
-            previous_config: The previous configuration before update.
+            previous_config: The previous configuration, if any.
 
         Returns:
             SecretOutputs with updated secret metadata.
@@ -285,33 +294,5 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
         Idempotent: Succeeds if the secret does not exist.
         """
-        if self.outputs is None:
-            return
-
-        client = create_github_client(self.config.access_token)
-
-        try:
-            if self._is_environment_secret():
-                response = await client.delete(
-                    f"/repos/{self.config.owner}/{self.config.repository}"
-                    f"/environments/{self.config.environment_name}/secrets/{self.config.secret_name}",
-                )
-            else:
-                response = await client.delete(
-                    f"/repos/{self.config.owner}/{self.config.repository}/actions/secrets/{self.config.secret_name}",
-                )
-
-            if response.status_code == 404:
-                return
-
-            await raise_for_status(response)
-        finally:
-            await client.aclose()
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+        async with create_github_client(self.config.access_token) as client:
+            await delete_if_present(client, self.secret_path())
