@@ -54,9 +54,13 @@ class Model[ModelConfigT: ModelConfig, ModelOutputsT: ModelOutputs, SpecT: AgnoS
         ...
 
     @abstractmethod
-    async def on_update(self, previous_config: ModelConfigT) -> ModelOutputsT:
-        """Update returns serializable outputs with spec."""
-        ...
+    async def on_update(self, previous_config: ModelConfigT | None) -> ModelOutputsT:
+        """Return serializable outputs with spec.
 
-    async def on_delete(self) -> None:
-        """Delete is a no-op since model resources are stateless."""
+        Args:
+            previous_config: The previous configuration, or None when none is recorded.
+
+        Returns:
+            Model outputs with spec.
+        """
+        ...

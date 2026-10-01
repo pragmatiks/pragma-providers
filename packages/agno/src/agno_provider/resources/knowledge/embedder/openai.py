@@ -91,6 +91,8 @@ class EmbedderOpenAI(AgnoResource[EmbedderOpenAIConfig, EmbedderOpenAIOutputs, E
         embedder = EmbedderOpenAI.from_spec(spec)
     """
 
+    computed = True
+
     @staticmethod
     def from_spec(spec: EmbedderOpenAISpec) -> OpenAIEmbedder:
         """Factory: construct Agno embedder from spec.
@@ -140,7 +142,7 @@ class EmbedderOpenAI(AgnoResource[EmbedderOpenAIConfig, EmbedderOpenAIOutputs, E
         """
         return self._build_outputs()
 
-    async def on_update(self, previous_config: EmbedderOpenAIConfig) -> EmbedderOpenAIOutputs:  # noqa: ARG002
+    async def on_update(self, previous_config: EmbedderOpenAIConfig | None) -> EmbedderOpenAIOutputs:  # noqa: ARG002
         """Update returns serializable metadata with spec.
 
         Args:
@@ -153,11 +155,3 @@ class EmbedderOpenAI(AgnoResource[EmbedderOpenAIConfig, EmbedderOpenAIOutputs, E
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs

@@ -109,6 +109,8 @@ class MemoryManager(AgnoResource[MemoryManagerConfig, MemoryManagerOutputs, Memo
         - on_delete: No-op (stateless wrapper)
     """
 
+    computed = True
+
     @staticmethod
     def from_spec(spec: MemoryManagerSpec) -> AgnoMemoryManager:
         """Factory: construct Agno MemoryManager from spec.
@@ -191,7 +193,7 @@ class MemoryManager(AgnoResource[MemoryManagerConfig, MemoryManagerOutputs, Memo
         """
         return await self._build_outputs()
 
-    async def on_update(self, previous_config: MemoryManagerConfig) -> MemoryManagerOutputs:  # noqa: ARG002
+    async def on_update(self, previous_config: MemoryManagerConfig | None) -> MemoryManagerOutputs:  # noqa: ARG002
         """Update resource and return serializable outputs.
 
         Returns:
@@ -201,11 +203,3 @@ class MemoryManager(AgnoResource[MemoryManagerConfig, MemoryManagerOutputs, Memo
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs

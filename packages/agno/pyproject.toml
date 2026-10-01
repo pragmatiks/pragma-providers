@@ -22,11 +22,8 @@ authors = [
 
 [dependency-groups]
 dev = [
-    "pytest>=8.4.1",
-    "pytest-asyncio>=1.0.0",
-    "pytest-cov>=7.0.0",
-    "pytest-mock>=3.14.0",
-    "ty>=0.0.14",
+    "ruff==0.16.8",
+    "ty==0.0.63",
 ]
 
 [tool.pragma]
@@ -37,10 +34,6 @@ description = "Build and deploy AI agents, teams, and knowledge bases with model
 icon_url = "https://cdn.prod.website-files.com/6796d350b8c706e4533e7e32/68a85d04c4b355c4accb0f9f_256.png"
 tags = ["ai", "agents", "llm", "openai", "anthropic", "knowledge-base"]
 entrypoint = ["python", "-m", "pragma_runtime.entrypoint"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
 
 [tool.commitizen]
 name = "cz_conventional_commits"

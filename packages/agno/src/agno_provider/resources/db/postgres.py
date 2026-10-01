@@ -186,6 +186,8 @@ class DbPostgres(AgnoResource[DbPostgresConfig, DbPostgresOutputs, DbPostgresSpe
         - on_delete: No-op (stateless wrapper)
     """
 
+    computed = True
+
     @staticmethod
     def from_spec(spec: DbPostgresSpec) -> AsyncPostgresDb:
         """Factory: construct Agno AsyncPostgresDb from spec.
@@ -320,7 +322,7 @@ class DbPostgres(AgnoResource[DbPostgresConfig, DbPostgresOutputs, DbPostgresSpe
         """
         return self._build_outputs()
 
-    async def on_update(self, previous_config: DbPostgresConfig) -> DbPostgresOutputs:  # noqa: ARG002
+    async def on_update(self, previous_config: DbPostgresConfig | None) -> DbPostgresOutputs:  # noqa: ARG002
         """Update resource and return serializable outputs.
 
         Returns:
@@ -330,11 +332,3 @@ class DbPostgres(AgnoResource[DbPostgresConfig, DbPostgresOutputs, DbPostgresSpe
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs

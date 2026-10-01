@@ -219,6 +219,8 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
         - on_delete: No-op (stateless wrapper)
     """
 
+    computed = True
+
     @staticmethod
     def from_spec(spec: TeamSpec) -> AgnoTeam:
         """Factory: construct Agno Team from spec.
@@ -452,7 +454,7 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
         """
         return await self._build_outputs()
 
-    async def on_update(self, previous_config: TeamConfig) -> TeamOutputs:  # noqa: ARG002
+    async def on_update(self, previous_config: TeamConfig | None) -> TeamOutputs:  # noqa: ARG002
         """Update team definition and return serializable outputs.
 
         Args:
@@ -465,11 +467,3 @@ class Team(AgnoResource[TeamConfig, TeamOutputs, TeamSpec]):
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs

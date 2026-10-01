@@ -130,7 +130,7 @@ class RunnerConfig(Config):
     teams: list[Dependency[Team]] = []
 
     config: ImmutableDependency[KubernetesConfig]
-    namespace: Dependency[Namespace]
+    namespace: ImmutableDependency[Namespace]
     replicas: Field[int] = 1
     image: Field[str] = "ghcr.io/pragmatiks/agno-runner:v2"
     security_key: Field[str] | None = None
@@ -200,12 +200,10 @@ class RunnerOutputs(Outputs):
     Attributes:
         spec: Specification for the runner.
         url: In-cluster service URL.
-        ready: Whether the runner is ready.
     """
 
     spec: RunnerSpec
     url: str
-    ready: bool
 
 
 class Runner(Resource[RunnerConfig, RunnerOutputs]):
@@ -252,6 +250,8 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         - on_update: Update child Kubernetes resources, wait for ready
         - on_delete: Child resources cascade deleted via owner_references
     """
+
+    computed = True
 
     def _runner_name(self) -> str:
         """Get Kubernetes deployment name based on resource name.
@@ -417,6 +417,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         )
 
         return KubernetesDeployment(
+            project_id=self.project_id,
             name=self._runner_name(),
             config=config,
         )
@@ -446,6 +447,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         )
 
         return Service(
+            project_id=self.project_id,
             name=self._service_name(),
             config=config,
         )
@@ -478,6 +480,7 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         )
 
         return KubernetesDeployment(
+            project_id=self.project_id,
             name=self._runner_name(),
             config=config,
         )
@@ -498,7 +501,6 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         namespace_name: str,
         agent_specs: list[AgentSpec],
         team_specs: list[TeamSpec],
-        ready: bool,
     ) -> RunnerOutputs:
         """Build runner outputs.
 
@@ -506,10 +508,9 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             namespace_name: Resolved namespace name string.
             agent_specs: Agent specs deployed on this runner.
             team_specs: Team specs deployed on this runner.
-            ready: Whether runner is ready.
 
         Returns:
-            RunnerOutputs with spec, url, and ready status.
+            RunnerOutputs with spec and url.
         """
         runner_spec = RunnerSpec(
             name=self._runner_name(),
@@ -527,7 +528,6 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         return RunnerOutputs(
             spec=runner_spec,
             url=self._build_service_url(namespace_name),
-            ready=ready,
         )
 
     async def _apply_kubernetes_resources(
@@ -575,34 +575,23 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
 
         await self._apply_kubernetes_resources(namespace_name, agent_specs, team_specs)
 
-        return self._build_outputs(namespace_name, agent_specs, team_specs, ready=True)
+        return self._build_outputs(namespace_name, agent_specs, team_specs)
 
-    async def on_update(self, previous_config: RunnerConfig) -> RunnerOutputs:
+    async def on_update(self, previous_config: RunnerConfig | None) -> RunnerOutputs:  # noqa: ARG002
         """Update Kubernetes Deployment + Service.
 
         Args:
-            previous_config: The previous configuration before update.
+            previous_config: The previous configuration, if any.
 
         Returns:
             RunnerOutputs with updated runner details.
-
-        Raises:
-            ValueError: If immutable fields changed.
         """
-        if previous_config.config.id != self.config.config.id:
-            msg = "Cannot change config; delete and recreate resource"
-            raise ValueError(msg)
-
-        if previous_config.namespace.id != self.config.namespace.id:
-            msg = "Cannot change namespace; delete and recreate resource"
-            raise ValueError(msg)
-
         namespace_name = await self._resolve_namespace_name()
         agent_specs, team_specs = await self._resolve_entity_specs()
 
         await self._apply_kubernetes_resources(namespace_name, agent_specs, team_specs)
 
-        return self._build_outputs(namespace_name, agent_specs, team_specs, ready=True)
+        return self._build_outputs(namespace_name, agent_specs, team_specs)
 
     async def on_delete(self) -> None:
         """Delete Kubernetes Deployment + Service.
@@ -645,11 +634,3 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
 
         async for entry in kubernetes_deployment.logs(since=since, tail=tail):
             yield entry
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
