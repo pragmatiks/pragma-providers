@@ -130,6 +130,8 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
         - on_delete: No-op (stateless wrapper)
     """
 
+    computed = True
+
     @staticmethod
     def from_spec(spec: ToolsMCPSpec) -> MCPTools:
         """Factory: construct MCPTools from spec.
@@ -335,7 +337,7 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
         """
         return self._build_outputs()
 
-    async def on_update(self, previous_config: ToolsMCPConfig) -> ToolsMCPOutputs:  # noqa: ARG002
+    async def on_update(self, previous_config: ToolsMCPConfig | None) -> ToolsMCPOutputs:  # noqa: ARG002
         """Update resource and return serializable outputs.
 
         Args:
@@ -348,11 +350,3 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs

@@ -328,6 +328,8 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         ```
     """
 
+    computed = True
+
     @staticmethod
     def from_spec(spec: AnthropicModelSpec) -> Claude:
         """Factory: construct Agno Claude object from spec.
@@ -468,7 +470,7 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         client = anthropic.AsyncAnthropic(api_key=str(self.config.api_key))
         await client.models.retrieve(self.config.id)
 
-    async def on_update(self, previous_config: AnthropicModelConfig) -> AnthropicModelOutputs:  # noqa: ARG002
+    async def on_update(self, previous_config: AnthropicModelConfig | None) -> AnthropicModelOutputs:  # noqa: ARG002
         """Validate model/mode compatibility and return serializable outputs with spec.
 
         Re-runs the model/thinking-mode compatibility check so updating an
@@ -487,11 +489,3 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs

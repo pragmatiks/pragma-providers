@@ -38,7 +38,7 @@ namespace (kubernetes) ─────┘
 - A Kubernetes namespace managed by the `kubernetes` provider
 - API keys for your chosen model provider (OpenAI, Anthropic)
 - An Agno runner container image (default: `ghcr.io/pragmatiks/agno-runner:v2`)
-- For knowledge/RAG: a Qdrant vector database instance
+- For knowledge/RAG: a Qdrant vector database instance and an applied `qdrant/collection` sized for the embedder; `knowledge/content` writes into that collection and never creates it
 - For memory/sessions: a PostgreSQL database instance
 
 ## Installation
@@ -60,9 +60,9 @@ pragma providers install agno
 | MCP Tools | `tools/mcp` | Model Context Protocol server integration (stdio, SSE, streamable-http) |
 | Web Search Tools | `tools/websearch` | Web and news search toolkit (DuckDuckGo, Google, Bing, etc.) |
 | Knowledge | `knowledge` | Semantic search configuration backed by a vector database |
-| Content | `knowledge/content` | Content source (URL or text) for ingestion into a knowledge base |
+| Content | `knowledge/content` | Content source for ingestion into a knowledge base: inline text, or a URL of a plain text, Markdown or JSON file (path ending in `.txt`, `.text`, `.md`, `.markdown` or `.json`). Websites, PDF, Office, CSV and YouTube URLs are refused |
 | OpenAI Embedder | `knowledge/embedder/openai` | OpenAI embedding model configuration |
-| Qdrant VectorDB | `vectordb/qdrant` | Qdrant vector database adapter for Agno knowledge |
+| Qdrant VectorDB | `vectordb/qdrant` | Qdrant vector database adapter for Agno knowledge. Vector search only: `search_type` accepts `vector`, because a `qdrant/collection` holds one unnamed dense vector and keyword or hybrid search needs sparse vectors |
 | Memory Manager | `memory/manager` | Agent memory management with PostgreSQL storage |
 | PostgreSQL DB | `db/postgres` | PostgreSQL database connection for sessions, memory, and storage |
 
@@ -111,7 +111,24 @@ config:
     field: value
 
 ---
-# 5. Vector database adapter
+# 5. Collection the content is written into, sized for text-embedding-3-small
+provider: qdrant
+resource: collection
+name: docs
+config:
+  url:
+    ref: qdrant/database/main
+    field: url
+  api_key:
+    ref: qdrant/database/main
+    field: api_key
+  name: docs
+  vectors:
+    size: 1536
+    distance: Cosine
+
+---
+# 6. Vector database adapter
 provider: agno
 resource: vectordb/qdrant
 name: doc-vectors
@@ -125,12 +142,12 @@ config:
   api_key:
     ref: qdrant/database/main
     field: api_key
-  search_type: hybrid
+  search_type: vector
   embedder:
     ref: agno/knowledge/embedder/openai/embedder
 
 ---
-# 6. Knowledge base
+# 7. Knowledge base
 provider: agno
 resource: knowledge
 name: docs-kb
@@ -140,18 +157,18 @@ config:
   max_results: 5
 
 ---
-# 7. Content ingestion
+# 8. Content ingestion
 provider: agno
 resource: knowledge/content
 name: product-docs
 config:
   knowledge:
     ref: agno/knowledge/docs-kb
-  url: https://docs.example.com/product
+  url: https://docs.example.com/product.md
   description: Product documentation
 
 ---
-# 8. Database for sessions and memory
+# 9. Database for sessions and memory
 provider: agno
 resource: db/postgres
 name: agent-db
@@ -167,7 +184,7 @@ config:
     field: password
 
 ---
-# 9. Memory manager
+# 10. Memory manager
 provider: agno
 resource: memory/manager
 name: agent-memory
@@ -178,7 +195,7 @@ config:
   update_memories: true
 
 ---
-# 10. Prompt template
+# 11. Prompt template
 provider: agno
 resource: prompt
 name: system-prompt
@@ -191,7 +208,7 @@ config:
     company: Acme Corp
 
 ---
-# 11. Agent definition
+# 12. Agent definition
 provider: agno
 resource: agent
 name: support-agent
@@ -213,7 +230,7 @@ config:
   enable_agentic_memory: true
 
 ---
-# 12. Deploy to Kubernetes
+# 13. Deploy to Kubernetes
 provider: agno
 resource: runner
 name: support-agent
@@ -291,13 +308,25 @@ config:
 An agent with access to a vector knowledge base for semantic search.
 
 ```yaml
+provider: qdrant
+resource: collection
+name: knowledge
+config:
+  url: http://qdrant.databases.svc.cluster.local:6333
+  name: knowledge
+  vectors:
+    size: 1536
+
+---
 provider: agno
 resource: vectordb/qdrant
 name: kb-vectors
 config:
   url: http://qdrant.databases.svc.cluster.local:6333
-  collection: knowledge
-  search_type: hybrid
+  collection:
+    ref: qdrant/collection/knowledge
+    field: name
+  search_type: vector
 
 ---
 provider: agno

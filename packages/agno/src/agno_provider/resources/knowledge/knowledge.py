@@ -5,12 +5,10 @@ Provides vector storage configuration for semantic search capabilities.
 
 from __future__ import annotations
 
-from agno.db.postgres import PostgresDb
 from agno.knowledge.knowledge import Knowledge as AgnoKnowledge
-from pragma_sdk import Config, Dependency, Field, Outputs
+from pragma_sdk import Config, Dependency, Field, ImmutableDependency, Outputs
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
-from agno_provider.resources.db.postgres import DbPostgres, DbPostgresSpec
 from agno_provider.resources.knowledge.embedder.openai import EmbedderOpenAI, EmbedderOpenAISpec
 from agno_provider.resources.vectordb.qdrant import VectordbQdrant, VectordbQdrantSpec
 
@@ -31,7 +29,6 @@ class KnowledgeSpec(AgnoSpec):
     name: str
     max_results: int = 10
     vector_db_spec: VectordbQdrantSpec
-    contents_db_spec: DbPostgresSpec | None = None
     embedder_spec: EmbedderOpenAISpec | None = None
 
 
@@ -46,8 +43,7 @@ class KnowledgeConfig(Config):
         max_results: Maximum search results to return.
     """
 
-    vector_db: Dependency[VectordbQdrant]
-    contents_db: Dependency[DbPostgres] | None = None
+    vector_db: ImmutableDependency[VectordbQdrant]
     embedder: Dependency[EmbedderOpenAI] | None = None
     max_results: Field[int] = 10
 
@@ -93,6 +89,8 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
         - on_delete: No-op (stateless wrapper)
     """
 
+    computed = True
+
     @staticmethod
     def from_spec(spec: KnowledgeSpec) -> AgnoKnowledge:
         """Factory: construct Agno Knowledge from spec.
@@ -105,18 +103,9 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
         """
         vectordb = VectordbQdrant.from_spec(spec.vector_db_spec)
 
-        contents_db = None
-        if spec.contents_db_spec:
-            db_url = spec.contents_db_spec.db_url.replace("postgresql+psycopg_async://", "postgresql+psycopg://", 1)
-            contents_db = PostgresDb(
-                db_url=db_url,
-                db_schema=spec.contents_db_spec.db_schema,
-            )
-
         return AgnoKnowledge(
             name=spec.name,
             vector_db=vectordb,
-            contents_db=contents_db,
             max_results=spec.max_results,
         )
 
@@ -140,14 +129,6 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
 
         vector_db_spec = vector_db_resource.outputs.spec
 
-        contents_db_spec = None
-
-        if self.config.contents_db is not None:
-            contents_db_resource = self.config.contents_db._resolved
-
-            if contents_db_resource is not None and contents_db_resource.outputs is not None:
-                contents_db_spec = contents_db_resource.outputs.spec
-
         embedder_spec = None
 
         if self.config.embedder is not None:
@@ -160,7 +141,6 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
             name=self.name,
             max_results=self.config.max_results,
             vector_db_spec=vector_db_spec,
-            contents_db_spec=contents_db_spec,
             embedder_spec=embedder_spec,
         )
 
@@ -193,9 +173,6 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
         """
         await self.config.vector_db.resolve()
 
-        if self.config.contents_db is not None:
-            await self.config.contents_db.resolve()
-
         if self.config.embedder is not None:
             await self.config.embedder.resolve()
 
@@ -212,7 +189,7 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
         """
         return await self._build_outputs()
 
-    async def on_update(self, previous_config: KnowledgeConfig) -> KnowledgeOutputs:  # noqa: ARG002
+    async def on_update(self, previous_config: KnowledgeConfig | None) -> KnowledgeOutputs:  # noqa: ARG002
         """Update resource and return serializable outputs.
 
         Returns:
@@ -222,11 +199,3 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs

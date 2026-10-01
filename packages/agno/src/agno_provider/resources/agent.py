@@ -265,6 +265,8 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
         - on_delete: No-op (stateless wrapper)
     """
 
+    computed = True
+
     @staticmethod
     def from_spec(spec: AgentSpec) -> AgnoAgent:
         """Factory: construct Agno Agent from spec.
@@ -472,7 +474,7 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
         """
         return await self._build_outputs()
 
-    async def on_update(self, previous_config: AgentConfig) -> AgentOutputs:  # noqa: ARG002
+    async def on_update(self, previous_config: AgentConfig | None) -> AgentOutputs:  # noqa: ARG002
         """Update agent definition and return serializable outputs.
 
         Args:
@@ -485,11 +487,3 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs

@@ -89,6 +89,8 @@ class ToolsWebSearch(AgnoResource[ToolsWebSearchConfig, ToolsWebSearchOutputs, T
         - on_delete: No-op (stateless)
     """
 
+    computed = True
+
     @staticmethod
     def from_spec(spec: ToolsWebSearchSpec) -> WebSearchTools:
         """Factory: construct WebSearchTools from spec.
@@ -157,7 +159,7 @@ class ToolsWebSearch(AgnoResource[ToolsWebSearchConfig, ToolsWebSearchOutputs, T
         """
         return self._build_outputs()
 
-    async def on_update(self, previous_config: ToolsWebSearchConfig) -> ToolsWebSearchOutputs:  # noqa: ARG002
+    async def on_update(self, previous_config: ToolsWebSearchConfig | None) -> ToolsWebSearchOutputs:  # noqa: ARG002
         """Update resource and return metadata.
 
         Args:
@@ -170,11 +172,3 @@ class ToolsWebSearch(AgnoResource[ToolsWebSearchConfig, ToolsWebSearchOutputs, T
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs

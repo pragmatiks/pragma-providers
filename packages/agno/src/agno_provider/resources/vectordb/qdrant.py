@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from agno.vectordb.qdrant import Qdrant, SearchType
-from pragma_sdk import Config, Dependency, Field, Outputs
+from pragma_sdk import Config, Dependency, Field, ImmutableField, Outputs
 from pydantic import computed_field
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
@@ -24,25 +24,21 @@ class VectordbQdrantSpec(AgnoSpec):
         url: Qdrant server URL.
         collection: Collection name.
         api_key: Optional API key for authentication.
-        search_type: Search type - vector, keyword, or hybrid.
+        search_type: Search type. Only vector search is supported.
         embedder_spec: Nested spec for embedder configuration.
     """
 
     url: str
     collection: str
     api_key: str | None = None
-    search_type: Literal["vector", "keyword", "hybrid"] = "vector"
+    search_type: Literal["vector"] = "vector"
     embedder_spec: EmbedderOpenAISpec | None = None
 
     @computed_field
     @property
     def search_type_enum(self) -> SearchType:
         """Convert string search_type to Agno SearchType enum."""
-        return {
-            "vector": SearchType.vector,
-            "keyword": SearchType.keyword,
-            "hybrid": SearchType.hybrid,
-        }[self.search_type]
+        return SearchType(self.search_type)
 
 
 class VectordbQdrantConfig(Config):
@@ -55,14 +51,15 @@ class VectordbQdrantConfig(Config):
         url: Qdrant server URL. Can reference qdrant/database outputs.
         collection: Collection name. Can reference qdrant/collection outputs.
         api_key: Optional API key for authentication.
-        search_type: Search type - vector, keyword, or hybrid.
+        search_type: Search type. Only vector search is supported, because a
+            qdrant/collection holds one unnamed dense vector.
         embedder: Optional embedder resource for automatic vector generation.
     """
 
-    url: Field[str]
-    collection: Field[str]
+    url: ImmutableField[str]
+    collection: ImmutableField[str]
     api_key: Field[str] | None = None
-    search_type: Field[Literal["vector", "keyword", "hybrid"]] = "hybrid"
+    search_type: Field[Literal["vector"]] = "vector"
     embedder: Dependency[EmbedderOpenAI] | None = None
 
 
@@ -104,7 +101,7 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
             resource: database
             name: main
             field: api_key
-          search_type: hybrid
+          search_type: vector
 
     Runtime reconstruction via spec:
         qdrant = VectordbQdrant.from_spec(spec)
@@ -114,6 +111,8 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
         - on_update: Return updated metadata
         - on_delete: No-op (stateless wrapper)
     """
+
+    computed = True
 
     @staticmethod
     def from_spec(spec: VectordbQdrantSpec) -> Qdrant:
@@ -170,36 +169,12 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
         """Build outputs from current config.
 
         Returns:
-            VectordbQdrantOutputs with spec and pip dependencies.
+            VectordbQdrantOutputs with spec and no pip dependencies.
         """
         return VectordbQdrantOutputs(
             spec=self._build_spec(),
-            pip_dependencies=self._get_pip_dependencies(),
+            pip_dependencies=[],
         )
-
-    def _get_search_type(self) -> SearchType:
-        """Map search type string to Agno SearchType enum.
-
-        Returns:
-            Agno SearchType enum value.
-        """
-        search_type_map = {
-            "vector": SearchType.vector,
-            "keyword": SearchType.keyword,
-            "hybrid": SearchType.hybrid,
-        }
-        return search_type_map[self.config.search_type]
-
-    def _get_pip_dependencies(self) -> list[str]:
-        """Get pip dependencies based on search type.
-
-        Returns:
-            List of pip packages required for this configuration.
-        """
-        if self.config.search_type in ("hybrid", "keyword"):
-            return ["fastembed>=0.6.0"]
-
-        return []
 
     async def on_create(self) -> VectordbQdrantOutputs:
         """Create resource and return serializable outputs.
@@ -209,7 +184,7 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
         """
         return self._build_outputs()
 
-    async def on_update(self, previous_config: VectordbQdrantConfig) -> VectordbQdrantOutputs:  # noqa: ARG002
+    async def on_update(self, previous_config: VectordbQdrantConfig | None) -> VectordbQdrantOutputs:  # noqa: ARG002
         """Update resource and return serializable outputs.
 
         Returns:
@@ -219,11 +194,3 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs

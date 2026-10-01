@@ -96,6 +96,8 @@ class Prompt(AgnoResource[PromptConfig, PromptOutputs, PromptSpec]):
         - on_delete: No-op (stateless)
     """
 
+    computed = True
+
     @staticmethod
     def from_spec(spec: PromptSpec) -> str:
         """Factory: return rendered instructions from spec.
@@ -158,7 +160,7 @@ class Prompt(AgnoResource[PromptConfig, PromptOutputs, PromptSpec]):
         """
         return self._build_outputs()
 
-    async def on_update(self, previous_config: PromptConfig) -> PromptOutputs:  # noqa: ARG002
+    async def on_update(self, previous_config: PromptConfig | None) -> PromptOutputs:  # noqa: ARG002
         """Update resource and return re-rendered outputs.
 
         Args:
@@ -171,11 +173,3 @@ class Prompt(AgnoResource[PromptConfig, PromptOutputs, PromptSpec]):
 
     async def on_delete(self) -> None:
         """Delete is a no-op since this resource is stateless."""
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
