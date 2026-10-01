@@ -125,9 +125,6 @@ The `pragma/file` resource reads storage configuration from environment variable
 ## Development
 
 ```bash
-# Run tests
-task pragma:test
-
 # Lint and type check
 task pragma:check
 
