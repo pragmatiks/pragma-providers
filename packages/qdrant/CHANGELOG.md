@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v8.0.2 (2026-10-01)
+
+### Fix
+
+- **qdrant,agno**: require kubernetes-provider 2.0.1 and gcp-provider 7 for observe-then-act
+
 ## qdrant-v8.0.1 (2026-10-01)
 
 ### Fix
