@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
-from github_provider.client import create_github_client, raise_for_status
+from github_provider.client import create_github_client, delete_if_present, fetch_optional_json, raise_for_status
 
 
 class ReviewerConfig(BaseModel):
@@ -77,27 +77,34 @@ class EnvironmentOutputs(Outputs):
     reviewers_count: int
 
 
-def _build_create_body(config: EnvironmentConfig) -> dict[str, Any]:
+def _build_create_body(config: EnvironmentConfig, previous_config: EnvironmentConfig | None) -> dict[str, Any]:
     """Build the API request body for environment creation or update.
+
+    Sends ``wait_timer`` and ``reviewers`` only when protection rules are
+    configured now or were configured before, so an update that drops them
+    clears them on GitHub and an environment without them never submits them
+    (GitHub rejects protection rules on plans that do not support them).
 
     Args:
         config: Environment configuration.
+        previous_config: Configuration last applied, or ``None`` on create.
 
     Returns:
         Dictionary suitable for PUT /repos/{owner}/{repo}/environments/{env}.
     """
-    body: dict[str, Any] = {}
+    previously_protected = previous_config is not None and previous_config.protection_rules is not None
 
-    if config.protection_rules is not None:
-        body["wait_timer"] = config.protection_rules.wait_timer
+    if config.protection_rules is None and not previously_protected:
+        return {}
 
-        if config.protection_rules.reviewers:
-            body["reviewers"] = [
-                {"type": reviewer.reviewer_type, "id": reviewer.reviewer_id}
-                for reviewer in config.protection_rules.reviewers
-            ]
+    protection_rules = cast(ProtectionRulesConfig, config.protection_rules or ProtectionRulesConfig())
 
-    return body
+    return {
+        "wait_timer": protection_rules.wait_timer,
+        "reviewers": [
+            {"type": reviewer.reviewer_type, "id": reviewer.reviewer_id} for reviewer in protection_rules.reviewers
+        ],
+    }
 
 
 def _build_outputs(data: dict[str, Any], owner: str, repository: str) -> EnvironmentOutputs:
@@ -141,10 +148,15 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
     Lifecycle:
         - on_create: Creates or updates an environment using PUT (the
           GitHub API uses PUT for both create and update). Idempotent.
+        - on_observe: Reads the environment by name.
         - on_update: Updates the environment configuration by re-applying
           the PUT request with the new settings.
         - on_delete: Deletes the environment. Idempotent -- succeeds if
           the environment does not exist.
+
+    An environment on a repository renamed or transferred away from
+    ``owner/repository`` counts as absent: on_create and on_update fail, and
+    on_delete succeeds without touching the repository at its new location.
 
     Example::
 
@@ -168,25 +180,29 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
                     reviewer_id: 12345
     """
 
-    async def _apply_environment(self) -> EnvironmentOutputs:
+    def environment_path(self) -> str:
+        """Build the REST path of this environment.
+
+        Returns:
+            Path of the form ``/repos/{owner}/{repository}/environments/{environment_name}``.
+        """
+        return f"/repos/{self.config.owner}/{self.config.repository}/environments/{self.config.environment_name}"
+
+    async def _apply_environment(self, previous_config: EnvironmentConfig | None) -> EnvironmentOutputs:
         """Create or update the environment and return outputs.
+
+        Args:
+            previous_config: Configuration last applied, or ``None`` on create.
 
         Returns:
             EnvironmentOutputs with environment details.
         """
-        client = create_github_client(self.config.access_token)
-
-        try:
-            body = _build_create_body(self.config)
-            response = await client.put(
-                f"/repos/{self.config.owner}/{self.config.repository}/environments/{self.config.environment_name}",
-                json=body,
-            )
+        async with create_github_client(self.config.access_token) as client:
+            body = _build_create_body(self.config, previous_config)
+            response = await client.put(self.environment_path(), json=body)
             await raise_for_status(response)
 
             return _build_outputs(response.json(), self.config.owner, self.config.repository)
-        finally:
-            await client.aclose()
 
     async def on_create(self) -> EnvironmentOutputs:
         """Create a deployment environment on the repository.
@@ -194,42 +210,37 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
         Returns:
             EnvironmentOutputs with environment details.
         """
-        return await self._apply_environment()
+        return await self._apply_environment(None)
 
-    async def on_update(self, previous_config: EnvironmentConfig) -> EnvironmentOutputs:
+    async def on_observe(self) -> EnvironmentOutputs | None:
+        """Read the deployment environment.
+
+        Returns:
+            EnvironmentOutputs, or ``None`` when the environment does not exist.
+        """
+        async with create_github_client(self.config.access_token) as client:
+            environment = await fetch_optional_json(client, self.environment_path())
+
+        if environment is None:
+            return None
+
+        return _build_outputs(environment, self.config.owner, self.config.repository)
+
+    async def on_update(self, previous_config: EnvironmentConfig | None) -> EnvironmentOutputs:
         """Update the environment configuration.
 
         Args:
-            previous_config: The previous configuration before update.
+            previous_config: The previous configuration, if any.
 
         Returns:
             EnvironmentOutputs with updated environment details.
         """
-        return await self._apply_environment()
+        return await self._apply_environment(previous_config)
 
     async def on_delete(self) -> None:
         """Delete the deployment environment.
 
         Idempotent: Succeeds if the environment does not exist.
         """
-        client = create_github_client(self.config.access_token)
-
-        try:
-            response = await client.delete(
-                f"/repos/{self.config.owner}/{self.config.repository}/environments/{self.config.environment_name}",
-            )
-
-            if response.status_code == 404:
-                return
-
-            await raise_for_status(response)
-        finally:
-            await client.aclose()
-
-    @classmethod
-    def upgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
-
-    @classmethod
-    def downgrade(cls, config: dict, outputs: dict) -> tuple[dict, dict]:  # noqa: D102
-        return config, outputs
+        async with create_github_client(self.config.access_token) as client:
+            await delete_if_present(client, self.environment_path())
