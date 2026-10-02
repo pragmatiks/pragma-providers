@@ -26,6 +26,9 @@ dev = [
     "ty==0.0.63",
 ]
 
+[project.entry-points."pragma.provider"]
+agno = "agno_provider"
+
 [tool.pragma]
 provider = "agno"
 package = "agno_provider"
