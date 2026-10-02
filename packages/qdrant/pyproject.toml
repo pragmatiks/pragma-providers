@@ -20,6 +20,9 @@ dev = [
     "ty==0.0.63",
 ]
 
+[project.entry-points."pragma.provider"]
+qdrant = "qdrant_provider"
+
 [tool.pragma]
 # Provider metadata - used by the platform for discovery and deployment
 provider = "qdrant"
