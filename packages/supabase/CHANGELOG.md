@@ -1,3 +1,23 @@
+## supabase-v6.1.0 (2026-10-02)
+
+### Feat
+
+- **template**: declare the pragma.provider entry point in scaffolded providers
+- **vercel**: declare the pragma.provider entry point
+- **supabase**: declare the pragma.provider entry point
+- **qdrant**: declare the pragma.provider entry point
+- **pragma**: declare the pragma.provider entry point
+- **kubernetes**: declare the pragma.provider entry point
+- **github**: declare the pragma.provider entry point
+- **gcp**: declare the pragma.provider entry point
+- **agno**: declare the pragma.provider entry point
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v15.0.0 (#109)
+- **qdrant,agno**: require kubernetes-provider 2.0.1 and gcp-provider 7 for observe-then-act
+- **kubernetes**: require pragmatiks-gcp-provider 7 for observe-then-act
+
 ## supabase-v6.0.0 (2026-10-01)
 
 ### BREAKING CHANGE
