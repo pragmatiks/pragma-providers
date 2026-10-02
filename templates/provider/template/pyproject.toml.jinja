@@ -19,6 +19,9 @@ dev = [
     "ty==0.0.63",
 ]
 
+[project.entry-points."pragma.provider"]
+{{ name }} = "{{ package_name }}"
+
 [tool.pragma]
 # Provider metadata - used by the platform for discovery and deployment
 provider = "{{ name }}"
