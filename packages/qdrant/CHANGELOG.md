@@ -10,6 +10,24 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v8.1.0 (2026-10-02)
+
+### Feat
+
+- **template**: declare the pragma.provider entry point in scaffolded providers
+- **vercel**: declare the pragma.provider entry point
+- **supabase**: declare the pragma.provider entry point
+- **qdrant**: declare the pragma.provider entry point
+- **pragma**: declare the pragma.provider entry point
+- **kubernetes**: declare the pragma.provider entry point
+- **github**: declare the pragma.provider entry point
+- **gcp**: declare the pragma.provider entry point
+- **agno**: declare the pragma.provider entry point
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v15.0.0 (#109)
+
 ## qdrant-v8.0.2 (2026-10-01)
 
 ### Fix
