@@ -19,6 +19,9 @@ dev = [
     "ty==0.0.63",
 ]
 
+[project.entry-points."pragma.provider"]
+pragma = "pragma_provider"
+
 [tool.pragma]
 provider = "pragma"
 package = "pragma_provider"
