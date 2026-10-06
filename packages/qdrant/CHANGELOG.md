@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v8.1.1 (2026-10-06)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v16.0.0 (#111)
+
 ## qdrant-v8.1.0 (2026-10-02)
 
 ### Feat
