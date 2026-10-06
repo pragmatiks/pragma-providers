@@ -1,7 +1,8 @@
 [project]
 name = "pragmatiks-agno-provider"
 version = "2.1.0"
-description = "Agno agent provider for Pragmatiks"
+description = "Build and deploy AI agents, teams, and knowledge bases with models from OpenAI and Anthropic, MCP tools, and vector storage."
+keywords = ["ai", "agents", "llm", "openai", "anthropic", "knowledge-base"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -28,15 +29,6 @@ dev = [
 
 [project.entry-points."pragma.provider"]
 agno = "agno_provider"
-
-[tool.pragma]
-provider = "agno"
-package = "agno_provider"
-display_name = "Agno AI Agents"
-description = "Build and deploy AI agents, teams, and knowledge bases with models from OpenAI and Anthropic, MCP tools, and vector storage."
-icon_url = "https://cdn.prod.website-files.com/6796d350b8c706e4533e7e32/68a85d04c4b355c4accb0f9f_256.png"
-tags = ["ai", "agents", "llm", "openai", "anthropic", "knowledge-base"]
-entrypoint = ["python", "-m", "pragma_runtime.entrypoint"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
