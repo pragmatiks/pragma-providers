@@ -1,7 +1,8 @@
 [project]
 name = "pragmatiks-pragma-provider"
 version = "6.1.1"
-description = "Built-in platform provider for Pragmatiks"
+description = "Manage platform-native secrets, configuration, and file storage declaratively through Pragmatiks."
+keywords = ["platform", "secrets", "configuration", "files"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -21,14 +22,6 @@ dev = [
 
 [project.entry-points."pragma.provider"]
 pragma = "pragma_provider"
-
-[tool.pragma]
-provider = "pragma"
-package = "pragma_provider"
-display_name = "Pragma Platform"
-description = "Manage platform-native secrets, configuration, and file storage declaratively through Pragmatiks."
-icon_url = "https://pragmatiks.io/icon.svg"
-tags = ["platform", "secrets", "configuration", "files"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
