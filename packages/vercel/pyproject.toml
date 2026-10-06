@@ -1,7 +1,8 @@
 [project]
 name = "pragmatiks-vercel-provider"
 version = "6.1.1"
-description = "Vercel provider for Pragmatiks"
+description = "Manage Vercel projects, deployments, and domains through declarative resources using the Vercel REST API."
+keywords = ["vercel", "hosting", "deployments", "domains", "frontend"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -21,15 +22,6 @@ dev = [
 
 [project.entry-points."pragma.provider"]
 vercel = "vercel_provider"
-
-[tool.pragma]
-# Provider metadata - used by the platform for discovery and deployment
-provider = "vercel"
-package = "vercel_provider"
-display_name = "Vercel"
-description = "Manage Vercel projects, deployments, and domains through declarative resources using the Vercel REST API."
-icon_url = "https://cdn.simpleicons.org/vercel"
-tags = ["vercel", "hosting", "deployments", "domains", "frontend"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
