@@ -1,7 +1,8 @@
 [project]
 name = "pragmatiks-github-provider"
 version = "6.1.1"
-description = "GitHub provider for Pragmatiks"
+description = "Manage GitHub repositories, environments, and secrets through declarative resources using the GitHub REST API."
+keywords = ["github", "repositories", "secrets", "environments", "source-control"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -22,15 +23,6 @@ dev = [
 
 [project.entry-points."pragma.provider"]
 github = "github_provider"
-
-[tool.pragma]
-# Provider metadata - used by the platform for discovery and deployment
-provider = "github"
-package = "github_provider"
-display_name = "GitHub"
-description = "Manage GitHub repositories, environments, and secrets through declarative resources using the GitHub REST API."
-icon_url = "https://cdn.simpleicons.org/github"
-tags = ["github", "repositories", "secrets", "environments", "source-control"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
