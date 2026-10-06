@@ -1,7 +1,8 @@
 [project]
 name = "pragmatiks-kubernetes-provider"
 version = "2.1.0"
-description = "Generic Kubernetes resources using lightkube"
+description = "Deploy and manage Kubernetes resources including deployments, services, configmaps, secrets, and statefulsets."
+keywords = ["kubernetes", "orchestration", "containers", "infrastructure"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -24,16 +25,6 @@ dev = [
 
 [project.entry-points."pragma.provider"]
 kubernetes = "kubernetes_provider"
-
-[tool.pragma]
-# Provider metadata - used by the platform for discovery and deployment
-provider = "kubernetes"
-package = "kubernetes_provider"
-display_name = "Kubernetes"
-description = "Deploy and manage Kubernetes resources including deployments, services, configmaps, secrets, and statefulsets."
-icon_url = "https://cdn.simpleicons.org/kubernetes"
-tags = ["kubernetes", "orchestration", "containers", "infrastructure"]
-entrypoint = ["python", "-m", "pragma_runtime.entrypoint"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
