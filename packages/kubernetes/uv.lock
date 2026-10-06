@@ -290,7 +290,7 @@ wheels = [
 
 [[package]]
 name = "google-api-core"
-version = "2.40.0"
+version = "2.41.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-auth" },
@@ -300,9 +300,9 @@ dependencies = [
     { name = "protobuf" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/23/f7/0fb8c3618c783ad49da1aaf97f93a4bb9e4ed522135516b44d129a7f85bb/google_api_core-2.40.0.tar.gz", hash = "sha256:ebee7d1b138b5362beecec260e6e8988ac97346562c7382ccb6f0ad8435c599f", size = 258617, upload-time = "2026-09-29T19:25:54.611Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/c7/5c90a4b12d68efe3a6c277c9d0336e3d1e7f64b41dfb780e35d0eefec77a/google_api_core-2.41.0.tar.gz", hash = "sha256:73e89a86baef6680934adeee6fbd0ceaf20c1393ab229b2f9b34efb23b0fdef3", size = 262821, upload-time = "2026-10-05T17:11:08.492Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/44/e4/35f849ef989a801fa4f32ada19cef898fc32913c6b93bc2a6a4f95d2df9d/google_api_core-2.40.0-py3-none-any.whl", hash = "sha256:4b9e0a80024c269ae173136d5439f4ed284651d6e5e2773ba5c694f481f9c0f4", size = 214233, upload-time = "2026-09-29T19:25:29.006Z" },
+    { url = "https://files.pythonhosted.org/packages/18/93/98877c3d38474e3c4a8f9149e4b63c31f9e474abf09def1cada7489bfeaa/google_api_core-2.41.0-py3-none-any.whl", hash = "sha256:1f3d626b7a8022dda8deef200b845057231ddc7cbf0d999026bdf61ba38d7fdf", size = 215644, upload-time = "2026-10-05T17:11:06.837Z" },
 ]
 
 [package.optional-dependencies]
@@ -329,15 +329,15 @@ wheels = [
 
 [[package]]
 name = "google-auth"
-version = "2.59.1"
+version = "2.60.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "pyasn1-modules" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/81/e3/9f752a968e487fbc10b2c2a1dd561b62489f923972911009577bb88fe7bb/google_auth-2.59.1.tar.gz", hash = "sha256:ce50fc533ac02f489a2b183a0c156672c376ecb2091b1127bc7efba2975fff27", size = 384298, upload-time = "2026-09-30T17:26:25.738Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6e/a0/d9a866dbcf9de983d717a969744e50492d1c9c56b10207a9f23b3fab85d7/google_auth-2.60.0.tar.gz", hash = "sha256:34aa0283ef72c99cd410e35db4417211fa3e6aaa5399183227bbe3b82bd15192", size = 387015, upload-time = "2026-10-05T16:05:09.724Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/03/38/311ac322f46ecd789f1342bb7adb0a14b940cf54b5db0e92d4f449aa6cf8/google_auth-2.59.1-py3-none-any.whl", hash = "sha256:89c3f931683a482ac97e61df7eb9da5e08a91703f3c752b2377d72cfb7d69e6a", size = 263519, upload-time = "2026-09-30T17:26:24.017Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/f5/7e1770bb548086797ad936ffe7be3d0438f7066ff39982a7763bbb54ccb4/google_auth-2.60.0-py3-none-any.whl", hash = "sha256:e78414cd2e22cc02884768707def024ca32da17695f2c0e6194cdbe1316c4cd4", size = 264569, upload-time = "2026-10-05T16:05:08.053Z" },
 ]
 
 [[package]]
@@ -755,19 +755,19 @@ wheels = [
 
 [[package]]
 name = "opentelemetry-api"
-version = "1.45.0"
+version = "1.45.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1f/dc/e12c1fe1ed8a7b7149777127b1a0e12ce5bd5a81d97408bedc2128c260f5/opentelemetry_api-1.45.0.tar.gz", hash = "sha256:711ede81773c8025c2c03dac0450bc89f3d30aea6eabcc815c570d4e35a963f7", size = 72115, upload-time = "2026-09-25T12:32:28.399Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2e/02/6e0ae9cc61bd3169d401077b507b3ebc344745171e1051ab430be012dcd9/opentelemetry_api-1.45.1.tar.gz", hash = "sha256:aa38ed19bcc084ba42782a73255b3582283eced7ad6dddbd6695189e69adfb75", size = 72804, upload-time = "2026-10-06T17:32:58.133Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/44/b9/040d1a1c7836922828e6480cd2366bb8fe0ebf75b413d2bb51a9b0e7f78f/opentelemetry_api-1.45.0-py3-none-any.whl", hash = "sha256:80e068aba7cd56c8b58512d6a36f8d25cb1dfaa0c0a4cc1c938ccf9f362d9cb3", size = 60020, upload-time = "2026-09-25T12:32:03.192Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/41/f7dcf80b81ee8e71c1a2b59f14208bc723edbd89ed027a73b175abf6348e/opentelemetry_api-1.45.1-py3-none-any.whl", hash = "sha256:b31553efa588ae44bc306f863c785c5333a9ecc091248c6ee68b4b6c87fdedfb", size = 60256, upload-time = "2026-10-06T17:32:33.506Z" },
 ]
 
 [[package]]
 name = "pragmatiks-gcp-provider"
-version = "7.0.0"
+version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-python-client" },
@@ -777,14 +777,14 @@ dependencies = [
     { name = "google-cloud-secret-manager" },
     { name = "pragmatiks-sdk" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ae/bc/b5f6701413285106f9760569e8d1bf89b9bccb7e8e4cda3e610e5d21dd82/pragmatiks_gcp_provider-7.0.0.tar.gz", hash = "sha256:088b98b7083068973523d1fc9d599797fc551657d7445d50c23d9b11037f1851", size = 21505, upload-time = "2026-10-01T19:11:27.47Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/70/d5/818fe51a05a750515fbb4496646d1d918aeeec08ad4ea9e17423d85975b1/pragmatiks_gcp_provider-7.1.0.tar.gz", hash = "sha256:2d55160e2aa9a33ba0f5ddbe0ccee0de2220748e6d6d3a11e4715fab07aebf9c", size = 21531, upload-time = "2026-10-02T22:22:39.155Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/db/03/19da6745cf8700186d4c3dd2ce38642ff4a86b0b3ca11e5db74844c8074d/pragmatiks_gcp_provider-7.0.0-py3-none-any.whl", hash = "sha256:c36050352dfea15b77df4d94e16ea325c0d0fea2b3dd8123ddf95cc78f154956", size = 28767, upload-time = "2026-10-01T19:11:26.493Z" },
+    { url = "https://files.pythonhosted.org/packages/49/d6/4ccfa7944e7480796047df9c3b540c94e6cbf962cca3e6d49101c680c1cb/pragmatiks_gcp_provider-7.1.0-py3-none-any.whl", hash = "sha256:e55d122c44884f585c9f9ff49734ababf561e42d3f2f3d311aab10f9572f8e6f", size = 29040, upload-time = "2026-10-02T22:22:38.131Z" },
 ]
 
 [[package]]
 name = "pragmatiks-kubernetes-provider"
-version = "2.0.1"
+version = "2.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-auth" },
@@ -805,7 +805,7 @@ requires-dist = [
     { name = "google-auth", specifier = ">=2.30.0" },
     { name = "lightkube", specifier = ">=0.15.0" },
     { name = "pragmatiks-gcp-provider", specifier = ">=7.0.0" },
-    { name = "pragmatiks-sdk", specifier = ">=15.0.0" },
+    { name = "pragmatiks-sdk", specifier = ">=16.0.0" },
     { name = "requests", specifier = ">=2.32.0" },
 ]
 
@@ -817,7 +817,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-sdk"
-version = "15.0.0"
+version = "16.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -826,9 +826,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/96/07/85b6e9f11c80cc4fedb9226e2d12b6b07a2b732adfa92300199ad21c447d/pragmatiks_sdk-15.0.0.tar.gz", hash = "sha256:fcf0b687262078a133cf5deb5aea024cbbeb4e03a4c825ba4e4fe23fa20ece4b", size = 76257, upload-time = "2026-10-02T18:22:11.098Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ae/ac/a009639e59ffa3da9a7e5d4291ba95989451323b4f53820efa9f3cd48ffd/pragmatiks_sdk-16.0.0.tar.gz", hash = "sha256:98ea97ec2fc2eb49c7b9dc9f06ab66f4ec75b32f748f92e18fa015ca067281d9", size = 76217, upload-time = "2026-10-06T18:12:29.461Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c6/5a/116bae2bcb627949290018fbd4d8a443d675b668cceb7f80b6a079e5c375/pragmatiks_sdk-15.0.0-py3-none-any.whl", hash = "sha256:da5b4456fdab893aa6fddb8235b727fa7a974ec6ba777cfea16e317987d047c9", size = 97117, upload-time = "2026-10-02T18:22:09.836Z" },
+    { url = "https://files.pythonhosted.org/packages/04/4d/9e4ed0d2cdb9a90a211ea17685b0b11037db1c6a4771ee39522ee7290e2b/pragmatiks_sdk-16.0.0-py3-none-any.whl", hash = "sha256:2040450aa28d783d7cd2968b036fb8a69c24961e4604f8918bbbe3367ce9d5fa", size = 97129, upload-time = "2026-10-06T18:12:27.817Z" },
 ]
 
 [[package]]
