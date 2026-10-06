@@ -1,7 +1,8 @@
 [project]
 name = "pragmatiks-supabase-provider"
 version = "6.1.1"
-description = "Supabase provider for Pragmatiks"
+description = "Manage Supabase projects and configuration through declarative resources using the Management API."
+keywords = ["supabase", "database", "authentication", "backend-as-a-service"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -21,15 +22,6 @@ dev = [
 
 [project.entry-points."pragma.provider"]
 supabase = "supabase_provider"
-
-[tool.pragma]
-# Provider metadata - used by the platform for discovery and deployment
-provider = "supabase"
-package = "supabase_provider"
-display_name = "Supabase"
-description = "Manage Supabase projects and configuration through declarative resources using the Management API."
-icon_url = "https://cdn.simpleicons.org/supabase"
-tags = ["supabase", "database", "authentication", "backend-as-a-service"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
