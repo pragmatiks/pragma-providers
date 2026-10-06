@@ -46,13 +46,15 @@ from {{ package_name }}.resources import MyResource
 
 ## Deployment
 
-Push your provider to Pragmatiks platform:
+Publish a version to Pragmatiks:
 
 ```bash
-pragma provider push
+pragma providers publish
 ```
 
-The platform handles all runtime infrastructure - you just push your code.
+The command builds the wheel, uploads it, and waits until your organization's provider host admits it. Check a version's status with `pragma providers versions <organization>/{{ name }}`.
+
+The first published version creates the provider's catalog entry: `[project].description` in `pyproject.toml` becomes its description and `[project].keywords` its tags. Later versions leave the catalog description and tags unchanged.
 
 ## Updating This Project
 

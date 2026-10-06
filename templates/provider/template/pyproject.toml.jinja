@@ -2,6 +2,7 @@
 name = "{{ project_name }}"
 version = "0.1.0"
 description = "{{ description }}"
+keywords = []
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -21,14 +22,6 @@ dev = [
 
 [project.entry-points."pragma.provider"]
 {{ name }} = "{{ package_name }}"
-
-[tool.pragma]
-# Provider metadata - used by the platform for discovery and deployment
-provider = "{{ name }}"
-package = "{{ package_name }}"
-display_name = "{{ display_name }}"
-description = "{{ description }}"
-tags = []
 
 [tool.ruff]
 line-length = 120
