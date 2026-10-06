@@ -1,7 +1,8 @@
 [project]
 name = "pragmatiks-gcp-provider"
 version = "7.1.1"
-description = "GCP provider for Pragmatiks"
+description = "Manage GCP resources including Cloud SQL databases, GKE clusters, and secrets through declarative configuration."
+keywords = ["cloud", "gcp", "infrastructure", "database", "kubernetes"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -25,16 +26,6 @@ dev = [
 
 [project.entry-points."pragma.provider"]
 gcp = "gcp_provider"
-
-[tool.pragma]
-# Provider metadata - used by the platform for discovery and deployment
-provider = "gcp"
-package = "gcp_provider"
-display_name = "Google Cloud Platform"
-description = "Manage GCP resources including Cloud SQL databases, GKE clusters, and secrets through declarative configuration."
-icon_url = "https://cdn.simpleicons.org/googlecloud"
-tags = ["cloud", "gcp", "infrastructure", "database", "kubernetes"]
-entrypoint = ["python", "-m", "pragma_runtime.entrypoint"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
