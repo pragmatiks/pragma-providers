@@ -1,5 +1,5 @@
 [project]
-name = "pragmatiks-gcp-provider"
+name = "pragmatiks-gcp"
 version = "7.2.0"
 description = "Manage GCP resources including Cloud SQL databases, GKE clusters, and secrets through declarative configuration."
 keywords = ["cloud", "gcp", "infrastructure", "database", "kubernetes"]
