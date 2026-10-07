@@ -13,7 +13,7 @@ Declaratively manage Kubernetes workloads, networking, configuration, and cluste
 ## Installation
 
 ```bash
-pragma providers install kubernetes
+pragma providers install pragmatiks/kubernetes
 ```
 
 ## Resources
