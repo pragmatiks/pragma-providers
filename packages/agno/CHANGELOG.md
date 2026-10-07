@@ -1,3 +1,29 @@
+## agno-v2.2.0 (2026-10-07)
+
+### Feat
+
+- **template**: scaffold and publish providers for wheel admission
+- **vercel**: carry the catalog description and keywords in the project metadata
+- **supabase**: carry the catalog description and keywords in the project metadata
+- **qdrant**: carry the catalog description and keywords in the project metadata
+- **pragma**: carry the catalog description and keywords in the project metadata
+- **kubernetes**: carry the catalog description and keywords in the project metadata
+- **github**: carry the catalog description and keywords in the project metadata
+- **gcp**: carry the catalog description and keywords in the project metadata
+- **agno**: carry the catalog description and keywords in the project metadata
+
+### Fix
+
+- **pragma**: publish as pragmatiks-pragma
+- **github**: publish as pragmatiks-github
+- **vercel**: publish as pragmatiks-vercel
+- **supabase**: publish as pragmatiks-supabase
+- **agno**: publish as pragmatiks-agno
+- **qdrant**: publish as pragmatiks-qdrant
+- **kubernetes**: publish as pragmatiks-kubernetes
+- **gcp**: publish as pragmatiks-gcp
+- **deps**: update pragmatiks-sdk to v16.0.0 (#111)
+
 ## agno-v2.1.0 (2026-10-02)
 
 ### Feat
