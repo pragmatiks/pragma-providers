@@ -1,4 +1,4 @@
-"""Pragma platform provider for built-in resources.
+"""Pragmatiks provider for secrets, configuration, and files.
 
 Provides pragma/secret, pragma/config, and pragma/file resources for managing
 secrets, non-sensitive configuration, and file storage declaratively through
