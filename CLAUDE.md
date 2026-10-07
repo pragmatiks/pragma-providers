@@ -8,17 +8,19 @@
 
 Providers handle resource lifecycle events (CREATE, UPDATE, DELETE) by calling cloud APIs and returning results to the platform.
 
-**Each provider is an independent PyPI package.** Providers depend on each other through PyPI, not local source. They could live in separate repositories — this monorepo is a convenience, not a coupling.
+**The providers form one uv workspace.** Each provider is its own package with its own version and changelog. Providers that build on a sibling depend on it through a `workspace = true` source, never a path. Every provider publishes to the Pragmatiks registry only.
 
 ## Cross-Cutting Changes
 
 **Never bundle changes across multiple providers in a single commit or PR.** Each provider must be modified independently.
 
+Exception: a workspace-level change (build, publishing, naming) lands as one commit per provider in one rebase-merged PR.
+
 When an SDK interface change affects all providers:
 1. SDK change publishes to PyPI first
-2. SDK cascade (`update-sdk.yaml`) updates lockfiles in this repo
+2. SDK cascade (`update-sdk.yaml`) updates the root lockfile
 3. Each provider adapts individually — one commit per provider
-4. The publish workflow handles ordering (gcp → kubernetes/qdrant → agno)
+4. The publish workflow handles ordering (gcp → kubernetes → qdrant/agno)
 
 ## Development
 
@@ -71,7 +73,7 @@ If you find yourself thinking "I'm pretty sure this library does X" or "the API 
 
 Before writing custom code in a provider, work through these in order:
 
-1. **Reuse what is already in the project.** Check the provider's `pyproject.toml` and lockfile for an existing dependency that solves the problem. Grep the provider's codebase for prior patterns. The cheapest correct answer is already on disk.
+1. **Reuse what is already in the project.** Check the provider's `pyproject.toml` and the root workspace `uv.lock` for an existing dependency that solves the problem. Grep the provider's codebase for prior patterns. The cheapest correct answer is already on disk.
 2. **Adopt an established external library.** Look for popular, state-of-the-art, actively maintained libraries — typically the cloud vendor's official SDK. Verify GitHub stars / last release / open critical issues / maintainer reputation. A boring widely-used library beats a custom implementation.
 3. **Custom code, only as a last resort.** Only after 1 and 2 fail should you write it from scratch.
 
@@ -85,30 +87,33 @@ If your work requires adding a new top-level dependency to a provider package, S
 2. **Present findings to the user** with a one-sentence recommendation. Do NOT install the dependency or write code that uses it.
 3. **Wait for approval.** Install only after explicit user approval (`uv add` inside the relevant `packages/<provider>/` directory). If rejected, revisit the solution preference order.
 
-This applies to any new top-level dependency. It does NOT apply to transitive dependencies pulled in by existing direct deps. Each provider has its own dependency set — keep this per-package and never share deps across providers via the workspace root.
+This applies to any new top-level dependency. It does NOT apply to transitive dependencies pulled in by existing direct deps. Each provider declares its own dependencies in its own `pyproject.toml`, never in the root `[project]`; the members share one resolution through the root `uv.lock`.
 
-## Publishing to PyPI
+## Publishing to the Pragmatiks registry
 
-Each provider is a separate PyPI package:
+Each provider publishes to the Pragmatiks registry as its own distribution, never to PyPI:
 
-| Provider | Package | Tag Format |
-|----------|---------|------------|
-| GCP | `pragmatiks-gcp-provider` | `gcp-v{version}` |
+| Provider | Distribution | Tag Format |
+|----------|--------------|------------|
+| GCP | `pragmatiks-gcp` | `gcp-v{version}` |
+| Supabase | `pragmatiks-supabase` | `supabase-v{version}` |
+| Vercel | `pragmatiks-vercel` | `vercel-v{version}` |
+| GitHub | `pragmatiks-github` | `github-v{version}` |
+| Pragma | `pragmatiks-pragma` | `pragma-v{version}` |
+| Kubernetes | `pragmatiks-kubernetes` | `kubernetes-v{version}` |
+| Qdrant | `pragmatiks-qdrant` | `qdrant-v{version}` |
+| Agno | `pragmatiks-agno` | `agno-v{version}` |
 
-**Versioning** (commitizen, per-package):
-```bash
-cd packages/gcp
-cz bump              # Bump version based on conventional commits
+**Versioning**: CI bumps each provider with commitizen from its conventional commits and pushes the tag. Never bump versions or edit changelogs by hand.
+
+**Publishing**: `scripts/publish_platform_provider.sh` builds the wheel with `uv build --wheel --no-sources`, which ignores `[tool.uv.sources]` so build requirements resolve from the package index, not the workspace, and publishes it with `pragma providers publish --wheel`.
+
+**Embedded providers**: a provider declares every Pragmatiks provider among its dependencies, direct or transitive, under `[project.entry-points."pragma.embeds"]`, keyed by distribution name. The platform reads only the key; by convention the value is the embedded provider's import package:
+
+```toml
+[project.entry-points."pragma.embeds"]
+pragmatiks-gcp = "gcp_provider"
 ```
-
-**Publishing**:
-```bash
-cd packages/gcp
-uv build             # Build wheel and sdist
-uv publish           # Publish to PyPI (requires PYPI_TOKEN)
-```
-
-**Note**: Each provider has its own version and changelog.
 
 ## Engineering Principles
 

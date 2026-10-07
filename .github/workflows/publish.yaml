@@ -7,12 +7,12 @@ on:
   workflow_dispatch:
     inputs:
       allow_no_commit:
-        description: "Force commitizen to bump even with no eligible commits (use after a catalog wipe)"
+        description: "Bump as a PATCH, even when feat or breaking commits call for MINOR or MAJOR or no commit is eligible; recovers after a Pragmatiks catalog reset. Ignored when publish_only is set"
         type: boolean
         required: false
         default: false
-      register_only:
-        description: "Skip cz bump, tag push, GitHub release, and PyPI publish; only re-register the existing pyproject version with the Pragma catalog"
+      publish_only:
+        description: "Skip bump, tag and GitHub release; re-publish the pyproject version to the Pragmatiks registry"
         type: boolean
         required: false
         default: false
@@ -21,7 +21,7 @@ on:
 #   gcp, supabase, vercel, github, pragma  (no internal deps — run in parallel)
 #   kubernetes  (depends on gcp)
 #   qdrant      (depends on kubernetes)
-#   agno        (depends on gcp, kubernetes)
+#   agno        (depends on kubernetes)
 #
 # Change propagation:
 #   gcp changed      → gcp, kubernetes, qdrant, agno
@@ -55,7 +55,6 @@ jobs:
           filters: |
             shared:
               - 'pyproject.toml'
-              - 'uv.lock'
             gcp:
               - 'packages/gcp/**'
             kubernetes:
@@ -86,7 +85,6 @@ jobs:
     environment: pypi
     permissions:
       contents: write
-      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -116,25 +114,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump and build
+      - name: Bump
         id: bump
+        shell: bash
         env:
-          # `cz bump` defaults to MAJOR when `--allow-no-commit` is set with no
-          # eligible commits. Pin to PATCH so catalog-recovery dispatches can't
-          # bump majors for free. Real `feat:`/`fix:`/`BREAKING CHANGE` commits
-          # on `push` events still drive the increment via the empty default.
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/gcp
-          if [ "${{ inputs.register_only }}" = "true" ]; then
+          if [ "${{ inputs.publish_only }}" = "true" ]; then
             VERSION=$(cz version --project)
-            echo "Register-only mode: using existing v$VERSION"
+            echo "Publish-only mode: using existing v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped gcp to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-            uv build --package pragmatiks-gcp-provider --out-dir ../../dist
           else
             if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for gcp"
@@ -145,7 +139,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
-        if: inputs.register_only != true
+        if: inputs.publish_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --tags && exit 0
@@ -155,30 +149,26 @@ jobs:
           echo "Failed to push after 5 attempts"
           exit 1
 
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          gh release create "gcp-v${VERSION}" \
-            --title "pragmatiks-gcp-provider v${VERSION}" \
-            --generate-notes \
-            dist/pragmatiks_gcp_provider-${VERSION}* || echo "Release may already exist"
-
-      - name: Publish to PyPI
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: dist/
-          skip-existing: true
-          attestations: false
-
-      - name: Publish to pragma store
+      - name: Publish to the Pragmatiks registry
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/gcp "${{ steps.bump.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != '' && inputs.publish_only != true
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          TAG="gcp-v${VERSION}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          elif ! gh release create "$TAG" --title "pragmatiks/gcp v${VERSION}" --generate-notes; then
+            echo "::error title=GitHub Release::Release $TAG was not created"
+            exit 1
+          fi
 
   publish-supabase:
     needs: [detect-changes]
@@ -192,7 +182,6 @@ jobs:
     environment: pypi
     permissions:
       contents: write
-      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -222,25 +211,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump and build
+      - name: Bump
         id: bump
+        shell: bash
         env:
-          # `cz bump` defaults to MAJOR when `--allow-no-commit` is set with no
-          # eligible commits. Pin to PATCH so catalog-recovery dispatches can't
-          # bump majors for free. Real `feat:`/`fix:`/`BREAKING CHANGE` commits
-          # on `push` events still drive the increment via the empty default.
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/supabase
-          if [ "${{ inputs.register_only }}" = "true" ]; then
+          if [ "${{ inputs.publish_only }}" = "true" ]; then
             VERSION=$(cz version --project)
-            echo "Register-only mode: using existing v$VERSION"
+            echo "Publish-only mode: using existing v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped supabase to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-            uv build --package pragmatiks-supabase-provider --out-dir ../../dist
           else
             if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for supabase"
@@ -251,7 +236,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
-        if: inputs.register_only != true
+        if: inputs.publish_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --tags && exit 0
@@ -261,30 +246,26 @@ jobs:
           echo "Failed to push after 5 attempts"
           exit 1
 
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          gh release create "supabase-v${VERSION}" \
-            --title "pragmatiks-supabase-provider v${VERSION}" \
-            --generate-notes \
-            dist/pragmatiks_supabase_provider-${VERSION}* || echo "Release may already exist"
-
-      - name: Publish to PyPI
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: dist/
-          skip-existing: true
-          attestations: false
-
-      - name: Publish to pragma store
+      - name: Publish to the Pragmatiks registry
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/supabase "${{ steps.bump.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != '' && inputs.publish_only != true
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          TAG="supabase-v${VERSION}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          elif ! gh release create "$TAG" --title "pragmatiks/supabase v${VERSION}" --generate-notes; then
+            echo "::error title=GitHub Release::Release $TAG was not created"
+            exit 1
+          fi
 
   publish-vercel:
     needs: [detect-changes]
@@ -298,7 +279,6 @@ jobs:
     environment: pypi
     permissions:
       contents: write
-      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -328,25 +308,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump and build
+      - name: Bump
         id: bump
+        shell: bash
         env:
-          # `cz bump` defaults to MAJOR when `--allow-no-commit` is set with no
-          # eligible commits. Pin to PATCH so catalog-recovery dispatches can't
-          # bump majors for free. Real `feat:`/`fix:`/`BREAKING CHANGE` commits
-          # on `push` events still drive the increment via the empty default.
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/vercel
-          if [ "${{ inputs.register_only }}" = "true" ]; then
+          if [ "${{ inputs.publish_only }}" = "true" ]; then
             VERSION=$(cz version --project)
-            echo "Register-only mode: using existing v$VERSION"
+            echo "Publish-only mode: using existing v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped vercel to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-            uv build --package pragmatiks-vercel-provider --out-dir ../../dist
           else
             if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for vercel"
@@ -357,7 +333,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
-        if: inputs.register_only != true
+        if: inputs.publish_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --tags && exit 0
@@ -367,30 +343,26 @@ jobs:
           echo "Failed to push after 5 attempts"
           exit 1
 
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          gh release create "vercel-v${VERSION}" \
-            --title "pragmatiks-vercel-provider v${VERSION}" \
-            --generate-notes \
-            dist/pragmatiks_vercel_provider-${VERSION}* || echo "Release may already exist"
-
-      - name: Publish to PyPI
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: dist/
-          skip-existing: true
-          attestations: false
-
-      - name: Publish to pragma store
+      - name: Publish to the Pragmatiks registry
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/vercel "${{ steps.bump.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != '' && inputs.publish_only != true
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          TAG="vercel-v${VERSION}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          elif ! gh release create "$TAG" --title "pragmatiks/vercel v${VERSION}" --generate-notes; then
+            echo "::error title=GitHub Release::Release $TAG was not created"
+            exit 1
+          fi
 
   publish-github:
     needs: [detect-changes]
@@ -404,7 +376,6 @@ jobs:
     environment: pypi
     permissions:
       contents: write
-      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -434,25 +405,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump and build
+      - name: Bump
         id: bump
+        shell: bash
         env:
-          # `cz bump` defaults to MAJOR when `--allow-no-commit` is set with no
-          # eligible commits. Pin to PATCH so catalog-recovery dispatches can't
-          # bump majors for free. Real `feat:`/`fix:`/`BREAKING CHANGE` commits
-          # on `push` events still drive the increment via the empty default.
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/github
-          if [ "${{ inputs.register_only }}" = "true" ]; then
+          if [ "${{ inputs.publish_only }}" = "true" ]; then
             VERSION=$(cz version --project)
-            echo "Register-only mode: using existing v$VERSION"
+            echo "Publish-only mode: using existing v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped github to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-            uv build --package pragmatiks-github-provider --out-dir ../../dist
           else
             if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for github"
@@ -463,7 +430,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
-        if: inputs.register_only != true
+        if: inputs.publish_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --tags && exit 0
@@ -473,30 +440,26 @@ jobs:
           echo "Failed to push after 5 attempts"
           exit 1
 
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          gh release create "github-v${VERSION}" \
-            --title "pragmatiks-github-provider v${VERSION}" \
-            --generate-notes \
-            dist/pragmatiks_github_provider-${VERSION}* || echo "Release may already exist"
-
-      - name: Publish to PyPI
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: dist/
-          skip-existing: true
-          attestations: false
-
-      - name: Publish to pragma store
+      - name: Publish to the Pragmatiks registry
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/github "${{ steps.bump.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != '' && inputs.publish_only != true
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          TAG="github-v${VERSION}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          elif ! gh release create "$TAG" --title "pragmatiks/github v${VERSION}" --generate-notes; then
+            echo "::error title=GitHub Release::Release $TAG was not created"
+            exit 1
+          fi
 
   publish-pragma:
     needs: [detect-changes]
@@ -510,7 +473,6 @@ jobs:
     environment: pypi
     permissions:
       contents: write
-      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -540,25 +502,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump and build
+      - name: Bump
         id: bump
+        shell: bash
         env:
-          # `cz bump` defaults to MAJOR when `--allow-no-commit` is set with no
-          # eligible commits. Pin to PATCH so catalog-recovery dispatches can't
-          # bump majors for free. Real `feat:`/`fix:`/`BREAKING CHANGE` commits
-          # on `push` events still drive the increment via the empty default.
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/pragma
-          if [ "${{ inputs.register_only }}" = "true" ]; then
+          if [ "${{ inputs.publish_only }}" = "true" ]; then
             VERSION=$(cz version --project)
-            echo "Register-only mode: using existing v$VERSION"
+            echo "Publish-only mode: using existing v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped pragma to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-            uv build --package pragmatiks-pragma-provider --out-dir ../../dist
           else
             if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for pragma"
@@ -569,7 +527,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
-        if: inputs.register_only != true
+        if: inputs.publish_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --tags && exit 0
@@ -579,30 +537,26 @@ jobs:
           echo "Failed to push after 5 attempts"
           exit 1
 
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          gh release create "pragma-v${VERSION}" \
-            --title "pragmatiks-pragma-provider v${VERSION}" \
-            --generate-notes \
-            dist/pragmatiks_pragma_provider-${VERSION}* || echo "Release may already exist"
-
-      - name: Publish to PyPI
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: dist/
-          skip-existing: true
-          attestations: false
-
-      - name: Publish to pragma store
+      - name: Publish to the Pragmatiks registry
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/pragma "${{ steps.bump.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != '' && inputs.publish_only != true
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          TAG="pragma-v${VERSION}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          elif ! gh release create "$TAG" --title "pragmatiks/pragma v${VERSION}" --generate-notes; then
+            echo "::error title=GitHub Release::Release $TAG was not created"
+            exit 1
+          fi
 
   publish-kubernetes:
     needs: [detect-changes, publish-gcp]
@@ -628,7 +582,6 @@ jobs:
     environment: pypi
     permissions:
       contents: write
-      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -661,42 +614,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Wait for PyPI availability
-        if: needs.publish-gcp.outputs.version != ''
-        run: |
-          PACKAGE="pragmatiks-gcp-provider"
-          VERSION="${{ needs.publish-gcp.outputs.version }}"
-          echo "Waiting for $PACKAGE v$VERSION on PyPI..."
-          for i in {1..30}; do
-            if curl -sf --max-time 30 "https://pypi.org/pypi/$PACKAGE/$VERSION/json" > /dev/null; then
-              echo "Package available on PyPI"
-              exit 0
-            fi
-            echo "Attempt $i: Package not yet available, waiting 10s..."
-            sleep 10
-          done
-          echo "Timed out waiting for package on PyPI"
-          exit 1
-
-      - name: Bump and build
+      - name: Bump
         id: bump
+        shell: bash
         env:
-          # `cz bump` defaults to MAJOR when `--allow-no-commit` is set with no
-          # eligible commits. Pin to PATCH so catalog-recovery dispatches can't
-          # bump majors for free. Real `feat:`/`fix:`/`BREAKING CHANGE` commits
-          # on `push` events still drive the increment via the empty default.
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/kubernetes
-          if [ "${{ inputs.register_only }}" = "true" ]; then
+          if [ "${{ inputs.publish_only }}" = "true" ]; then
             VERSION=$(cz version --project)
-            echo "Register-only mode: using existing v$VERSION"
+            echo "Publish-only mode: using existing v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped kubernetes to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-            uv build --package pragmatiks-kubernetes-provider --out-dir ../../dist
           else
             if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for kubernetes"
@@ -707,7 +639,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
-        if: inputs.register_only != true
+        if: inputs.publish_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --tags && exit 0
@@ -717,30 +649,26 @@ jobs:
           echo "Failed to push after 5 attempts"
           exit 1
 
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          gh release create "kubernetes-v${VERSION}" \
-            --title "pragmatiks-kubernetes-provider v${VERSION}" \
-            --generate-notes \
-            dist/pragmatiks_kubernetes_provider-${VERSION}* || echo "Release may already exist"
-
-      - name: Publish to PyPI
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: dist/
-          skip-existing: true
-          attestations: false
-
-      - name: Publish to pragma store
+      - name: Publish to the Pragmatiks registry
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/kubernetes "${{ steps.bump.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != '' && inputs.publish_only != true
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          TAG="kubernetes-v${VERSION}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          elif ! gh release create "$TAG" --title "pragmatiks/kubernetes v${VERSION}" --generate-notes; then
+            echo "::error title=GitHub Release::Release $TAG was not created"
+            exit 1
+          fi
 
   publish-qdrant:
     needs: [detect-changes, publish-kubernetes]
@@ -765,7 +693,6 @@ jobs:
     environment: pypi
     permissions:
       contents: write
-      id-token: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -798,42 +725,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Wait for PyPI availability
-        if: needs.publish-kubernetes.outputs.version != ''
-        run: |
-          PACKAGE="pragmatiks-kubernetes-provider"
-          VERSION="${{ needs.publish-kubernetes.outputs.version }}"
-          echo "Waiting for $PACKAGE v$VERSION on PyPI..."
-          for i in {1..30}; do
-            if curl -sf --max-time 30 "https://pypi.org/pypi/$PACKAGE/$VERSION/json" > /dev/null; then
-              echo "Package available on PyPI"
-              exit 0
-            fi
-            echo "Attempt $i: Package not yet available, waiting 10s..."
-            sleep 10
-          done
-          echo "Timed out waiting for package on PyPI"
-          exit 1
-
-      - name: Bump and build
+      - name: Bump
         id: bump
+        shell: bash
         env:
-          # `cz bump` defaults to MAJOR when `--allow-no-commit` is set with no
-          # eligible commits. Pin to PATCH so catalog-recovery dispatches can't
-          # bump majors for free. Real `feat:`/`fix:`/`BREAKING CHANGE` commits
-          # on `push` events still drive the increment via the empty default.
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/qdrant
-          if [ "${{ inputs.register_only }}" = "true" ]; then
+          if [ "${{ inputs.publish_only }}" = "true" ]; then
             VERSION=$(cz version --project)
-            echo "Register-only mode: using existing v$VERSION"
+            echo "Publish-only mode: using existing v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped qdrant to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-            uv build --package pragmatiks-qdrant-provider --out-dir ../../dist
           else
             if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for qdrant"
@@ -844,7 +750,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
-        if: inputs.register_only != true
+        if: inputs.publish_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --tags && exit 0
@@ -854,30 +760,26 @@ jobs:
           echo "Failed to push after 5 attempts"
           exit 1
 
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          gh release create "qdrant-v${VERSION}" \
-            --title "pragmatiks-qdrant-provider v${VERSION}" \
-            --generate-notes \
-            dist/pragmatiks_qdrant_provider-${VERSION}* || echo "Release may already exist"
-
-      - name: Publish to PyPI
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: dist/
-          skip-existing: true
-          attestations: false
-
-      - name: Publish to pragma store
+      - name: Publish to the Pragmatiks registry
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/qdrant "${{ steps.bump.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != '' && inputs.publish_only != true
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          TAG="qdrant-v${VERSION}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          elif ! gh release create "$TAG" --title "pragmatiks/qdrant v${VERSION}" --generate-notes; then
+            echo "::error title=GitHub Release::Release $TAG was not created"
+            exit 1
+          fi
 
   publish-agno:
     needs: [detect-changes, publish-gcp, publish-kubernetes]
@@ -903,7 +805,6 @@ jobs:
     environment: pypi
     permissions:
       contents: write
-      id-token: write
       packages: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
@@ -937,51 +838,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Wait for PyPI availability
-        run: |
-          wait_for_package() {
-            local package=$1
-            local version=$2
-            echo "Waiting for $package v$version on PyPI..."
-            for i in {1..30}; do
-              if curl -sf --max-time 30 "https://pypi.org/pypi/$package/$version/json" > /dev/null; then
-                echo "Package available on PyPI"
-                return 0
-              fi
-              echo "Attempt $i: Package not yet available, waiting 10s..."
-              sleep 10
-            done
-            echo "Timed out waiting for $package v$version on PyPI"
-            return 1
-          }
-
-          if [ -n "${{ needs.publish-gcp.outputs.version }}" ]; then
-            wait_for_package pragmatiks-gcp-provider "${{ needs.publish-gcp.outputs.version }}"
-          fi
-
-          if [ -n "${{ needs.publish-kubernetes.outputs.version }}" ]; then
-            wait_for_package pragmatiks-kubernetes-provider "${{ needs.publish-kubernetes.outputs.version }}"
-          fi
-
-      - name: Bump and build
+      - name: Bump
         id: bump
+        shell: bash
         env:
-          # `cz bump` defaults to MAJOR when `--allow-no-commit` is set with no
-          # eligible commits. Pin to PATCH so catalog-recovery dispatches can't
-          # bump majors for free. Real `feat:`/`fix:`/`BREAKING CHANGE` commits
-          # on `push` events still drive the increment via the empty default.
           ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
         run: |
           cd packages/agno
-          if [ "${{ inputs.register_only }}" = "true" ]; then
+          if [ "${{ inputs.publish_only }}" = "true" ]; then
             VERSION=$(cz version --project)
-            echo "Register-only mode: using existing v$VERSION"
+            echo "Publish-only mode: using existing v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
             VERSION=$(cz version --project)
             echo "Bumped agno to v$VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-            uv build --package pragmatiks-agno-provider --out-dir ../../dist
           else
             if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
               echo "No bump needed for agno"
@@ -992,7 +863,7 @@ jobs:
           fi
 
       - name: Push version bumps and tags
-        if: inputs.register_only != true
+        if: inputs.publish_only != true
         run: |
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push origin main --tags && exit 0
@@ -1002,30 +873,26 @@ jobs:
           echo "Failed to push after 5 attempts"
           exit 1
 
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          gh release create "agno-v${VERSION}" \
-            --title "pragmatiks-agno-provider v${VERSION}" \
-            --generate-notes \
-            dist/pragmatiks_agno_provider-${VERSION}* || echo "Release may already exist"
-
-      - name: Publish to PyPI
-        if: steps.bump.outputs.version != '' && inputs.register_only != true
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: dist/
-          skip-existing: true
-          attestations: false
-
-      - name: Publish to pragma store
+      - name: Publish to the Pragmatiks registry
         if: steps.bump.outputs.version != ''
         env:
           PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
         run: ./scripts/publish_platform_provider.sh packages/agno "${{ steps.bump.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.version != '' && inputs.publish_only != true
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          TAG="agno-v${VERSION}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          elif ! gh release create "$TAG" --title "pragmatiks/agno v${VERSION}" --generate-notes; then
+            echo "::error title=GitHub Release::Release $TAG was not created"
+            exit 1
+          fi
 
       - name: Read runner transport version
         id: runner-transport

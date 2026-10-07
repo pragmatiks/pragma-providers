@@ -31,7 +31,7 @@ tasks:
 
   install:
     desc: Install all provider dependencies
-    cmd: uv sync --all-groups
+    cmd: uv sync --all-packages --all-groups
 
   format:
     desc: Format all Python code
