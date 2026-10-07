@@ -1,5 +1,5 @@
 [project]
-name = "pragmatiks-vercel-provider"
+name = "pragmatiks-vercel"
 version = "6.2.0"
 description = "Manage Vercel projects, deployments, and domains through declarative resources using the Vercel REST API."
 keywords = ["vercel", "hosting", "deployments", "domains", "frontend"]

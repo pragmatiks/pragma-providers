@@ -2,6 +2,12 @@
 
 Manage Vercel projects, deployments, and domains through declarative resources using the Vercel REST API.
 
+## Installation
+
+```bash
+pragma providers install pragmatiks/vercel
+```
+
 ## Resources
 
 - **Project** - Create and manage Vercel projects with framework, build settings, and environment variables
