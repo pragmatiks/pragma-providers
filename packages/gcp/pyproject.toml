@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-gcp-provider"
-version = "7.1.1"
+version = "7.2.0"
 description = "Manage GCP resources including Cloud SQL databases, GKE clusters, and secrets through declarative configuration."
 keywords = ["cloud", "gcp", "infrastructure", "database", "kubernetes"]
 readme = "README.md"
@@ -29,7 +29,7 @@ gcp = "gcp_provider"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "7.1.1"
+version = "7.2.0"
 version_files = ["pyproject.toml:^version"]
 tag_format = "gcp-v$version"
 update_changelog_on_bump = true
