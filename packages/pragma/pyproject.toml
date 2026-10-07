@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-pragma-provider"
-version = "6.1.1"
+version = "6.2.0"
 description = "Manage platform-native secrets, configuration, and file storage declaratively through Pragmatiks."
 keywords = ["platform", "secrets", "configuration", "files"]
 readme = "README.md"
@@ -25,7 +25,7 @@ pragma = "pragma_provider"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "6.1.1"
+version = "6.2.0"
 version_files = ["pyproject.toml:^version"]
 tag_format = "pragma-v$version"
 update_changelog_on_bump = true
