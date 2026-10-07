@@ -1,3 +1,16 @@
+## pragma-v6.2.1 (2026-10-07)
+
+### Fix
+
+- **pragma**: publish as pragmatiks-pragma
+- **github**: publish as pragmatiks-github
+- **vercel**: publish as pragmatiks-vercel
+- **supabase**: publish as pragmatiks-supabase
+- **agno**: publish as pragmatiks-agno
+- **qdrant**: publish as pragmatiks-qdrant
+- **kubernetes**: publish as pragmatiks-kubernetes
+- **gcp**: publish as pragmatiks-gcp
+
 ## pragma-v6.2.0 (2026-10-07)
 
 ### Feat
