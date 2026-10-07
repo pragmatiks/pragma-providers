@@ -1,5 +1,5 @@
 [project]
-name = "pragmatiks-qdrant-provider"
+name = "pragmatiks-qdrant"
 version = "8.2.0"
 description = "Provision and manage Qdrant vector database instances and collections for similarity search and AI applications."
 keywords = ["vector-database", "search", "ai", "embeddings"]
@@ -7,7 +7,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "pragmatiks-sdk>=16.0.0",
-    "pragmatiks-kubernetes-provider>=2.0.1",
+    "pragmatiks-kubernetes>=2.0.1",
     "qdrant-client>=1.12.0",
 ]
 
@@ -24,6 +24,10 @@ dev = [
 [project.entry-points."pragma.provider"]
 qdrant = "qdrant_provider"
 
+[project.entry-points."pragma.embeds"]
+pragmatiks-gcp = "gcp_provider"
+pragmatiks-kubernetes = "kubernetes_provider"
+
 [tool.commitizen]
 name = "cz_conventional_commits"
 version = "8.2.0"
@@ -35,6 +39,9 @@ changelog_file = "CHANGELOG.md"
 [tool.ruff]
 extend = "../../pyproject.toml"
 line-length = 120
+
+[tool.uv.sources]
+pragmatiks-kubernetes = { workspace = true }
 
 [tool.uv.build-backend]
 module-name = "qdrant_provider"
