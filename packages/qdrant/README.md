@@ -18,7 +18,7 @@ Manage [Qdrant](https://qdrant.tech) vector database deployments and collections
 ## Installation
 
 ```bash
-pragma providers install qdrant
+pragma providers install pragmatiks/qdrant
 ```
 
 ---
