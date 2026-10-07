@@ -1,5 +1,5 @@
 [project]
-name = "pragmatiks-supabase-provider"
+name = "pragmatiks-supabase"
 version = "6.2.0"
 description = "Manage Supabase projects and configuration through declarative resources using the Management API."
 keywords = ["supabase", "database", "authentication", "backend-as-a-service"]

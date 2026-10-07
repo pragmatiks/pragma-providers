@@ -2,6 +2,12 @@
 
 Manage Supabase projects and configuration through declarative resources using the Supabase Management API.
 
+## Installation
+
+```bash
+pragma providers install pragmatiks/supabase
+```
+
 ## Resources
 
 - **Project** - Create and manage Supabase projects, including their authentication settings (providers, signups, JWT expiry)
