@@ -37,7 +37,7 @@ pragma resources get gcp/secret db-password
 Manage Google Cloud Platform resources.
 
 ```bash
-pip install pragmatiks-gcp-provider
+pragma providers install pragmatiks/gcp
 ```
 
 | Resource | Description |
@@ -48,45 +48,115 @@ pip install pragmatiks-gcp-provider
 | `gcp/cloudsql/database` | Cloud SQL databases |
 | `gcp/cloudsql/user` | Cloud SQL users |
 
+### Supabase Provider
+
+Manage Supabase projects.
+
+```bash
+pragma providers install pragmatiks/supabase
+```
+
+| Resource | Description |
+|----------|-------------|
+| `supabase/project` | Supabase projects and their authentication settings |
+
+### Vercel Provider
+
+Manage Vercel projects, deployments, and domains.
+
+```bash
+pragma providers install pragmatiks/vercel
+```
+
+| Resource | Description |
+|----------|-------------|
+| `vercel/project` | Vercel projects |
+| `vercel/deployment` | Deployments of a Vercel project |
+| `vercel/domain` | Custom domains on Vercel projects |
+
+### GitHub Provider
+
+Manage GitHub repositories, environments, and secrets.
+
+```bash
+pragma providers install pragmatiks/github
+```
+
+| Resource | Description |
+|----------|-------------|
+| `github/repository` | GitHub repositories |
+| `github/environment` | GitHub deployment environments |
+| `github/secret` | GitHub repository and environment secrets |
+
+### Pragma Provider
+
+Manage secrets, configuration, and files stored by Pragmatiks.
+
+```bash
+pragma providers install pragmatiks/pragma
+```
+
+| Resource | Description |
+|----------|-------------|
+| `pragma/secret` | Platform-managed secrets |
+| `pragma/config` | Non-sensitive configuration values |
+| `pragma/file` | Platform-managed file storage |
+
 ### Kubernetes Provider
 
 Manage Kubernetes resources.
 
 ```bash
-pip install pragmatiks-kubernetes-provider
+pragma providers install pragmatiks/kubernetes
 ```
 
 | Resource | Description |
 |----------|-------------|
-| `kubernetes/configmap` | ConfigMaps |
-| `kubernetes/secret` | Secrets |
-| `kubernetes/service` | Services |
-| `kubernetes/statefulset` | StatefulSets |
+| `kubernetes/config` | Authenticated Kubernetes cluster access |
+| `kubernetes/deployment` | Kubernetes Deployments |
+| `kubernetes/service` | Kubernetes Services |
+| `kubernetes/configmap` | Kubernetes ConfigMaps |
+| `kubernetes/secret` | Kubernetes Secrets |
+| `kubernetes/statefulset` | Kubernetes StatefulSets |
+| `kubernetes/namespace` | Kubernetes Namespaces |
 
 ### Qdrant Provider
 
 Vector database for similarity search.
 
 ```bash
-pip install pragmatiks-qdrant-provider
+pragma providers install pragmatiks/qdrant
 ```
 
 | Resource | Description |
 |----------|-------------|
-| `qdrant/database` | Deploy Qdrant to GKE via Helm |
-| `qdrant/collection` | Manage vector collections |
+| `qdrant/collection` | Qdrant vector collections |
+| `qdrant/database` | Qdrant databases deployed to Kubernetes |
 
 ### Agno Provider
 
 AI agent deployment.
 
 ```bash
-pip install pragmatiks-agno-provider
+pragma providers install pragmatiks/agno
 ```
 
 | Resource | Description |
 |----------|-------------|
-| `agno/agent` | Deploy AI agents to GKE |
+| `agno/agent` | Agno agent definitions |
+| `agno/db/postgres` | Agno Postgres storage for agents |
+| `agno/runner` | Agno runners on Kubernetes |
+| `agno/knowledge` | Agno knowledge bases for semantic search |
+| `agno/knowledge/content` | Agno knowledge content sources |
+| `agno/knowledge/embedder/openai` | Agno OpenAI embedders |
+| `agno/memory/manager` | Agno memory managers |
+| `agno/models/anthropic` | Agno Anthropic Claude models |
+| `agno/models/openai` | Agno OpenAI chat models |
+| `agno/prompt` | Agno prompt templates |
+| `agno/team` | Agno team definitions |
+| `agno/tools/mcp` | Agno MCP server tools |
+| `agno/tools/websearch` | Agno web search tools |
+| `agno/vectordb/qdrant` | Agno Qdrant vector databases |
 
 ## Using Provider Resources
 
@@ -127,8 +197,9 @@ pragma providers init mycompany
 cd mycompany-provider
 # Edit src/mycompany_provider/resources/
 
-# Deploy to the platform
-pragma providers push --deploy
+# Publish a version, then install it in your organization
+pragma providers publish
+pragma providers install <org>/mycompany
 ```
 
 See the [Building Providers Guide](https://docs.pragmatiks.io/building-providers/overview) for complete documentation.
@@ -194,9 +265,13 @@ task gcp:check
 pragma-providers/
 ├── packages/
 │   ├── gcp/              # GCP provider (secret, gke, cloudsql)
-│   ├── kubernetes/       # Kubernetes provider
-│   ├── qdrant/           # Qdrant provider (database, collection)
-│   └── agno/             # Agno provider (agent)
+│   ├── supabase/         # Supabase provider (project)
+│   ├── vercel/           # Vercel provider (project, deployment, domain)
+│   ├── github/           # GitHub provider (repository, environment, secret)
+│   ├── pragma/           # Pragma provider (secret, config, file)
+│   ├── kubernetes/       # Kubernetes provider (deployment, service, secret, ...)
+│   ├── qdrant/           # Qdrant provider (collection, database)
+│   └── agno/             # Agno provider (agent, team, knowledge, ...)
 ├── pyproject.toml        # Workspace configuration
 └── README.md
 ```

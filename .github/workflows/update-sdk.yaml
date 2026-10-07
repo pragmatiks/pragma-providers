@@ -40,7 +40,6 @@ jobs:
             echo "Updating $pyproject to SDK v${SDK_VERSION}"
 
             sed -i "s|pragmatiks-sdk>=.*\"|pragmatiks-sdk>=${SDK_VERSION}\"|" "$pyproject"
-            sed -i "s|tag = \"v.*\"|tag = \"v${SDK_VERSION}\"|" "$pyproject"
           done
 
       - name: Wait for PyPI availability
@@ -58,14 +57,8 @@ jobs:
           echo "Timed out waiting for pragmatiks-sdk==${SDK_VERSION}"
           exit 1
 
-      - name: Update lockfiles
-        run: |
-          for provider_dir in packages/*/; do
-            echo "Updating lockfile in $provider_dir"
-            cd "$provider_dir"
-            uv lock --upgrade
-            cd ../..
-          done
+      - name: Update lockfile
+        run: uv lock --upgrade
 
       - name: Commit and push branch
         run: |
