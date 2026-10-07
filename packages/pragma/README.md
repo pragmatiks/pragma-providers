@@ -1,19 +1,13 @@
 # Pragma Provider
 
-Built-in platform resources for [Pragmatiks](https://pragmatiks.io).
+Platform resources for [Pragmatiks](https://pragmatiks.io).
 
-Declaratively manage secrets, non-sensitive configuration, and file storage alongside the rest of your infrastructure. The resources in this provider are available out of the box in every organization and are commonly referenced by other providers through `FieldReference`.
+Declaratively manage secrets, non-sensitive configuration, and file storage alongside the rest of your infrastructure. Install it in your organization to use its resources, which other providers commonly reference through `FieldReference`.
 
 ## Installation
 
 ```bash
-pip install pragmatiks-pragma-provider
-```
-
-or with uv:
-
-```bash
-uv add pragmatiks-pragma-provider
+pragma providers install pragmatiks/pragma
 ```
 
 ## Resources

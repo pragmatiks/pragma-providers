@@ -1,5 +1,5 @@
 [project]
-name = "pragmatiks-pragma-provider"
+name = "pragmatiks-pragma"
 version = "6.2.0"
 description = "Manage platform-native secrets, configuration, and file storage declaratively through Pragmatiks."
 keywords = ["platform", "secrets", "configuration", "files"]
