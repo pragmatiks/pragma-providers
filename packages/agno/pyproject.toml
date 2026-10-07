@@ -1,5 +1,5 @@
 [project]
-name = "pragmatiks-agno-provider"
+name = "pragmatiks-agno"
 version = "2.1.0"
 description = "Build and deploy AI agents, teams, and knowledge bases with models from OpenAI and Anthropic, MCP tools, and vector storage."
 keywords = ["ai", "agents", "llm", "openai", "anthropic", "knowledge-base"]
@@ -7,8 +7,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "pragmatiks-sdk>=16.0.0",
-    "pragmatiks-gcp-provider>=7.0.0",
-    "pragmatiks-kubernetes-provider>=2.0.1",
+    "pragmatiks-kubernetes>=2.0.1",
     "agno[anthropic,openai,postgres,qdrant]>=2.4.0",
     "fastapi[standard]>=0.115.0",
     "sqlalchemy>=2.0.0",
@@ -30,6 +29,10 @@ dev = [
 [project.entry-points."pragma.provider"]
 agno = "agno_provider"
 
+[project.entry-points."pragma.embeds"]
+pragmatiks-gcp = "gcp_provider"
+pragmatiks-kubernetes = "kubernetes_provider"
+
 [tool.commitizen]
 name = "cz_conventional_commits"
 version = "2.1.0"
@@ -41,6 +44,9 @@ changelog_file = "CHANGELOG.md"
 [tool.ruff]
 extend = "../../pyproject.toml"
 line-length = 120
+
+[tool.uv.sources]
+pragmatiks-kubernetes = { workspace = true }
 
 [tool.uv.build-backend]
 module-name = "agno_provider"

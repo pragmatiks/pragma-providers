@@ -44,7 +44,7 @@ namespace (kubernetes) ─────┘
 ## Installation
 
 ```bash
-pragma providers install agno
+pragma providers install pragmatiks/agno
 ```
 
 ## Resources
