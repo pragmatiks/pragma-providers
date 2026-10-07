@@ -29,7 +29,7 @@ Manage Google Cloud Platform resources declaratively through the Pragmatiks plat
 ## Installation
 
 ```bash
-pragma providers install gcp
+pragma providers install pragmatiks/gcp
 ```
 
 ## Resources
