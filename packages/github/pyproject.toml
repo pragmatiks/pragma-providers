@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-github-provider"
-version = "6.1.1"
+version = "6.2.0"
 description = "Manage GitHub repositories, environments, and secrets through declarative resources using the GitHub REST API."
 keywords = ["github", "repositories", "secrets", "environments", "source-control"]
 readme = "README.md"
@@ -26,7 +26,7 @@ github = "github_provider"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "6.1.1"
+version = "6.2.0"
 version_files = ["pyproject.toml:^version"]
 tag_format = "github-v$version"
 update_changelog_on_bump = true
