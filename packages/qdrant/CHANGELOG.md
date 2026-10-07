@@ -10,6 +10,19 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v8.2.1 (2026-10-07)
+
+### Fix
+
+- **pragma**: publish as pragmatiks-pragma
+- **github**: publish as pragmatiks-github
+- **vercel**: publish as pragmatiks-vercel
+- **supabase**: publish as pragmatiks-supabase
+- **agno**: publish as pragmatiks-agno
+- **qdrant**: publish as pragmatiks-qdrant
+- **kubernetes**: publish as pragmatiks-kubernetes
+- **gcp**: publish as pragmatiks-gcp
+
 ## qdrant-v8.2.0 (2026-10-07)
 
 ### Feat
