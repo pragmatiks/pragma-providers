@@ -2,6 +2,12 @@
 
 Manage GitHub repositories, environments, and secrets through declarative resources using the GitHub REST API.
 
+## Installation
+
+```bash
+pragma providers install pragmatiks/github
+```
+
 ## Resources
 
 - **Repository** - Create and manage GitHub repositories with visibility, features, and branch settings
