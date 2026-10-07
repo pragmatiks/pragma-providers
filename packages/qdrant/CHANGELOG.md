@@ -10,6 +10,20 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v8.2.0 (2026-10-07)
+
+### Feat
+
+- **template**: scaffold and publish providers for wheel admission
+- **vercel**: carry the catalog description and keywords in the project metadata
+- **supabase**: carry the catalog description and keywords in the project metadata
+- **qdrant**: carry the catalog description and keywords in the project metadata
+- **pragma**: carry the catalog description and keywords in the project metadata
+- **kubernetes**: carry the catalog description and keywords in the project metadata
+- **github**: carry the catalog description and keywords in the project metadata
+- **gcp**: carry the catalog description and keywords in the project metadata
+- **agno**: carry the catalog description and keywords in the project metadata
+
 ## qdrant-v8.1.1 (2026-10-06)
 
 ### Fix
