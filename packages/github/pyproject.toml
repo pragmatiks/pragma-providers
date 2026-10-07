@@ -1,5 +1,5 @@
 [project]
-name = "pragmatiks-github-provider"
+name = "pragmatiks-github"
 version = "6.2.0"
 description = "Manage GitHub repositories, environments, and secrets through declarative resources using the GitHub REST API."
 keywords = ["github", "repositories", "secrets", "environments", "source-control"]
