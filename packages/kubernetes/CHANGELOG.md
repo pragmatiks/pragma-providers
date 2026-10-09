@@ -1,3 +1,9 @@
+## kubernetes-v2.2.1 (2026-10-09)
+
+### Fix
+
+- **scripts**: drive platform publish from pragma exit codes (#114)
+
 ## kubernetes-v2.2.0 (2026-10-07)
 
 ### Feat
