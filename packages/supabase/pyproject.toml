@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-supabase"
-version = "6.2.1"
+version = "6.2.2"
 description = "Manage Supabase projects and configuration through declarative resources using the Management API."
 keywords = ["supabase", "database", "authentication", "backend-as-a-service"]
 readme = "README.md"
@@ -25,7 +25,7 @@ supabase = "supabase_provider"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "6.2.1"
+version = "6.2.2"
 version_files = ["pyproject.toml:^version"]
 tag_format = "supabase-v$version"
 update_changelog_on_bump = true
