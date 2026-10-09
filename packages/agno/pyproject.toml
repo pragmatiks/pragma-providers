@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-agno"
-version = "2.2.0"
+version = "2.2.1"
 description = "Build and deploy AI agents, teams, and knowledge bases with models from OpenAI and Anthropic, MCP tools, and vector storage."
 keywords = ["ai", "agents", "llm", "openai", "anthropic", "knowledge-base"]
 readme = "README.md"
@@ -35,7 +35,7 @@ pragmatiks-kubernetes = "kubernetes_provider"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "2.2.0"
+version = "2.2.1"
 version_files = ["pyproject.toml:^version"]
 tag_format = "agno-v$version"
 update_changelog_on_bump = true
