@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v8.2.2 (2026-10-09)
+
+### Fix
+
+- **scripts**: drive platform publish from pragma exit codes (#114)
+
 ## qdrant-v8.2.1 (2026-10-07)
 
 ### Fix
