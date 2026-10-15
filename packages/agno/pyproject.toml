@@ -6,7 +6,7 @@ keywords = ["ai", "agents", "llm", "openai", "anthropic", "knowledge-base"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk>=16.0.0",
+    "pragmatiks-sdk>=17.0.0",
     "pragmatiks-kubernetes>=2.0.1",
     "agno[anthropic,openai,postgres,qdrant]>=2.4.0",
     "fastapi[standard]>=0.115.0",
