@@ -1,3 +1,9 @@
+## vercel-v6.2.4 (2026-10-16)
+
+### Fix
+
+- **scripts**: publish through pragma CLI 12 and read the catalog before building
+
 ## vercel-v6.2.3 (2026-10-15)
 
 ### Fix
