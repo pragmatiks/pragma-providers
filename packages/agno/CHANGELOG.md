@@ -1,3 +1,10 @@
+## agno-v2.2.2 (2026-10-16)
+
+### Fix
+
+- **scripts**: publish through pragma CLI 12 and read the catalog before building
+- **deps**: update pragmatiks-sdk to v17.0.0 (#115)
+
 ## agno-v2.2.1 (2026-10-09)
 
 ### Fix
