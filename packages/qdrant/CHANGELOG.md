@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 - Collection resource with create, update, delete lifecycle
 - Support for Qdrant Cloud and local instances
 
+## qdrant-v8.2.4 (2026-10-16)
+
+### Fix
+
+- **scripts**: publish through pragma CLI 12 and read the catalog before building
+
 ## qdrant-v8.2.3 (2026-10-15)
 
 ### Fix
