@@ -31,7 +31,11 @@ tasks:
 
   install:
     desc: Install all provider dependencies
-    cmd: uv sync --all-packages --all-groups
+    cmd: uv sync --all-packages --all-groups --locked
+
+  lock:
+    desc: Re-resolve the workspace lockfile
+    cmd: uv lock
 
   format:
     desc: Format all Python code
