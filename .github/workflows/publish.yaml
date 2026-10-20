@@ -22,6 +22,7 @@ on:
 #   kubernetes  (depends on gcp)
 #   qdrant      (depends on kubernetes)
 #   agno        (depends on kubernetes)
+#   relock      (after every publish job; commits uv.lock when any provider bumped)
 #
 # Change propagation:
 #   gcp changed      → gcp, kubernetes, qdrant, agno
@@ -939,3 +940,74 @@ jobs:
           tags: |
             ghcr.io/pragmatiks/agno-runner:${{ steps.runner-transport.outputs.transport }}
             ghcr.io/pragmatiks/agno-runner:latest
+
+  relock:
+    needs:
+      - detect-changes
+      - publish-gcp
+      - publish-supabase
+      - publish-vercel
+      - publish-github
+      - publish-pragma
+      - publish-kubernetes
+      - publish-qdrant
+      - publish-agno
+    if: >-
+      !cancelled() &&
+      inputs.publish_only != true &&
+      (
+        needs.publish-gcp.outputs.version != '' ||
+        needs.publish-supabase.outputs.version != '' ||
+        needs.publish-vercel.outputs.version != '' ||
+        needs.publish-github.outputs.version != '' ||
+        needs.publish-pragma.outputs.version != '' ||
+        needs.publish-kubernetes.outputs.version != '' ||
+        needs.publish-qdrant.outputs.version != '' ||
+        needs.publish-agno.outputs.version != ''
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Relock and push
+        run: |
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard FETCH_HEAD
+            uv lock
+            if git diff --quiet -- uv.lock; then
+              echo "uv.lock already matches main"
+              exit 0
+            fi
+            git commit -m "build: relock the provider workspace after version bumps" -- uv.lock
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push attempt $i failed, retrying in ${i}s..."
+            sleep $i
+          done
+          echo "Failed to push after 5 attempts"
+          exit 1
+
+      - name: Report recovery
+        if: failure()
+        run: echo "::error title=Relock::uv.lock on main is stale after the version bumps; rerun the relock job"
