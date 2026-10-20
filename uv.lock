@@ -1985,7 +1985,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-agno"
-version = "2.2.2"
+version = "2.2.3"
 source = { editable = "packages/agno" }
 dependencies = [
     { name = "agno", extra = ["anthropic", "openai", "postgres", "qdrant"] },
@@ -2024,7 +2024,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-gcp"
-version = "7.2.4"
+version = "7.2.5"
 source = { editable = "packages/gcp" }
 dependencies = [
     { name = "google-api-python-client" },
@@ -2059,7 +2059,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-github"
-version = "6.2.4"
+version = "6.2.5"
 source = { editable = "packages/github" }
 dependencies = [
     { name = "httpx" },
@@ -2088,7 +2088,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-kubernetes"
-version = "2.2.2"
+version = "2.2.3"
 source = { editable = "packages/kubernetes" }
 dependencies = [
     { name = "google-auth" },
@@ -2121,7 +2121,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-pragma"
-version = "6.2.4"
+version = "6.2.5"
 source = { editable = "packages/pragma" }
 dependencies = [
     { name = "obstore" },
@@ -2148,7 +2148,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-qdrant"
-version = "8.2.4"
+version = "8.2.5"
 source = { editable = "packages/qdrant" }
 dependencies = [
     { name = "pragmatiks-kubernetes" },
@@ -2194,7 +2194,7 @@ wheels = [
 
 [[package]]
 name = "pragmatiks-supabase"
-version = "6.2.4"
+version = "6.2.5"
 source = { editable = "packages/supabase" }
 dependencies = [
     { name = "httpx" },
@@ -2221,7 +2221,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-vercel"
-version = "6.2.4"
+version = "6.2.5"
 source = { editable = "packages/vercel" }
 dependencies = [
     { name = "httpx" },
