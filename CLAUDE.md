@@ -28,8 +28,17 @@ Always use `task` commands:
 
 | Command | Purpose |
 |---------|---------|
+| `task install` | Install every provider from the committed `uv.lock` |
 | `task format` | Format with ruff |
 | `task check` | Lint + type check |
+
+### Lockfile
+
+The root `uv.lock` is committed and must match the manifests. Any change to a `pyproject.toml` ships with its `uv lock` in the same commit. Relock with `task lock`. Every task needs the uv version named in `[tool.uv] required-version`; while your global uv differs, run tasks through `mise exec uv@<that version> -- task <name>`.
+
+CI runs `uv lock --check` and `uv sync --all-packages --all-groups --locked` on every pull request and on every push to `main` except `bump:` commits, so a stale lock fails CI.
+
+Publishing bumps provider versions, which leaves `uv.lock` stale. The publish workflow's final `relock` job relocks and pushes `build: relock the provider workspace after version bumps`. From the first `bump:` push until that commit lands, `main` carries a stale lock, and CI fails the lock check on any pull request whose run started in that window. Push such a pull request again (for example rebase) after the relock commit lands: re-running the check reuses the old merge commit and fails again. If the `relock` job fails, rerun it: it relocks from the current `main`.
 
 ## Provider Interface
 
