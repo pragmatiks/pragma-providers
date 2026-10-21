@@ -34,8 +34,7 @@ name = "cz_conventional_commits"
 version = "2.2.3"
 version_files = ["pyproject.toml:^version"]
 tag_format = "kubernetes-v$version"
-update_changelog_on_bump = true
-changelog_file = "CHANGELOG.md"
+bump_message = "bump: version $current_version → $new_version [skip ci]"
 
 [tool.ruff]
 extend = "../../pyproject.toml"

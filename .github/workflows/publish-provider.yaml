@@ -1,0 +1,77 @@
+name: Publish Provider
+
+on:
+  workflow_call:
+    inputs:
+      provider:
+        description: "Provider package directory name under packages/, such as gcp"
+        type: string
+        required: true
+      version:
+        description: "Version to publish; the release tag <provider>-v<version> must point at commit"
+        type: string
+        required: true
+      commit:
+        description: "Commit the release tag points to; the wheel is built from it"
+        type: string
+        required: true
+      create_release:
+        description: "Create the GitHub Release after publishing; false when the caller creates it after later steps"
+        type: boolean
+        default: true
+    secrets:
+      PRAGMA_PUBLISH_API_KEY:
+        required: true
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+
+      - name: Verify the release tag
+        env:
+          TAG: ${{ inputs.provider }}-v${{ inputs.version }}
+          COMMIT: ${{ inputs.commit }}
+          REPOSITORY_URL: https://github.com/${{ github.repository }}.git
+        run: |
+          TAGGED_COMMIT="$(git ls-remote --tags "${REPOSITORY_URL}" "refs/tags/${TAG}" "refs/tags/${TAG}^{}" \
+            | awk -v tag="refs/tags/${TAG}" '$2 == tag { commit = $1 } $2 == tag "^{}" { peeled = $1 } END { print (peeled != "" ? peeled : commit) }')"
+          if [ "${TAGGED_COMMIT}" != "${COMMIT}" ]; then
+            echo "::error title=Release tag::${TAG} resolves to '${TAGGED_COMMIT}' on GitHub, not to ${COMMIT}"
+            exit 1
+          fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.20"
+          enable-cache: false
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Publish to the Pragmatiks registry
+        env:
+          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
+          PROVIDER: ${{ inputs.provider }}
+          VERSION: ${{ inputs.version }}
+        run: ./scripts/publish_platform_provider.sh "packages/${PROVIDER}" "${VERSION}"
+
+  release:
+    needs: [publish]
+    if: inputs.create_release
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-provider.yaml
+    with:
+      provider: ${{ inputs.provider }}
+      version: ${{ inputs.version }}
