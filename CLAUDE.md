@@ -28,13 +28,18 @@ Always use `task` commands:
 
 | Command | Purpose |
 |---------|---------|
-| `task install` | Install every provider from the committed `uv.lock` |
+| `task install` | Install the toolchain from `mise.lock`, every provider from `uv.lock`, and the git hooks |
 | `task format` | Format with ruff |
 | `task check` | Lint + type check |
+| `task lock:toolchain` | Regenerate `mise.lock` and `.mise/locks/` (macOS arm64 or Linux x86_64 only; never bumps) |
+
+### Toolchain
+
+mise is the only toolchain source. `mise.toml` pins python, uv, task, pre-commit, git-cliff, commitizen and yq; `mise.lock` and `.mise/locks/` are committed. Install the pinned mise version (`MISE_VERSION_PIN` in `Taskfile.yaml`); the install and the one-sweep bump rule across repositories live in the hub's `docs/runbooks/local-dev-setup.md`. A toolchain change ships with its `task lock:toolchain` output in the same commit. On a fresh clone run `mise trust && mise install` first (task comes from mise), then `task install`.
 
 ### Lockfile
 
-The root `uv.lock` is committed and must match the manifests. Any change to a `pyproject.toml` ships with its `uv lock` in the same commit. Relock with `task lock`. Every task needs the uv version named in `[tool.uv] required-version`; while your global uv differs, run tasks through `mise exec uv@<that version> -- task <name>`.
+The root `uv.lock` is committed and must match the manifests. Any change to a `pyproject.toml` ships with its `uv lock` in the same commit. Relock with `task lock`. `[tool.uv] required-version` must equal the uv version in `mise.toml`; uv refuses to run at any other version.
 
 Humans change `main` only through pull requests. The pragma-ci-bot GitHub App pushes release commits to it directly, from the `push` job of `publish.yaml` in the main-only `release` environment. CI runs `uv lock --check` and `uv sync --all-packages --all-groups --locked` on every pull request and on every push to `main`, except release pushes: they carry `[skip ci]`, so GitHub starts no workflow for them (`ci.yaml` also skips a push whose head commit starts with `bump:`).
 
@@ -46,7 +51,7 @@ Every push to `main` that starts workflows, and a manual dispatch from `main`, r
 - `push` pushes `main` and every new tag in one atomic push. When `main` moved after the bump, it pushes nothing and starts a new `publish.yaml` run on `main`, which bumps from the latest `main`; any other rejection fails the run.
 - Each provider then publishes from the commit its tag points to, after verifying the tag on GitHub, and gets a GitHub Release, created last (for agno, after its runner image). Any later run completes a release a failed run left behind: a provider with nothing to bump whose current tag has no GitHub Release is published from that tag without a new bump or push. A version the registry already published and an existing release are skipped, so **Re-run failed jobs**, **Re-run all jobs**, a new dispatch and the next merge's run all recover. To re-publish every provider's current version, for example after a registry reset, dispatch `publish.yaml` from `main` with `publish_only`.
 
-`git-cliff` is pinned in `publish.yaml`; `commitizen` is pinned to the same version in the root dev dependencies and in `publish.yaml`, change both together.
+`git-cliff`, `commitizen`, uv and python are pinned in `mise.toml`; every workflow job that runs them installs them through the pinned mise-action step, and `environment: release` jobs install nothing.
 
 ## Provider Interface
 
