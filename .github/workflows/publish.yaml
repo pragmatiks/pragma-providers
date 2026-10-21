@@ -7,893 +7,305 @@ on:
   workflow_dispatch:
     inputs:
       allow_no_commit:
-        description: "Bump as a PATCH, even when feat or breaking commits call for MINOR or MAJOR or no commit is eligible; recovers after a Pragmatiks catalog reset. Ignored when publish_only is set"
+        description: "Bump every provider as a PATCH, even when feat or breaking commits call for MINOR or MAJOR or no commit on its paths is eligible; recovers after a Pragmatiks catalog reset. Ignored when publish_only is set"
         type: boolean
         required: false
         default: false
       publish_only:
-        description: "Skip bump, tag and GitHub release; re-publish the pyproject version to the Pragmatiks registry"
+        description: "Skip bump, tag and push; re-publish every provider's current version from its release tag to the Pragmatiks registry"
         type: boolean
         required: false
         default: false
 
-# Provider dependency DAG:
-#   gcp, supabase, vercel, github, pragma  (no internal deps — run in parallel)
-#   kubernetes  (depends on gcp)
-#   qdrant      (depends on kubernetes)
-#   agno        (depends on kubernetes)
-#   relock      (after every publish job; commits uv.lock when any provider bumped)
-#
-# Change propagation:
-#   gcp changed      → gcp, kubernetes, qdrant, agno
-#   kubernetes changed → kubernetes, qdrant, agno
-#   supabase changed → supabase
-#   vercel changed   → vercel
-#   github changed   → github
-#   pragma changed   → pragma (narrow filter: does not react to shared changes)
-#   shared changed   → all providers except pragma
+concurrency:
+  group: pragma-providers-release
+  cancel-in-progress: false
+  queue: max
+
+permissions: {}
 
 jobs:
-  detect-changes:
+  bump:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
-      shared: ${{ steps.filter.outputs.shared }}
-      gcp: ${{ steps.filter.outputs.gcp }}
-      kubernetes: ${{ steps.filter.outputs.kubernetes }}
-      qdrant: ${{ steps.filter.outputs.qdrant }}
-      agno: ${{ steps.filter.outputs.agno }}
-      supabase: ${{ steps.filter.outputs.supabase }}
-      vercel: ${{ steps.filter.outputs.vercel }}
-      github: ${{ steps.filter.outputs.github }}
-      pragma: ${{ steps.filter.outputs.pragma }}
+      bumped: ${{ steps.bump.outputs.bumped }}
+      gcp_version: ${{ steps.bump.outputs.gcp_version }}
+      gcp_commit: ${{ steps.bump.outputs.gcp_commit }}
+      supabase_version: ${{ steps.bump.outputs.supabase_version }}
+      supabase_commit: ${{ steps.bump.outputs.supabase_commit }}
+      vercel_version: ${{ steps.bump.outputs.vercel_version }}
+      vercel_commit: ${{ steps.bump.outputs.vercel_commit }}
+      github_version: ${{ steps.bump.outputs.github_version }}
+      github_commit: ${{ steps.bump.outputs.github_commit }}
+      pragma_version: ${{ steps.bump.outputs.pragma_version }}
+      pragma_commit: ${{ steps.bump.outputs.pragma_commit }}
+      kubernetes_version: ${{ steps.bump.outputs.kubernetes_version }}
+      kubernetes_commit: ${{ steps.bump.outputs.kubernetes_commit }}
+      qdrant_version: ${{ steps.bump.outputs.qdrant_version }}
+      qdrant_commit: ${{ steps.bump.outputs.qdrant_commit }}
+      agno_version: ${{ steps.bump.outputs.agno_version }}
+      agno_commit: ${{ steps.bump.outputs.agno_commit }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Detect changed paths
-        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
-        id: filter
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filters: |
-            shared:
-              - 'pyproject.toml'
-            gcp:
-              - 'packages/gcp/**'
-            kubernetes:
-              - 'packages/kubernetes/**'
-            qdrant:
-              - 'packages/qdrant/**'
-            agno:
-              - 'packages/agno/**'
-            supabase:
-              - 'packages/supabase/**'
-            vercel:
-              - 'packages/vercel/**'
-            github:
-              - 'packages/github/**'
-            pragma:
-              - 'packages/pragma/**'
-              - 'taskfiles/pragma.Taskfile.yaml'
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.20"
+          enable-cache: false
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install git-cliff and commitizen
+        run: |
+          uv tool install git-cliff==2.14.2
+          uv tool install commitizen==4.19.2
+
+      - name: Configure git
+        run: |
+          git config user.name "pragma-ci-bot[bot]"
+          git config user.email "254457222+pragma-ci-bot[bot]@users.noreply.github.com"
+
+      - name: Bump providers and relock
+        id: bump
+        env:
+          PUBLISH_ONLY: ${{ inputs.publish_only == true }}
+          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit == true && inputs.publish_only != true }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/bump_providers.sh "${RUNNER_TEMP}/release.bundle" "${GITHUB_OUTPUT}"
+
+      - name: Upload the release bundle
+        if: steps.bump.outputs.bumped == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-bundle
+          path: ${{ runner.temp }}/release.bundle
+          if-no-files-found: error
+          retention-days: 1
+
+  push:
+    needs: [bump]
+    if: needs.bump.outputs.bumped == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions: {}
+    outputs:
+      pushed: ${{ steps.push.outputs.pushed }}
+    steps:
+      - name: Download the release bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-bundle
+          path: ${{ runner.temp }}/release-bundle
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-actions: write
+
+      - name: Push main and the release tags
+        id: push
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          BUNDLE_PATH: ${{ runner.temp }}/release-bundle/release.bundle
+          RELEASE_REPOSITORY: ${{ runner.temp }}/release-repository
+          REPOSITORY_URL: https://github.com/${{ github.repository }}.git
+          GH_REPO: ${{ github.repository }}
+        run: |
+          AUTHORIZATION="$(printf 'x-access-token:%s' "${APP_TOKEN}" | base64 -w0)"
+          echo "::add-mask::${AUTHORIZATION}"
+
+          git init --quiet --bare "${RELEASE_REPOSITORY}"
+          cd "${RELEASE_REPOSITORY}"
+          git fetch --quiet "${BUNDLE_PATH}" 'refs/heads/main:refs/heads/main' 'refs/tags/*:refs/tags/*'
+
+          if GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${AUTHORIZATION}" \
+            git push --atomic --porcelain "${REPOSITORY_URL}" 'refs/heads/main:refs/heads/main' 'refs/tags/*:refs/tags/*'; then
+            echo "pushed=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          REMOTE_MAIN="$(GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${AUTHORIZATION}" \
+            git ls-remote "${REPOSITORY_URL}" refs/heads/main | cut -f1)"
+          if [ -n "${REMOTE_MAIN}" ] && ! git merge-base --is-ancestor "${REMOTE_MAIN}" refs/heads/main 2> /dev/null; then
+            GH_TOKEN="${APP_TOKEN}" gh workflow run publish.yaml --ref main
+            echo "::notice title=Release::main moved after the bump, so nothing was pushed. Started a new Publish Providers run on main, which bumps from the latest main."
+            echo "pushed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "::error title=Release::the push of main and the release tags was rejected; see git's error above"
+          exit 1
 
   publish-gcp:
-    needs: [detect-changes]
+    needs: [bump, push]
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (
-        !startsWith(github.event.head_commit.message, 'bump:') &&
-        (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.gcp == 'true')
-      )
-    runs-on: ubuntu-latest
-    environment: pypi
+      !cancelled() &&
+      needs.bump.result == 'success' &&
+      needs.bump.outputs.gcp_version != '' &&
+      (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true')
     permissions:
       contents: write
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-
-      - name: Set up Python
-        run: uv python install 3.13
-
-      - name: Install commitizen
-        run: uv tool install commitizen
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump
-        id: bump
-        shell: bash
-        env:
-          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
-        run: |
-          cd packages/gcp
-          if [ "${{ inputs.publish_only }}" = "true" ]; then
-            VERSION=$(cz version --project)
-            echo "Publish-only mode: using existing v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
-            VERSION=$(cz version --project)
-            echo "Bumped gcp to v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          else
-            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
-              echo "No bump needed for gcp"
-            else
-              cat bump_output.txt
-              exit 1
-            fi
-          fi
-
-      - name: Push version bumps and tags
-        if: inputs.publish_only != true
-        run: |
-          for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --tags && exit 0
-            echo "Push attempt $i failed, retrying in ${i}s..."
-            sleep $i
-          done
-          echo "Failed to push after 5 attempts"
-          exit 1
-
-      - name: Publish to the Pragmatiks registry
-        if: steps.bump.outputs.version != ''
-        env:
-          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
-        run: ./scripts/publish_platform_provider.sh packages/gcp "${{ steps.bump.outputs.version }}"
-
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.publish_only != true
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          TAG="gcp-v${VERSION}"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG already exists"
-          elif ! gh release create "$TAG" --title "pragmatiks/gcp v${VERSION}" --generate-notes; then
-            echo "::error title=GitHub Release::Release $TAG was not created"
-            exit 1
-          fi
+    uses: ./.github/workflows/publish-provider.yaml
+    with:
+      provider: gcp
+      version: ${{ needs.bump.outputs.gcp_version }}
+      commit: ${{ needs.bump.outputs.gcp_commit }}
+    secrets:
+      PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
 
   publish-supabase:
-    needs: [detect-changes]
+    needs: [bump, push]
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (
-        !startsWith(github.event.head_commit.message, 'bump:') &&
-        (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.supabase == 'true')
-      )
-    runs-on: ubuntu-latest
-    environment: pypi
+      !cancelled() &&
+      needs.bump.result == 'success' &&
+      needs.bump.outputs.supabase_version != '' &&
+      (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true')
     permissions:
       contents: write
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-
-      - name: Set up Python
-        run: uv python install 3.13
-
-      - name: Install commitizen
-        run: uv tool install commitizen
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump
-        id: bump
-        shell: bash
-        env:
-          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
-        run: |
-          cd packages/supabase
-          if [ "${{ inputs.publish_only }}" = "true" ]; then
-            VERSION=$(cz version --project)
-            echo "Publish-only mode: using existing v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
-            VERSION=$(cz version --project)
-            echo "Bumped supabase to v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          else
-            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
-              echo "No bump needed for supabase"
-            else
-              cat bump_output.txt
-              exit 1
-            fi
-          fi
-
-      - name: Push version bumps and tags
-        if: inputs.publish_only != true
-        run: |
-          for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --tags && exit 0
-            echo "Push attempt $i failed, retrying in ${i}s..."
-            sleep $i
-          done
-          echo "Failed to push after 5 attempts"
-          exit 1
-
-      - name: Publish to the Pragmatiks registry
-        if: steps.bump.outputs.version != ''
-        env:
-          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
-        run: ./scripts/publish_platform_provider.sh packages/supabase "${{ steps.bump.outputs.version }}"
-
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.publish_only != true
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          TAG="supabase-v${VERSION}"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG already exists"
-          elif ! gh release create "$TAG" --title "pragmatiks/supabase v${VERSION}" --generate-notes; then
-            echo "::error title=GitHub Release::Release $TAG was not created"
-            exit 1
-          fi
+    uses: ./.github/workflows/publish-provider.yaml
+    with:
+      provider: supabase
+      version: ${{ needs.bump.outputs.supabase_version }}
+      commit: ${{ needs.bump.outputs.supabase_commit }}
+    secrets:
+      PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
 
   publish-vercel:
-    needs: [detect-changes]
+    needs: [bump, push]
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (
-        !startsWith(github.event.head_commit.message, 'bump:') &&
-        (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.vercel == 'true')
-      )
-    runs-on: ubuntu-latest
-    environment: pypi
+      !cancelled() &&
+      needs.bump.result == 'success' &&
+      needs.bump.outputs.vercel_version != '' &&
+      (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true')
     permissions:
       contents: write
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-
-      - name: Set up Python
-        run: uv python install 3.13
-
-      - name: Install commitizen
-        run: uv tool install commitizen
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump
-        id: bump
-        shell: bash
-        env:
-          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
-        run: |
-          cd packages/vercel
-          if [ "${{ inputs.publish_only }}" = "true" ]; then
-            VERSION=$(cz version --project)
-            echo "Publish-only mode: using existing v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
-            VERSION=$(cz version --project)
-            echo "Bumped vercel to v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          else
-            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
-              echo "No bump needed for vercel"
-            else
-              cat bump_output.txt
-              exit 1
-            fi
-          fi
-
-      - name: Push version bumps and tags
-        if: inputs.publish_only != true
-        run: |
-          for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --tags && exit 0
-            echo "Push attempt $i failed, retrying in ${i}s..."
-            sleep $i
-          done
-          echo "Failed to push after 5 attempts"
-          exit 1
-
-      - name: Publish to the Pragmatiks registry
-        if: steps.bump.outputs.version != ''
-        env:
-          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
-        run: ./scripts/publish_platform_provider.sh packages/vercel "${{ steps.bump.outputs.version }}"
-
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.publish_only != true
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          TAG="vercel-v${VERSION}"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG already exists"
-          elif ! gh release create "$TAG" --title "pragmatiks/vercel v${VERSION}" --generate-notes; then
-            echo "::error title=GitHub Release::Release $TAG was not created"
-            exit 1
-          fi
+    uses: ./.github/workflows/publish-provider.yaml
+    with:
+      provider: vercel
+      version: ${{ needs.bump.outputs.vercel_version }}
+      commit: ${{ needs.bump.outputs.vercel_commit }}
+    secrets:
+      PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
 
   publish-github:
-    needs: [detect-changes]
+    needs: [bump, push]
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (
-        !startsWith(github.event.head_commit.message, 'bump:') &&
-        (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.github == 'true')
-      )
-    runs-on: ubuntu-latest
-    environment: pypi
+      !cancelled() &&
+      needs.bump.result == 'success' &&
+      needs.bump.outputs.github_version != '' &&
+      (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true')
     permissions:
       contents: write
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-
-      - name: Set up Python
-        run: uv python install 3.13
-
-      - name: Install commitizen
-        run: uv tool install commitizen
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump
-        id: bump
-        shell: bash
-        env:
-          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
-        run: |
-          cd packages/github
-          if [ "${{ inputs.publish_only }}" = "true" ]; then
-            VERSION=$(cz version --project)
-            echo "Publish-only mode: using existing v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
-            VERSION=$(cz version --project)
-            echo "Bumped github to v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          else
-            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
-              echo "No bump needed for github"
-            else
-              cat bump_output.txt
-              exit 1
-            fi
-          fi
-
-      - name: Push version bumps and tags
-        if: inputs.publish_only != true
-        run: |
-          for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --tags && exit 0
-            echo "Push attempt $i failed, retrying in ${i}s..."
-            sleep $i
-          done
-          echo "Failed to push after 5 attempts"
-          exit 1
-
-      - name: Publish to the Pragmatiks registry
-        if: steps.bump.outputs.version != ''
-        env:
-          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
-        run: ./scripts/publish_platform_provider.sh packages/github "${{ steps.bump.outputs.version }}"
-
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.publish_only != true
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          TAG="github-v${VERSION}"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG already exists"
-          elif ! gh release create "$TAG" --title "pragmatiks/github v${VERSION}" --generate-notes; then
-            echo "::error title=GitHub Release::Release $TAG was not created"
-            exit 1
-          fi
+    uses: ./.github/workflows/publish-provider.yaml
+    with:
+      provider: github
+      version: ${{ needs.bump.outputs.github_version }}
+      commit: ${{ needs.bump.outputs.github_commit }}
+    secrets:
+      PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
 
   publish-pragma:
-    needs: [detect-changes]
+    needs: [bump, push]
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (
-        !startsWith(github.event.head_commit.message, 'bump:') &&
-        (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.pragma == 'true')
-      )
-    runs-on: ubuntu-latest
-    environment: pypi
+      !cancelled() &&
+      needs.bump.result == 'success' &&
+      needs.bump.outputs.pragma_version != '' &&
+      (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true')
     permissions:
       contents: write
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-
-      - name: Set up Python
-        run: uv python install 3.13
-
-      - name: Install commitizen
-        run: uv tool install commitizen
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump
-        id: bump
-        shell: bash
-        env:
-          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
-        run: |
-          cd packages/pragma
-          if [ "${{ inputs.publish_only }}" = "true" ]; then
-            VERSION=$(cz version --project)
-            echo "Publish-only mode: using existing v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
-            VERSION=$(cz version --project)
-            echo "Bumped pragma to v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          else
-            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
-              echo "No bump needed for pragma"
-            else
-              cat bump_output.txt
-              exit 1
-            fi
-          fi
-
-      - name: Push version bumps and tags
-        if: inputs.publish_only != true
-        run: |
-          for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --tags && exit 0
-            echo "Push attempt $i failed, retrying in ${i}s..."
-            sleep $i
-          done
-          echo "Failed to push after 5 attempts"
-          exit 1
-
-      - name: Publish to the Pragmatiks registry
-        if: steps.bump.outputs.version != ''
-        env:
-          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
-        run: ./scripts/publish_platform_provider.sh packages/pragma "${{ steps.bump.outputs.version }}"
-
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.publish_only != true
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          TAG="pragma-v${VERSION}"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG already exists"
-          elif ! gh release create "$TAG" --title "pragmatiks/pragma v${VERSION}" --generate-notes; then
-            echo "::error title=GitHub Release::Release $TAG was not created"
-            exit 1
-          fi
+    uses: ./.github/workflows/publish-provider.yaml
+    with:
+      provider: pragma
+      version: ${{ needs.bump.outputs.pragma_version }}
+      commit: ${{ needs.bump.outputs.pragma_commit }}
+    secrets:
+      PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
 
   publish-kubernetes:
-    needs: [detect-changes, publish-gcp]
-    # Runs if kubernetes or gcp changed (DAG propagation), or shared files changed.
-    # Uses always() because publish-gcp may be skipped (no gcp changes), and we still
-    # need kubernetes to run if only kubernetes files changed.
+    needs: [bump, push, publish-gcp]
     if: >-
-      always() &&
-      needs.detect-changes.result == 'success' &&
-      (needs.publish-gcp.result == 'success' || needs.publish-gcp.result == 'skipped') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        (
-          !startsWith(github.event.head_commit.message, 'bump:') &&
-          (
-            needs.detect-changes.outputs.shared == 'true' ||
-            needs.detect-changes.outputs.kubernetes == 'true' ||
-            needs.detect-changes.outputs.gcp == 'true'
-          )
-        )
-      )
-    runs-on: ubuntu-latest
-    environment: pypi
+      !cancelled() &&
+      needs.bump.result == 'success' &&
+      needs.bump.outputs.kubernetes_version != '' &&
+      (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true') &&
+      (needs.publish-gcp.result == 'success' || needs.publish-gcp.result == 'skipped')
     permissions:
       contents: write
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Pull latest changes
-        run: git pull origin main
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-
-      - name: Set up Python
-        run: uv python install 3.13
-
-      - name: Install commitizen
-        run: uv tool install commitizen
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump
-        id: bump
-        shell: bash
-        env:
-          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
-        run: |
-          cd packages/kubernetes
-          if [ "${{ inputs.publish_only }}" = "true" ]; then
-            VERSION=$(cz version --project)
-            echo "Publish-only mode: using existing v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
-            VERSION=$(cz version --project)
-            echo "Bumped kubernetes to v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          else
-            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
-              echo "No bump needed for kubernetes"
-            else
-              cat bump_output.txt
-              exit 1
-            fi
-          fi
-
-      - name: Push version bumps and tags
-        if: inputs.publish_only != true
-        run: |
-          for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --tags && exit 0
-            echo "Push attempt $i failed, retrying in ${i}s..."
-            sleep $i
-          done
-          echo "Failed to push after 5 attempts"
-          exit 1
-
-      - name: Publish to the Pragmatiks registry
-        if: steps.bump.outputs.version != ''
-        env:
-          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
-        run: ./scripts/publish_platform_provider.sh packages/kubernetes "${{ steps.bump.outputs.version }}"
-
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.publish_only != true
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          TAG="kubernetes-v${VERSION}"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG already exists"
-          elif ! gh release create "$TAG" --title "pragmatiks/kubernetes v${VERSION}" --generate-notes; then
-            echo "::error title=GitHub Release::Release $TAG was not created"
-            exit 1
-          fi
+    uses: ./.github/workflows/publish-provider.yaml
+    with:
+      provider: kubernetes
+      version: ${{ needs.bump.outputs.kubernetes_version }}
+      commit: ${{ needs.bump.outputs.kubernetes_commit }}
+    secrets:
+      PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
 
   publish-qdrant:
-    needs: [detect-changes, publish-kubernetes]
-    # Runs if qdrant, kubernetes, or gcp changed (full DAG propagation), or shared files changed.
+    needs: [bump, push, publish-kubernetes]
     if: >-
-      always() &&
-      needs.detect-changes.result == 'success' &&
-      (needs.publish-kubernetes.result == 'success' || needs.publish-kubernetes.result == 'skipped') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        (
-          !startsWith(github.event.head_commit.message, 'bump:') &&
-          (
-            needs.detect-changes.outputs.shared == 'true' ||
-            needs.detect-changes.outputs.qdrant == 'true' ||
-            needs.detect-changes.outputs.kubernetes == 'true' ||
-            needs.detect-changes.outputs.gcp == 'true'
-          )
-        )
-      )
-    runs-on: ubuntu-latest
-    environment: pypi
+      !cancelled() &&
+      needs.bump.result == 'success' &&
+      needs.bump.outputs.qdrant_version != '' &&
+      (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true') &&
+      (needs.publish-kubernetes.result == 'success' || needs.publish-kubernetes.result == 'skipped')
     permissions:
       contents: write
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Pull latest changes
-        run: git pull origin main
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-
-      - name: Set up Python
-        run: uv python install 3.13
-
-      - name: Install commitizen
-        run: uv tool install commitizen
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump
-        id: bump
-        shell: bash
-        env:
-          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
-        run: |
-          cd packages/qdrant
-          if [ "${{ inputs.publish_only }}" = "true" ]; then
-            VERSION=$(cz version --project)
-            echo "Publish-only mode: using existing v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
-            VERSION=$(cz version --project)
-            echo "Bumped qdrant to v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          else
-            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
-              echo "No bump needed for qdrant"
-            else
-              cat bump_output.txt
-              exit 1
-            fi
-          fi
-
-      - name: Push version bumps and tags
-        if: inputs.publish_only != true
-        run: |
-          for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --tags && exit 0
-            echo "Push attempt $i failed, retrying in ${i}s..."
-            sleep $i
-          done
-          echo "Failed to push after 5 attempts"
-          exit 1
-
-      - name: Publish to the Pragmatiks registry
-        if: steps.bump.outputs.version != ''
-        env:
-          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
-        run: ./scripts/publish_platform_provider.sh packages/qdrant "${{ steps.bump.outputs.version }}"
-
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.publish_only != true
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          TAG="qdrant-v${VERSION}"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG already exists"
-          elif ! gh release create "$TAG" --title "pragmatiks/qdrant v${VERSION}" --generate-notes; then
-            echo "::error title=GitHub Release::Release $TAG was not created"
-            exit 1
-          fi
+    uses: ./.github/workflows/publish-provider.yaml
+    with:
+      provider: qdrant
+      version: ${{ needs.bump.outputs.qdrant_version }}
+      commit: ${{ needs.bump.outputs.qdrant_commit }}
+    secrets:
+      PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
 
   publish-agno:
-    needs: [detect-changes, publish-gcp, publish-kubernetes]
-    # Runs if agno, gcp, or kubernetes changed (DAG propagation), or shared files changed.
+    needs: [bump, push, publish-gcp, publish-kubernetes]
     if: >-
-      always() &&
-      needs.detect-changes.result == 'success' &&
+      !cancelled() &&
+      needs.bump.result == 'success' &&
+      needs.bump.outputs.agno_version != '' &&
+      (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true') &&
       (needs.publish-gcp.result == 'success' || needs.publish-gcp.result == 'skipped') &&
-      (needs.publish-kubernetes.result == 'success' || needs.publish-kubernetes.result == 'skipped') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        (
-          !startsWith(github.event.head_commit.message, 'bump:') &&
-          (
-            needs.detect-changes.outputs.shared == 'true' ||
-            needs.detect-changes.outputs.agno == 'true' ||
-            needs.detect-changes.outputs.gcp == 'true' ||
-            needs.detect-changes.outputs.kubernetes == 'true'
-          )
-        )
-      )
-    runs-on: ubuntu-latest
-    environment: pypi
+      (needs.publish-kubernetes.result == 'success' || needs.publish-kubernetes.result == 'skipped')
     permissions:
       contents: write
+    uses: ./.github/workflows/publish-provider.yaml
+    with:
+      provider: agno
+      version: ${{ needs.bump.outputs.agno_version }}
+      commit: ${{ needs.bump.outputs.agno_commit }}
+      create_release: false
+    secrets:
+      PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
+
+  agno-runner-image:
+    needs: [bump, publish-agno]
+    if: ${{ !cancelled() && needs.publish-agno.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
       packages: write
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Pull latest changes
-        run: git pull origin main
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-
-      - name: Set up Python
-        run: uv python install 3.13
-
-      - name: Install commitizen
-        run: uv tool install commitizen
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump
-        id: bump
-        shell: bash
-        env:
-          ALLOW_NO_COMMIT: ${{ inputs.allow_no_commit && '--allow-no-commit --increment PATCH' || '' }}
-        run: |
-          cd packages/agno
-          if [ "${{ inputs.publish_only }}" = "true" ]; then
-            VERSION=$(cz version --project)
-            echo "Publish-only mode: using existing v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          elif cz bump --yes --changelog $ALLOW_NO_COMMIT 2>&1 | tee bump_output.txt; then
-            VERSION=$(cz version --project)
-            echo "Bumped agno to v$VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          else
-            if grep -qE "No commits found|No new commits found|is not a bump|NO_COMMITS_TO_BUMP|NO_COMMITS_FOUND" bump_output.txt; then
-              echo "No bump needed for agno"
-            else
-              cat bump_output.txt
-              exit 1
-            fi
-          fi
-
-      - name: Push version bumps and tags
-        if: inputs.publish_only != true
-        run: |
-          for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push origin main --tags && exit 0
-            echo "Push attempt $i failed, retrying in ${i}s..."
-            sleep $i
-          done
-          echo "Failed to push after 5 attempts"
-          exit 1
-
-      - name: Publish to the Pragmatiks registry
-        if: steps.bump.outputs.version != ''
-        env:
-          PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
-        run: ./scripts/publish_platform_provider.sh packages/agno "${{ steps.bump.outputs.version }}"
-
-      - name: Create GitHub Release
-        if: steps.bump.outputs.version != '' && inputs.publish_only != true
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          TAG="agno-v${VERSION}"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG already exists"
-          elif ! gh release create "$TAG" --title "pragmatiks/agno v${VERSION}" --generate-notes; then
-            echo "::error title=GitHub Release::Release $TAG was not created"
-            exit 1
-          fi
+          ref: ${{ needs.bump.outputs.agno_commit }}
+          persist-credentials: false
 
       - name: Read runner transport version
         id: runner-transport
@@ -906,17 +318,6 @@ jobs:
           fi
           echo "transport=$TRANSPORT" >> "$GITHUB_OUTPUT"
           echo "Runner transport version: $TRANSPORT"
-
-      - name: Resolve provider version for image label
-        id: runner-provider-version
-        run: |
-          cd packages/agno
-          VERSION="${{ steps.bump.outputs.version }}"
-          if [ -z "$VERSION" ]; then
-            VERSION=$(cz version --project)
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Provider version for image: $VERSION"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -936,78 +337,17 @@ jobs:
           push: true
           platforms: linux/amd64
           build-args: |
-            PROVIDER_VERSION=${{ steps.runner-provider-version.outputs.version }}
+            PROVIDER_VERSION=${{ needs.bump.outputs.agno_version }}
           tags: |
             ghcr.io/pragmatiks/agno-runner:${{ steps.runner-transport.outputs.transport }}
             ghcr.io/pragmatiks/agno-runner:latest
 
-  relock:
-    needs:
-      - detect-changes
-      - publish-gcp
-      - publish-supabase
-      - publish-vercel
-      - publish-github
-      - publish-pragma
-      - publish-kubernetes
-      - publish-qdrant
-      - publish-agno
-    if: >-
-      !cancelled() &&
-      inputs.publish_only != true &&
-      (
-        needs.publish-gcp.outputs.version != '' ||
-        needs.publish-supabase.outputs.version != '' ||
-        needs.publish-vercel.outputs.version != '' ||
-        needs.publish-github.outputs.version != '' ||
-        needs.publish-pragma.outputs.version != '' ||
-        needs.publish-kubernetes.outputs.version != '' ||
-        needs.publish-qdrant.outputs.version != '' ||
-        needs.publish-agno.outputs.version != ''
-      )
-    runs-on: ubuntu-latest
+  release-agno:
+    needs: [bump, agno-runner-image]
+    if: ${{ !cancelled() && needs.agno-runner-image.result == 'success' }}
     permissions:
-      contents: read
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Relock and push
-        run: |
-          for i in 1 2 3 4 5; do
-            git fetch origin main
-            git reset --hard FETCH_HEAD
-            uv lock
-            if git diff --quiet -- uv.lock; then
-              echo "uv.lock already matches main"
-              exit 0
-            fi
-            git commit -m "build: relock the provider workspace after version bumps" -- uv.lock
-            if git push origin HEAD:main; then
-              exit 0
-            fi
-            echo "Push attempt $i failed, retrying in ${i}s..."
-            sleep $i
-          done
-          echo "Failed to push after 5 attempts"
-          exit 1
-
-      - name: Report recovery
-        if: failure()
-        run: echo "::error title=Relock::uv.lock on main is stale after the version bumps; rerun the relock job"
+      contents: write
+    uses: ./.github/workflows/release-provider.yaml
+    with:
+      provider: agno
+      version: ${{ needs.bump.outputs.agno_version }}

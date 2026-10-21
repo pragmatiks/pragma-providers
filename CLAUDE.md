@@ -36,9 +36,17 @@ Always use `task` commands:
 
 The root `uv.lock` is committed and must match the manifests. Any change to a `pyproject.toml` ships with its `uv lock` in the same commit. Relock with `task lock`. Every task needs the uv version named in `[tool.uv] required-version`; while your global uv differs, run tasks through `mise exec uv@<that version> -- task <name>`.
 
-CI runs `uv lock --check` and `uv sync --all-packages --all-groups --locked` on every pull request and on every push to `main` except `bump:` commits, so a stale lock fails CI.
+Humans change `main` only through pull requests. The pragma-ci-bot GitHub App pushes release commits to it directly, from the `push` job of `publish.yaml` in the main-only `release` environment. CI runs `uv lock --check` and `uv sync --all-packages --all-groups --locked` on every pull request and on every push to `main`, except release pushes: they carry `[skip ci]`, so GitHub starts no workflow for them (`ci.yaml` also skips a push whose head commit starts with `bump:`).
 
-Publishing bumps provider versions, which leaves `uv.lock` stale. The publish workflow's final `relock` job relocks and pushes `build: relock the provider workspace after version bumps`. From the first `bump:` push until that commit lands, `main` carries a stale lock, and CI fails the lock check on any pull request whose run started in that window. Push such a pull request again (for example rebase) after the relock commit lands: re-running the check reuses the old merge commit and fails again. If the `relock` job fails, rerun it: it relocks from the current `main`.
+### Releases
+
+Every push to `main` that starts workflows, and a manual dispatch from `main`, runs `publish.yaml`. Runs queue in order and run one at a time. A pull request that `update-sdk.yaml` merges with `GITHUB_TOKEN` starts no workflow, so its providers release with the next run, or dispatch `publish.yaml` from `main`.
+
+- `bump` checks out the latest `main` and handles every provider in dependency order (gcp → kubernetes → qdrant/agno). git-cliff, configured by the root `cliff.toml`, reads only the commits since the provider's tag that touch its own paths (`packages/<provider>`, plus `taskfiles/pragma.Taskfile.yaml` for pragma), computes the next version and prepends the changelog entry; commitizen then writes the version, commits and tags. A provider releases only when one of those commits is a `feat`, `fix`, `refactor` or `perf` commit or a breaking change, and its changelog lists only those commits. A provider that depends on one bumped in the same run is bumped too, as a PATCH with a heading-only changelog entry when it has no such commit of its own. The root `pyproject.toml` and `ci:`/`chore:`/`docs:` commits release nothing. `bump` then relocks `uv.lock` as `build: relock the provider workspace after version bumps [skip ci]`. It runs all third-party tooling and holds no secrets.
+- `push` pushes `main` and every new tag in one atomic push. When `main` moved after the bump, it pushes nothing and starts a new `publish.yaml` run on `main`, which bumps from the latest `main`; any other rejection fails the run.
+- Each provider then publishes from the commit its tag points to, after verifying the tag on GitHub, and gets a GitHub Release, created last (for agno, after its runner image). Any later run completes a release a failed run left behind: a provider with nothing to bump whose current tag has no GitHub Release is published from that tag without a new bump or push. A version the registry already published and an existing release are skipped, so **Re-run failed jobs**, **Re-run all jobs**, a new dispatch and the next merge's run all recover. To re-publish every provider's current version, for example after a registry reset, dispatch `publish.yaml` from `main` with `publish_only`.
+
+`git-cliff` is pinned in `publish.yaml`; `commitizen` is pinned to the same version in the root dev dependencies and in `publish.yaml`, change both together.
 
 ## Provider Interface
 
@@ -113,7 +121,7 @@ Each provider publishes to the Pragmatiks registry as its own distribution, neve
 | Qdrant | `pragmatiks-qdrant` | `qdrant-v{version}` |
 | Agno | `pragmatiks-agno` | `agno-v{version}` |
 
-**Versioning**: CI bumps each provider with commitizen from its conventional commits and pushes the tag. Never bump versions or edit changelogs by hand.
+**Versioning**: CI bumps each provider with git-cliff from the conventional commits on its own paths and pushes the tag. Never bump versions or edit changelogs by hand.
 
 **Publishing**: `scripts/publish_platform_provider.sh` builds the wheel with `uv build --wheel --no-sources`, which ignores `[tool.uv.sources]` so build requirements resolve from the package index, not the workspace, and publishes it with `pragma providers publish --wheel`.
 

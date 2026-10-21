@@ -1,0 +1,41 @@
+name: Release Provider
+
+on:
+  workflow_call:
+    inputs:
+      provider:
+        description: "Provider package directory name under packages/, such as gcp"
+        type: string
+        required: true
+      version:
+        description: "Released version; the GitHub Release is created for the tag <provider>-v<version>"
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PROVIDER: ${{ inputs.provider }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          TAG="${PROVIDER}-v${VERSION}"
+          RELEASE_DRAFT_STATE="$(gh api graphql \
+            -f query="query(\$owner: String!, \$name: String!, \$tag: String!) { repository(owner: \$owner, name: \$name) { release(tagName: \$tag) { isDraft } } }" \
+            -f owner="${GITHUB_REPOSITORY%%/*}" \
+            -f name="${GITHUB_REPOSITORY#*/}" \
+            -f tag="${TAG}" \
+            --jq .data.repository.release.isDraft)"
+          if [ -n "${RELEASE_DRAFT_STATE}" ]; then
+            echo "Release ${TAG} already exists"
+            exit 0
+          fi
+          gh release create "${TAG}" --verify-tag --title "pragmatiks/${PROVIDER} v${VERSION}" --generate-notes
