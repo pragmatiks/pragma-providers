@@ -35,7 +35,7 @@ Always use `task` commands:
 
 ### Toolchain
 
-mise is the only toolchain source. `mise.toml` pins python, uv, task, pre-commit, git-cliff, commitizen and yq; `mise.lock` and `.mise/locks/` are committed. Install the pinned mise version (`MISE_VERSION_PIN` in `Taskfile.yaml`); the install and the one-sweep bump rule across repositories live in the hub's `docs/runbooks/local-dev-setup.md`. A toolchain change ships with its `task lock:toolchain` output in the same commit. On a fresh clone run `mise trust && mise install --locked` first (task comes from mise), then `task install`.
+mise is the only toolchain source. `mise.toml` pins python, uv, task, pre-commit, git-cliff, commitizen and yq; `mise.lock` and `.mise/locks/` are committed. Install the pinned mise version (`MISE_VERSION_PIN` in `Taskfile.yaml`); the install and the one-sweep bump rule across repositories live in the hub's `docs/runbooks/local-dev-setup.md`. A toolchain change ships with its `task lock:toolchain` output in the same commit. On a fresh clone run `mise trust && mise install` first (task comes from mise), then `task install`.
 
 ### Lockfile
 

@@ -36,7 +36,7 @@ tasks:
     desc: Install the pinned toolchain from mise.lock, every provider from uv.lock, and the git hooks
     cmds:
       - task: install:mise-ceiling
-      - mise install --locked
+      - mise install
       - uv sync --all-packages --all-groups --locked
       - task: install:hooks
 
