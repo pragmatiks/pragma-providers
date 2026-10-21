@@ -28,13 +28,18 @@ Always use `task` commands:
 
 | Command | Purpose |
 |---------|---------|
-| `task install` | Install every provider from the committed `uv.lock` |
+| `task install` | Install the toolchain from `mise.lock`, every provider from `uv.lock`, and the git hooks |
 | `task format` | Format with ruff |
 | `task check` | Lint + type check |
+| `task lock:toolchain` | Regenerate `mise.lock` and `.mise/locks/` (macOS arm64 or Linux x86_64 only; never bumps) |
+
+### Toolchain
+
+mise is the only toolchain source. `mise.toml` pins python, uv, task, pre-commit and commitizen; `mise.lock` and `.mise/locks/` are committed. Install the pinned mise version (`MISE_VERSION_PIN` in `Taskfile.yaml`); the install and the one-sweep bump rule across repositories live in the hub's `docs/runbooks/local-dev-setup.md`. A toolchain change ships with its `task lock:toolchain` output in the same commit. On a fresh clone run `mise trust && mise install --locked` first (task comes from mise), then `task install`.
 
 ### Lockfile
 
-The root `uv.lock` is committed and must match the manifests. Any change to a `pyproject.toml` ships with its `uv lock` in the same commit. Relock with `task lock`. Every task needs the uv version named in `[tool.uv] required-version`; while your global uv differs, run tasks through `mise exec uv@<that version> -- task <name>`.
+The root `uv.lock` is committed and must match the manifests. Any change to a `pyproject.toml` ships with its `uv lock` in the same commit. Relock with `task lock`. `[tool.uv] required-version` must equal the uv version in `mise.toml`; uv refuses to run at any other version.
 
 Humans change `main` only through pull requests. The pragma-ci-bot GitHub App pushes release commits to it directly, from the `push` job of `publish.yaml` in the main-only `release` environment. CI runs `uv lock --check` and `uv sync --all-packages --all-groups --locked` on every pull request and on every push to `main`, except release pushes: they carry `[skip ci]`, so GitHub starts no workflow for them (`ci.yaml` also skips a push whose head commit starts with `bump:`).
 

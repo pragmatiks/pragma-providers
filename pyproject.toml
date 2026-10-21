@@ -40,7 +40,5 @@ preview = true
 
 [dependency-groups]
 dev = [
-    "commitizen==4.19.2",
-    "pre-commit>=4.0.0",
     "ruff==0.16.8",
 ]
