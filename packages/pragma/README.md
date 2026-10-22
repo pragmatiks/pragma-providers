@@ -120,8 +120,8 @@ The `pragma/file` resource reads storage configuration from environment variable
 
 ```bash
 # Lint and type check
-task pragma:check
+mise run pragma:check
 
 # Format
-task pragma:format
+mise run pragma:format
 ```

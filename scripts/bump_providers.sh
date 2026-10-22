@@ -23,18 +23,17 @@
 #
 # Providers are handled in dependency order (gcp before kubernetes, kubernetes before qdrant and agno),
 # so each bump commit sits on top of the previous one. git-cliff, configured by cliff.toml at the
-# repository root, reads only the commits that touch the provider's own paths (packages/<provider>,
-# plus taskfiles/pragma.Taskfile.yaml for pragma) since the provider's release tag. A provider is
-# bumped when at least one of those commits is a feat, fix, refactor or perf commit or a breaking
-# change; git-cliff computes the next version from them and prepends their changelog entry to
-# packages/<provider>/CHANGELOG.md. A provider that depends on one bumped in this run is bumped as
-# well: by its own commits when it has releasable ones, otherwise as a PATCH whose changelog entry has
-# only its heading. commitizen then writes the version into the provider's version files, commits and
-# creates the release tag. Eligibility is read from main, not from the triggering push, so a run that
-# was cancelled or stopped leaves nothing that the next run does not see. A provider with nothing to
-# bump whose current release tag has no GitHub Release, neither draft nor published, is reported for
-# publishing at its tag, so any later run completes a release that a run failing after its push left
-# incomplete; the GitHub Release is created last.
+# repository root, reads only the commits that touch the provider's own path (packages/<provider>)
+# since the provider's release tag. A provider is bumped when at least one of those commits is a feat,
+# fix, refactor or perf commit or a breaking change; git-cliff computes the next version from them and
+# prepends their changelog entry to packages/<provider>/CHANGELOG.md. A provider that depends on one
+# bumped in this run is bumped as well: by its own commits when it has releasable ones, otherwise as a
+# PATCH whose changelog entry has only its heading. commitizen then writes the version into the
+# provider's version files, commits and creates the release tag. Eligibility is read from main, not
+# from the triggering push, so a run that was cancelled or stopped leaves nothing that the next run
+# does not see. A provider with nothing to bump whose current release tag has no GitHub Release,
+# neither draft nor published, is reported for publishing at its tag, so any later run completes a
+# release that a run failing after its push left incomplete; the GitHub Release is created last.
 #
 # Results, for each provider that was bumped, completed or, with PUBLISH_ONLY, reported:
 #   <provider>_version  the version to publish
@@ -99,13 +98,6 @@ compute_dependencies() {
   esac
 }
 
-compute_include_path_arguments() {
-  case "$1" in
-    pragma) echo "--include-path packages/pragma/** --include-path taskfiles/pragma.Taskfile.yaml" ;;
-    *) echo "--include-path packages/$1/**" ;;
-  esac
-}
-
 has_bumped_dependency() {
   local dependency
 
@@ -121,10 +113,8 @@ has_bumped_dependency() {
 run_provider_cliff() {
   local provider="$1"
   shift
-  local include_path_arguments
 
-  read -r -a include_path_arguments <<< "$(compute_include_path_arguments "${provider}")"
-  git cliff --tag-pattern "^${provider}-v[0-9]" "${include_path_arguments[@]}" "$@"
+  git cliff --tag-pattern "^${provider}-v[0-9]" --include-path "packages/${provider}/**" "$@"
 }
 
 load_unreleased_context() {

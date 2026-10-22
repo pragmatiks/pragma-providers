@@ -1,0 +1,17 @@
+["install:python"]
+description = "Install every provider and its dependency groups from uv.lock"
+hide = true
+extends = "bash"
+sources = [
+  "pyproject.toml",
+  "uv.lock",
+  "packages/*/pyproject.toml",
+  "mise.toml",
+  "mise.lock",
+]
+outputs = [".venv/.install-complete"]
+run = [
+  "rm -f .venv/.install-complete",
+  "uv sync --all-packages --all-groups --locked",
+  "touch .venv/.install-complete",
+]

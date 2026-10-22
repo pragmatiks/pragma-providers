@@ -248,17 +248,17 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
 ## Development
 
-Requires [mise](https://mise.jdx.dev) at the version pinned in `Taskfile.yaml` (`MISE_VERSION_PIN`); it supplies every other tool from `mise.lock`.
+Requires [mise](https://mise.jdx.dev) at the `min_version` pinned in `mise.toml`; it supplies every other tool from `mise.lock`.
 
 ```bash
 # Install the toolchain, dependencies and git hooks
-task install
+mise run install
 
 # Run all checks
-task check
+mise run check
 
 # Provider-specific tasks
-task gcp:check
+mise run gcp:check
 ```
 
 ## Repository Structure

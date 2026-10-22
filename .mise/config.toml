@@ -1,0 +1,13 @@
+[task_templates.bash]
+shell = "bash -euo pipefail -c"
+
+[task_templates.provider-format]
+shell = "bash -euo pipefail -c"
+run = "env -u VIRTUAL_ENV uv run ruff format ."
+
+[task_templates.provider-check]
+shell = "bash -euo pipefail -c"
+run = [
+  "env -u VIRTUAL_ENV uv run ruff check --fix .",
+  "env -u VIRTUAL_ENV uv run ty check",
+]

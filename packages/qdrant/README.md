@@ -283,8 +283,8 @@ Choose the `vectors.size` to match your embedding model:
 
 ```bash
 # Lint and type check
-task qdrant:check
+mise run qdrant:check
 
 # Format
-task qdrant:format
+mise run qdrant:format
 ```

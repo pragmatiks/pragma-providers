@@ -1,0 +1,79 @@
+["gcp:format"]
+description = "Format the gcp provider with ruff"
+extends = "provider-format"
+dir = "packages/gcp"
+
+["gcp:check"]
+description = "Apply ruff's safe fixes to the gcp provider, then fail on any remaining ruff finding or ty type error"
+extends = "provider-check"
+dir = "packages/gcp"
+
+["kubernetes:format"]
+description = "Format the kubernetes provider with ruff"
+extends = "provider-format"
+dir = "packages/kubernetes"
+
+["kubernetes:check"]
+description = "Apply ruff's safe fixes to the kubernetes provider, then fail on any remaining ruff finding or ty type error"
+extends = "provider-check"
+dir = "packages/kubernetes"
+
+["qdrant:format"]
+description = "Format the qdrant provider with ruff"
+extends = "provider-format"
+dir = "packages/qdrant"
+
+["qdrant:check"]
+description = "Apply ruff's safe fixes to the qdrant provider, then fail on any remaining ruff finding or ty type error"
+extends = "provider-check"
+dir = "packages/qdrant"
+
+["agno:format"]
+description = "Format the agno provider with ruff"
+extends = "provider-format"
+dir = "packages/agno"
+
+["agno:check"]
+description = "Apply ruff's safe fixes to the agno provider, then fail on any remaining ruff finding or ty type error"
+extends = "provider-check"
+dir = "packages/agno"
+
+["supabase:format"]
+description = "Format the supabase provider with ruff"
+extends = "provider-format"
+dir = "packages/supabase"
+
+["supabase:check"]
+description = "Apply ruff's safe fixes to the supabase provider, then fail on any remaining ruff finding or ty type error"
+extends = "provider-check"
+dir = "packages/supabase"
+
+["vercel:format"]
+description = "Format the vercel provider with ruff"
+extends = "provider-format"
+dir = "packages/vercel"
+
+["vercel:check"]
+description = "Apply ruff's safe fixes to the vercel provider, then fail on any remaining ruff finding or ty type error"
+extends = "provider-check"
+dir = "packages/vercel"
+
+["github:format"]
+description = "Format the github provider with ruff"
+extends = "provider-format"
+dir = "packages/github"
+
+["github:check"]
+description = "Apply ruff's safe fixes to the github provider, then fail on any remaining ruff finding or ty type error"
+extends = "provider-check"
+dir = "packages/github"
+
+["pragma:format"]
+description = "Format the pragma provider with ruff"
+extends = "provider-format"
+dir = "packages/pragma"
+
+["pragma:check"]
+description = "Apply ruff's safe fixes to the pragma provider, then fail on any remaining ruff finding or ty type error"
+extends = "provider-check"
+dir = "packages/pragma"
