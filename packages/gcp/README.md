@@ -344,8 +344,8 @@ The provider uses explicit credentials (not Application Default Credentials) to 
 
 ```bash
 # Lint and type check
-task gcp:check
+mise run gcp:check
 
 # Format
-task gcp:format
+mise run gcp:format
 ```

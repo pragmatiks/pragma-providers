@@ -24,22 +24,22 @@ When an SDK interface change affects all providers:
 
 ## Development
 
-Always use `task` commands:
+Always use mise tasks (`mise tasks` lists them all):
 
 | Command | Purpose |
 |---------|---------|
-| `task install` | Install the toolchain from `mise.lock`, every provider from `uv.lock`, and the git hooks |
-| `task format` | Format with ruff |
-| `task check` | Lint + type check |
-| `task lock:toolchain` | Regenerate `mise.lock` and `.mise/locks/` (macOS arm64 or Linux x86_64 only; never bumps) |
+| `mise run install` | Install the toolchain from `mise.lock`, every provider from `uv.lock`, and the git hooks |
+| `mise run format` | Format with ruff |
+| `mise run check` | Lint + type check |
+| `mise run lock:toolchain` | Regenerate `mise.lock` and `.mise/locks/` (macOS arm64 or Linux x64 only; never bumps) |
 
 ### Toolchain
 
-mise is the only toolchain source. `mise.toml` pins python, uv, task, pre-commit, git-cliff, commitizen and yq; `mise.lock` and `.mise/locks/` are committed. Install the pinned mise version (`MISE_VERSION_PIN` in `Taskfile.yaml`); the install and the one-sweep bump rule across repositories live in the hub's `docs/runbooks/local-dev-setup.md`. A toolchain change ships with its `task lock:toolchain` output in the same commit. On a fresh clone run `mise trust && mise install` first (task comes from mise), then `task install`.
+mise is the only toolchain source. `mise.toml` pins python, uv, pre-commit, git-cliff, commitizen and yq; `mise.lock` and `.mise/locks/` are committed. Install the pinned mise version (`min_version` in `mise.toml`); the install and the one-sweep bump rule across repositories live in the hub's `docs/runbooks/local-dev-setup.md`. A toolchain change ships with its `mise run lock:toolchain` output in the same commit. On a fresh clone run `mise trust`, then `mise run install`.
 
 ### Lockfile
 
-The root `uv.lock` is committed and must match the manifests. Any change to a `pyproject.toml` ships with its `uv lock` in the same commit. Relock with `task lock`. `[tool.uv] required-version` must equal the uv version in `mise.toml`; uv refuses to run at any other version.
+The root `uv.lock` is committed and must match the manifests. Any change to a `pyproject.toml` ships with its `uv lock` in the same commit. Relock with `mise run lock`. `[tool.uv] required-version` must equal the uv version in `mise.toml`; uv refuses to run at any other version.
 
 Humans change `main` only through pull requests. The pragma-ci-bot GitHub App pushes release commits to it directly, from the `push` job of `publish.yaml` in the main-only `release` environment. CI runs `uv lock --check` and `uv sync --all-packages --all-groups --locked` on every pull request and on every push to `main`, except release pushes: they carry `[skip ci]`, so GitHub starts no workflow for them (`ci.yaml` also skips a push whose head commit starts with `bump:`).
 
@@ -47,7 +47,7 @@ Humans change `main` only through pull requests. The pragma-ci-bot GitHub App pu
 
 Every push to `main` that starts workflows, and a manual dispatch from `main`, runs `publish.yaml`. Runs queue in order and run one at a time. A pull request that `update-sdk.yaml` merges with `GITHUB_TOKEN` starts no workflow, so its providers release with the next run, or dispatch `publish.yaml` from `main`.
 
-- `bump` checks out the latest `main` and handles every provider in dependency order (gcp → kubernetes → qdrant/agno). git-cliff, configured by the root `cliff.toml`, reads only the commits since the provider's tag that touch its own paths (`packages/<provider>`, plus `taskfiles/pragma.Taskfile.yaml` for pragma), computes the next version and prepends the changelog entry; commitizen then writes the version, commits and tags. A provider releases only when one of those commits is a `feat`, `fix`, `refactor` or `perf` commit or a breaking change, and its changelog lists only those commits. A provider that depends on one bumped in the same run is bumped too, as a PATCH with a heading-only changelog entry when it has no such commit of its own. The root `pyproject.toml` and `ci:`/`chore:`/`docs:` commits release nothing. `bump` then relocks `uv.lock` as `build: relock the provider workspace after version bumps [skip ci]`. It runs all third-party tooling and holds no secrets.
+- `bump` checks out the latest `main` and handles every provider in dependency order (gcp → kubernetes → qdrant/agno). git-cliff, configured by the root `cliff.toml`, reads only the commits since the provider's tag that touch its own path (`packages/<provider>`), computes the next version and prepends the changelog entry; commitizen then writes the version, commits and tags. A provider releases only when one of those commits is a `feat`, `fix`, `refactor` or `perf` commit or a breaking change, and its changelog lists only those commits. A provider that depends on one bumped in the same run is bumped too, as a PATCH with a heading-only changelog entry when it has no such commit of its own. The root `pyproject.toml` and `ci:`/`chore:`/`docs:` commits release nothing. `bump` then relocks `uv.lock` as `build: relock the provider workspace after version bumps [skip ci]`. It runs all third-party tooling and holds no secrets.
 - `push` pushes `main` and every new tag in one atomic push. When `main` moved after the bump, it pushes nothing and starts a new `publish.yaml` run on `main`, which bumps from the latest `main`; any other rejection fails the run.
 - Each provider then publishes from the commit its tag points to, after verifying the tag on GitHub, and gets a GitHub Release, created last (for agno, after its runner image). Any later run completes a release a failed run left behind: a provider with nothing to bump whose current tag has no GitHub Release is published from that tag without a new bump or push. A version the registry already published and an existing release are skipped, so **Re-run failed jobs**, **Re-run all jobs**, a new dispatch and the next merge's run all recover. To re-publish every provider's current version, for example after a registry reset, dispatch `publish.yaml` from `main` with `publish_only`.
 
@@ -151,7 +151,7 @@ This section is an embedded copy of the pragma-os repo's `docs/engineering-princ
 
 | Layer | What | Where |
 |---|---|---|
-| 1. Style + standard smells | `ruff` (Python), `eslint` (TS) with curated rule set | per-repo `task check` / `pnpm lint` |
+| 1. Style + standard smells | `ruff` (Python), `eslint` (TS) with curated rule set | per-repo `mise run check` / `pnpm lint` |
 | 2. Complexity gating | `radon` / `xenon` (Python), `eslint-plugin-sonarjs/cognitive-complexity` (TS) | CI fail on regression |
 | 3. Pragmatiks-specific rules | `semgrep` ruleset (cross-language) + custom scripts | shared via `pragmatiks-lint` (PyPI) and `@pragmatiks/lint` (npm) |
 
@@ -290,7 +290,7 @@ Provider event `on_delete` stays (provider deletes external object).
 **Programmatic check**:
 - `eslint-plugin-unicorn/prevent-abbreviations` (TS) — direct fit, allowlist config.
 - `pra-no-abbreviations-python` semgrep rule (Python) — regex matching forbidden short identifiers, allowlist.
-- `packages/api/scripts/check_openapi_spec.py` (`task api:check`) — flags infrastructure terms in generated OpenAPI spec. Kubernetes, pod, namespace, and vendor names not in term list yet — reviewer scans for them.
+- `packages/api/scripts/check_openapi_spec.py` (`mise run api:check`) — flags infrastructure terms in generated OpenAPI spec. Kubernetes, pod, namespace, and vendor names not in term list yet — reviewer scans for them.
 
 **Reviewer hint**: `db`, `cfg`, `k8s` in any new code = blocker. Banned synonym from vocabulary table on any surface = blocker.
 
