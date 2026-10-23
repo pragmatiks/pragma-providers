@@ -1,3 +1,5 @@
+## kubernetes-v2.2.4 (2026-10-23)
+
 ## kubernetes-v2.2.3 (2026-10-18)
 
 ### Fix
