@@ -18,8 +18,8 @@
 #                           uv tools are neither used nor changed.
 #
 # Requires: python3 >= 3.11, jq, uv at the version the workspace pyproject.toml pins, and a Python
-# >= 3.13 that uv can find or download for the pinned pragma CLI (pragmatiks-cli 12.x on
-# pragmatiks-sdk 17.x).
+# >= 3.13 that uv can find or download for the pinned pragma CLI (pragmatiks-cli 13.1 or a later 13.x
+# on pragmatiks-sdk 18.x).
 #
 # Example:
 #   publish_platform_provider.sh packages/qdrant 7.0.1
@@ -29,19 +29,21 @@
 # the catalog records for the version replaces a record that is still being published or failed, and
 # is refused while the record is promoting (pragma exit 1). The same wheel, which a rerun on the same
 # commit builds, is watched while the record is still being published, and starts a new attempt when
-# the record failed. The pragma providers publish exit code decides what happens next:
+# the record failed. pragma providers publish runs with --output json: its stderr flows to the log, and
+# once its watch ends its stdout carries one document, {"operation_id": <this publish's operation>,
+# "version": <the catalog record as last read>}, on exits 0, 1 and 3; earlier exits leave it empty. A
+# record whose operation_id differs from the document's operation_id was replaced by another publish of
+# this version. The pragma providers publish exit code decides what happens next:
 #   - 0: the version is published; exits 0.
 #   - 3: the wheel was accepted but the CLI stopped watching before the version settled, or could not
-#     read it; polls the catalog.
-#   - anything else: exits 1 at once without reading the catalog; the pragma CLI error is printed above.
+#     read it; polls the catalog, or exits 1 when the document has no operation_id.
+#   - anything else: exits 1 at once without reading the catalog; the pragma CLI error, a replaced
+#     publish included, is printed above.
 #
 # Polling ends when the catalog records the version as published (exit 0), failed (exit 1, with the
 # catalog's error message), missing (exit 1), replaced by another publish of this version (exit 1), or
 # 20 minutes after the publish started have passed (exit 1). Any other status (staged, queued, admitting
-# or promoting) and a catalog that cannot be read are polled again until the deadline. The wheel_sha256
-# of the first record read is this attempt's own: a record without one, or a later record with a
-# different one, was replaced. A replacement that lands before that first read is taken as this
-# attempt's own.
+# or promoting) and a catalog that cannot be read are polled again until the deadline.
 #
 # Also exits 1 when an argument is missing, PRAGMA_PUBLISH_API_KEY is empty or unset, the pyproject is
 # missing or malformed or its version differs from <version>, the catalog cannot be read to check
@@ -59,8 +61,8 @@
 set -euo pipefail
 
 PROVIDER_NAMESPACE="pragmatiks"
-PRAGMA_CLI_REQUIREMENT="pragmatiks-cli>=12.0,<13"
-PRAGMA_SDK_REQUIREMENT="pragmatiks-sdk>=17,<18"
+PRAGMA_CLI_REQUIREMENT="pragmatiks-cli>=13.1,<14"
+PRAGMA_SDK_REQUIREMENT="pragmatiks-sdk>=18,<19"
 PUBLISH_DEADLINE_SECONDS=1200
 POLL_INTERVAL_SECONDS=15
 
@@ -129,6 +131,10 @@ compute_record_status() {
   jq --raw-output --arg missing "${MISSING_RECORD_STATUS}" '.status // $missing' <<< "$1"
 }
 
+compute_operation_id() {
+  jq --raw-output '.operation_id // ""' <<< "$1"
+}
+
 PYPROJECT_PATH="${PROVIDER_DIRECTORY}/pyproject.toml"
 if [ ! -f "${PYPROJECT_PATH}" ]; then
   echo "publish_platform_provider: pyproject not found at ${PYPROJECT_PATH}" >&2
@@ -189,13 +195,20 @@ fi
 
 PUBLISH_STARTED_SECONDS="${SECONDS}"
 PUBLISH_EXIT_CODE=0
-run_pragma providers publish --wheel "${WHEELS[0]}" || PUBLISH_EXIT_CODE=$?
+PUBLISH_DOCUMENT="$(run_pragma providers publish --wheel "${WHEELS[0]}" --output json)" \
+  || PUBLISH_EXIT_CODE=$?
 
 case "${PUBLISH_EXIT_CODE}" in
   0)
     exit 0
     ;;
   "${ADMISSION_UNCONFIRMED_EXIT_CODE}")
+    OPERATION_ID="$(compute_operation_id "${PUBLISH_DOCUMENT}")"
+    if [ -z "${OPERATION_ID}" ]; then
+      echo "publish_platform_provider: ${VERSION_LABEL}:" \
+        "publish exited ${PUBLISH_EXIT_CODE} without an operation id. ${CHECK_HINT}" >&2
+      exit "${FAILURE_EXIT_CODE}"
+    fi
     echo "publish_platform_provider: ${VERSION_LABEL}:" \
       "wheel accepted, the version has not settled yet; polling the catalog"
     ;;
@@ -205,8 +218,6 @@ case "${PUBLISH_EXIT_CODE}" in
     exit "${FAILURE_EXIT_CODE}"
     ;;
 esac
-
-OWN_WHEEL_SHA256=""
 
 while true; do
   if CATALOG_VERSION="$(read_catalog_version "${PROVIDER_NAME}" "${VERSION}")"; then
@@ -219,11 +230,7 @@ while true; do
     "${UNREADABLE_CATALOG_STATUS}" | "${MISSING_RECORD_STATUS}")
       ;;
     *)
-      RECORD_WHEEL_SHA256="$(jq --raw-output '.wheel_sha256 // ""' <<< "${CATALOG_VERSION}")"
-      if [ -z "${OWN_WHEEL_SHA256}" ]; then
-        OWN_WHEEL_SHA256="${RECORD_WHEEL_SHA256}"
-      fi
-      if [ -z "${RECORD_WHEEL_SHA256}" ] || [ "${RECORD_WHEEL_SHA256}" != "${OWN_WHEEL_SHA256}" ]; then
+      if [ "$(compute_operation_id "${CATALOG_VERSION}")" != "${OPERATION_ID}" ]; then
         STATUS="${REPLACED_RECORD_STATUS}"
       fi
       ;;
