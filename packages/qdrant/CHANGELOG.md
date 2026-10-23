@@ -1,3 +1,5 @@
+## qdrant-v8.2.6 (2026-10-23)
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
