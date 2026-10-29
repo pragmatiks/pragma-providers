@@ -1,3 +1,9 @@
+## supabase-v6.2.8 (2026-10-29)
+
+### Fix
+
+- **supabase**: send the project database password on every update (PRA-836)
+
 ## supabase-v6.2.7 (2026-10-29)
 
 ### Fix
