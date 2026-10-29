@@ -237,7 +237,7 @@ jobs:
       needs.bump.result == 'success' &&
       needs.bump.outputs.kubernetes_version != '' &&
       (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true') &&
-      (needs.publish-gcp.result == 'success' || needs.publish-gcp.result == 'skipped')
+      (needs.publish-gcp.result == 'success' || needs.bump.outputs.gcp_version == '')
     permissions:
       contents: write
     uses: ./.github/workflows/publish-provider.yaml
@@ -249,13 +249,14 @@ jobs:
       PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
 
   publish-qdrant:
-    needs: [bump, push, publish-kubernetes]
+    needs: [bump, push, publish-gcp, publish-kubernetes]
     if: >-
       !cancelled() &&
       needs.bump.result == 'success' &&
       needs.bump.outputs.qdrant_version != '' &&
       (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true') &&
-      (needs.publish-kubernetes.result == 'success' || needs.publish-kubernetes.result == 'skipped')
+      (needs.publish-gcp.result == 'success' || needs.bump.outputs.gcp_version == '') &&
+      (needs.publish-kubernetes.result == 'success' || needs.bump.outputs.kubernetes_version == '')
     permissions:
       contents: write
     uses: ./.github/workflows/publish-provider.yaml
@@ -273,8 +274,8 @@ jobs:
       needs.bump.result == 'success' &&
       needs.bump.outputs.agno_version != '' &&
       (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true') &&
-      (needs.publish-gcp.result == 'success' || needs.publish-gcp.result == 'skipped') &&
-      (needs.publish-kubernetes.result == 'success' || needs.publish-kubernetes.result == 'skipped')
+      (needs.publish-gcp.result == 'success' || needs.bump.outputs.gcp_version == '') &&
+      (needs.publish-kubernetes.result == 'success' || needs.bump.outputs.kubernetes_version == '')
     permissions:
       contents: write
     uses: ./.github/workflows/publish-provider.yaml
