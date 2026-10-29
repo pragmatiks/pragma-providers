@@ -414,8 +414,8 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
     async def on_update(self, previous_config: ProjectConfig | None) -> ProjectOutputs:
         """Wait until the existing project is healthy, then apply the database password and auth settings.
 
-        The database password is sent when it differs from ``previous_config`` or when
-        ``previous_config`` is unknown.
+        The database password is write-only, so it is sent on every update: equality with
+        ``previous_config`` proves nothing about the stored value.
 
         Args:
             previous_config: The previous configuration, if any.
@@ -442,8 +442,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
 
             project = await self.wait_for_healthy(client, project["ref"])
 
-            if previous_config is None or previous_config.database_password != self.config.database_password:
-                await self.apply_database_password(client, project["ref"])
+            await self.apply_database_password(client, project["ref"])
 
             await self.apply_auth_settings(client, project["ref"])
 
