@@ -1,3 +1,10 @@
+## gcp-v7.2.7 (2026-10-29)
+
+### Fix
+
+- **gcp**: send the Cloud SQL user password on every update (PRA-815)
+- **deps**: update pragmatiks-sdk to v19.0.0 (#127)
+
 ## gcp-v7.2.6 (2026-10-23)
 
 ## gcp-v7.2.5 (2026-10-18)
