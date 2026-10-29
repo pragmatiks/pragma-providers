@@ -137,7 +137,9 @@ class User(Resource[UserConfig, UserOutputs]):
         return self.build_outputs(instance_config, user)
 
     async def on_update(self, previous_config: UserConfig | None) -> UserOutputs:
-        """Apply the configured password when it changed or the previous configuration is unknown.
+        """Write the configured password on every update.
+
+        The password is write-only, so equality with ``previous_config`` proves nothing about the stored value.
 
         Args:
             previous_config: The previous configuration, if any.
@@ -153,24 +155,23 @@ class User(Resource[UserConfig, UserOutputs]):
         instance_config = await resolve_instance_config(self.config.instance)
         service = await get_sqladmin_service(get_credentials(instance_config.credentials))
 
-        if previous_config is None or previous_config.password != self.config.password:
-            await run_instance_operation(
-                service,
-                instance_config,
-                self.name,
-                lambda: execute(
-                    service.users().update(
-                        project=instance_config.project_id,
-                        instance=instance_config.instance_name,
-                        name=self.config.username,
-                        body={
-                            "name": self.config.username,
-                            "password": self.config.password,
-                        },
-                    )
-                ),
-                compute_operation_deadline(),
-            )
+        await run_instance_operation(
+            service,
+            instance_config,
+            self.name,
+            lambda: execute(
+                service.users().update(
+                    project=instance_config.project_id,
+                    instance=instance_config.instance_name,
+                    name=self.config.username,
+                    body={
+                        "name": self.config.username,
+                        "password": self.config.password,
+                    },
+                )
+            ),
+            compute_operation_deadline(),
+        )
 
         return await self.fetch_outputs(instance_config, service)
 
