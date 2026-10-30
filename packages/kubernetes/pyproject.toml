@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-kubernetes"
-version = "2.2.5"
+version = "2.2.6"
 description = "Deploy and manage Kubernetes resources including deployments, services, configmaps, secrets, and statefulsets."
 keywords = ["kubernetes", "orchestration", "containers", "infrastructure"]
 readme = "README.md"
@@ -31,7 +31,7 @@ pragmatiks-gcp = "gcp_provider"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "2.2.5"
+version = "2.2.6"
 version_files = ["pyproject.toml:^version"]
 tag_format = "kubernetes-v$version"
 bump_message = "bump: version $current_version → $new_version [skip ci]"
