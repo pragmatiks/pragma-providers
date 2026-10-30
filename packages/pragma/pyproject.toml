@@ -6,7 +6,7 @@ keywords = ["platform", "secrets", "configuration", "files"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk>=19.0.0",
+    "pragmatiks-sdk>=20.0.0",
     "obstore>=0.5.0",
 ]
 
