@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-qdrant"
-version = "8.2.7"
+version = "8.2.8"
 description = "Provision and manage Qdrant vector database instances and collections for similarity search and AI applications."
 keywords = ["vector-database", "search", "ai", "embeddings"]
 readme = "README.md"
@@ -30,7 +30,7 @@ pragmatiks-kubernetes = "kubernetes_provider"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "8.2.7"
+version = "8.2.8"
 version_files = ["pyproject.toml:^version"]
 tag_format = "qdrant-v$version"
 bump_message = "bump: version $current_version → $new_version [skip ci]"
