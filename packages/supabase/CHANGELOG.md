@@ -1,3 +1,9 @@
+## supabase-v6.2.9 (2026-10-30)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v20.0.0 (#131)
+
 ## supabase-v6.2.8 (2026-10-29)
 
 ### Fix
