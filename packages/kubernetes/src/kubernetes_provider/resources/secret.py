@@ -11,7 +11,7 @@ from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Secret as K8sSecret
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 
-from kubernetes_provider.objects import delete_object, fetch_object, wait_for_absence
+from kubernetes_provider.objects import FIELD_MANAGER, create_object, delete_object, fetch_object, wait_for_absence
 from kubernetes_provider.resources.config import KubernetesConfig
 
 
@@ -56,12 +56,12 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
     base64-encoded key-value pairs. Supports both ``data`` (auto-encoded)
     and ``string_data`` (server-encoded) inputs.
 
-    Uses server-side apply with ``field_manager="pragma-kubernetes"`` for
-    idempotent operations. Health checks verify the secret exists and
-    report the number of stored keys.
+    Creates the secret, refusing one that already exists, and updates it with
+    server-side apply under ``field_manager="pragma-kubernetes"``. Health checks
+    verify the secret exists and report the number of stored keys.
 
     Lifecycle:
-        - on_create: Apply secret configuration
+        - on_create: Create the secret, refusing an existing one
         - on_observe: Look up the secret by name and namespace
         - on_update: Apply updated secret configuration
         - on_delete: Delete the secret and wait until it is gone (idempotent)
@@ -138,15 +138,16 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         )
 
     async def on_create(self) -> SecretOutputs:
-        """Create or update Kubernetes Secret.
-
-        Idempotent: Uses apply() which handles both create and update.
+        """Create the Kubernetes Secret.
 
         Returns:
             SecretOutputs with secret details.
+
+        Raises:
+            AlreadyExistsError: If the namespace already holds a secret with this name.
         """
         async with self._get_client() as client:
-            secret = await client.apply(self._build_secret(), field_manager="pragma-kubernetes")
+            secret = await create_object(client, self._build_secret())
 
             return self.build_outputs(secret)
 
@@ -173,7 +174,10 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         Returns:
             SecretOutputs with updated secret details.
         """
-        return await self.on_create()
+        async with self._get_client() as client:
+            secret = await client.apply(self._build_secret(), field_manager=FIELD_MANAGER)
+
+        return self.build_outputs(secret)
 
     async def on_delete(self) -> None:
         """Delete Kubernetes Secret and wait until it is gone.

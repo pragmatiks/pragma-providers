@@ -27,7 +27,7 @@ from lightkube.resources.core_v1 import Pod
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import BaseModel
 
-from kubernetes_provider.objects import delete_object, fetch_object, wait_for_absence
+from kubernetes_provider.objects import FIELD_MANAGER, create_object, delete_object, fetch_object, wait_for_absence
 from kubernetes_provider.resources.config import KubernetesConfig
 from kubernetes_provider.rollout import build_replica_health, wait_for_rollout
 
@@ -180,14 +180,15 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
     references to Kubernetes Secrets), and resource limits.
 
     Waits for all replicas to reach ready state before reporting success
-    (polls every 5s, timeout 300s). Uses server-side apply with
-    ``field_manager="pragma-kubernetes"`` for idempotent operations.
+    (polls every 5s, timeout 300s). Creates the deployment, refusing one that
+    already exists, and updates it with server-side apply under
+    ``field_manager="pragma-kubernetes"``.
 
     Supports fetching aggregated logs from all pods matching the label
     selector, and health checks that compare ready replicas to desired count.
 
     Lifecycle:
-        - on_create: Apply deployment, wait for all replicas ready
+        - on_create: Create deployment, refusing an existing one, wait for all replicas ready
         - on_observe: Look up the deployment by name and namespace
         - on_update: Apply updated deployment, wait for all replicas ready
         - on_delete: Delete the deployment and wait until it is gone (idempotent)
@@ -377,16 +378,15 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
     async def on_create(self) -> DeploymentOutputs:
         """Create Kubernetes Deployment and wait for ready.
 
-        Idempotent: Uses apply() which handles both create and update.
-
         Returns:
             DeploymentOutputs with deployment details.
 
         Raises:
+            AlreadyExistsError: If the namespace already holds a deployment with this name.
             TimeoutError: If the rollout does not complete within the rollout timeout.
         """
         async with self._get_client() as client:
-            await client.apply(self._build_deployment(), field_manager="pragma-kubernetes")
+            await create_object(client, self._build_deployment())
 
             deployment = await wait_for_rollout(client, K8sDeployment, self.name, self.config.namespace)
 
@@ -414,8 +414,16 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
         Returns:
             DeploymentOutputs with updated deployment details.
+
+        Raises:
+            TimeoutError: If the rollout does not complete within the rollout timeout.
         """
-        return await self.on_create()
+        async with self._get_client() as client:
+            await client.apply(self._build_deployment(), field_manager=FIELD_MANAGER)
+
+            deployment = await wait_for_rollout(client, K8sDeployment, self.name, self.config.namespace)
+
+        return self.build_outputs(deployment)
 
     async def on_delete(self) -> None:
         """Delete Kubernetes Deployment and wait until it is gone.

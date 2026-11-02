@@ -10,7 +10,7 @@ from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import ConfigMap as K8sConfigMap
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 
-from kubernetes_provider.objects import delete_object, fetch_object, wait_for_absence
+from kubernetes_provider.objects import FIELD_MANAGER, create_object, delete_object, fetch_object, wait_for_absence
 from kubernetes_provider.resources.config import KubernetesConfig
 
 
@@ -48,12 +48,12 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
     Stores non-sensitive configuration data as key-value pairs that can be
     mounted as files or exposed as environment variables in pods.
 
-    Uses server-side apply with ``field_manager="pragma-kubernetes"`` for
-    idempotent operations. Health checks verify the ConfigMap exists and
-    report the number of stored keys.
+    Creates the ConfigMap, refusing one that already exists, and updates it with
+    server-side apply under ``field_manager="pragma-kubernetes"``. Health checks
+    verify the ConfigMap exists and report the number of stored keys.
 
     Lifecycle:
-        - on_create: Apply configmap configuration
+        - on_create: Create the configmap, refusing an existing one
         - on_observe: Look up the configmap by name and namespace
         - on_update: Apply updated configmap configuration
         - on_delete: Delete the configmap and wait until it is gone (idempotent)
@@ -101,15 +101,16 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
         )
 
     async def on_create(self) -> ConfigMapOutputs:
-        """Create or update Kubernetes ConfigMap.
-
-        Idempotent: Uses apply() which handles both create and update.
+        """Create the Kubernetes ConfigMap.
 
         Returns:
             ConfigMapOutputs with configmap details.
+
+        Raises:
+            AlreadyExistsError: If the namespace already holds a configmap with this name.
         """
         async with self._get_client() as client:
-            configmap = await client.apply(self._build_configmap(), field_manager="pragma-kubernetes")
+            configmap = await create_object(client, self._build_configmap())
 
             return self.build_outputs(configmap)
 
@@ -136,7 +137,10 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
         Returns:
             ConfigMapOutputs with updated configmap details.
         """
-        return await self.on_create()
+        async with self._get_client() as client:
+            configmap = await client.apply(self._build_configmap(), field_manager=FIELD_MANAGER)
+
+        return self.build_outputs(configmap)
 
     async def on_delete(self) -> None:
         """Delete Kubernetes ConfigMap and wait until it is gone.

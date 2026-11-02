@@ -1,4 +1,4 @@
-"""Lookup and deletion of Kubernetes objects by name."""
+"""Creation, lookup and deletion of Kubernetes objects."""
 
 from __future__ import annotations
 
@@ -6,12 +6,41 @@ from typing import Any, cast
 
 from lightkube import ApiError, AsyncClient
 from lightkube.types import CascadeType
+from pragma_sdk import AlreadyExistsError
 
 from kubernetes_provider.polling import poll_until
 
 
 DELETION_POLL_INTERVAL_SECONDS = 2
 DELETION_TIMEOUT_SECONDS = 300
+FIELD_MANAGER = "pragma-kubernetes"
+ALREADY_EXISTS_STATUS_CODE = 409
+
+
+async def create_object[ObjectT](client: AsyncClient, kubernetes_object: ObjectT) -> ObjectT:
+    """Create a Kubernetes object, refusing one that already exists.
+
+    The object is never adopted: an object the cluster already holds under the same name is
+    reported instead of taken over.
+
+    Args:
+        client: Lightkube client for the target cluster.
+        kubernetes_object: Object to create; a namespaced object names its namespace in its metadata.
+
+    Returns:
+        The object as created by the cluster.
+
+    Raises:
+        AlreadyExistsError: If the cluster already holds an object of that type and name.
+        ApiError: If the create request fails for any other reason.
+    """
+    try:
+        return await client.create(cast(Any, kubernetes_object), field_manager=FIELD_MANAGER)
+    except ApiError as error:
+        if error.status.code == ALREADY_EXISTS_STATUS_CODE:
+            message = f"{type(kubernetes_object).__name__} already exists: {error.status.message}"
+            raise AlreadyExistsError(message) from error
+        raise
 
 
 async def fetch_object[ObjectT](

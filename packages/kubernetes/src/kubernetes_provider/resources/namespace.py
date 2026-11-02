@@ -10,7 +10,7 @@ from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Namespace as K8sNamespace
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
 
-from kubernetes_provider.objects import delete_object, fetch_object, wait_for_absence
+from kubernetes_provider.objects import FIELD_MANAGER, create_object, delete_object, fetch_object, wait_for_absence
 from kubernetes_provider.resources.config import KubernetesConfig
 
 
@@ -47,12 +47,12 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
     Manages cluster-scoped Namespace objects for workload isolation. Namespaces
     do not belong to another namespace and have no ``namespace`` config field.
 
-    Uses server-side apply with ``field_manager="pragma-kubernetes"`` for
-    idempotent operations. Health checks verify the namespace exists and
-    reports its phase (Active or Terminating).
+    Creates the namespace, refusing one that already exists, and updates it with
+    server-side apply under ``field_manager="pragma-kubernetes"``. Health checks
+    verify the namespace exists and reports its phase (Active or Terminating).
 
     Lifecycle:
-        - on_create: Apply namespace configuration
+        - on_create: Create the namespace, refusing an existing one
         - on_observe: Look up the namespace by name
         - on_update: Apply updated namespace configuration (labels)
         - on_delete: Delete the namespace and wait until it is gone (idempotent)
@@ -98,15 +98,16 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
         return NamespaceOutputs(name=namespace.metadata.name)
 
     async def on_create(self) -> NamespaceOutputs:
-        """Create or update Kubernetes Namespace.
-
-        Idempotent: Uses apply() which handles both create and update.
+        """Create the Kubernetes Namespace.
 
         Returns:
             NamespaceOutputs with namespace name.
+
+        Raises:
+            AlreadyExistsError: If the cluster already holds a namespace with this name.
         """
         async with self._get_client() as client:
-            namespace = await client.apply(self._build_namespace(), field_manager="pragma-kubernetes")
+            namespace = await create_object(client, self._build_namespace())
 
         return self.build_outputs(namespace)
 
@@ -133,7 +134,10 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
         Returns:
             NamespaceOutputs with namespace name.
         """
-        return await self.on_create()
+        async with self._get_client() as client:
+            namespace = await client.apply(self._build_namespace(), field_manager=FIELD_MANAGER)
+
+        return self.build_outputs(namespace)
 
     async def on_delete(self) -> None:
         """Delete Kubernetes Namespace and wait until it and everything in it is gone.
