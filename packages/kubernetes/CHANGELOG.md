@@ -1,3 +1,10 @@
+## kubernetes-v2.2.8 (2026-11-02)
+
+### Fix
+
+- **kubernetes**: refuse an existing object on create instead of adopting it
+- **deps**: update pragmatiks-sdk to v22.0.1 (#133)
+
 ## kubernetes-v2.2.7 (2026-11-01)
 
 ### Fix
