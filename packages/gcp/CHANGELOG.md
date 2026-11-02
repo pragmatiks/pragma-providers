@@ -1,3 +1,9 @@
+## gcp-v7.2.11 (2026-11-02)
+
+### Fix
+
+- **gcp**: refuse an existing object on create instead of adopting it
+
 ## gcp-v7.2.10 (2026-11-02)
 
 ### Fix
