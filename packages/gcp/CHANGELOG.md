@@ -1,3 +1,9 @@
+## gcp-v7.2.12 (2026-11-02)
+
+### Fix
+
+- **gcp**: recognize a resource's own object on a create conflict
+
 ## gcp-v7.2.11 (2026-11-02)
 
 ### Fix
