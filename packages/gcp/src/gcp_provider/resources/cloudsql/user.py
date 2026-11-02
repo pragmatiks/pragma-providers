@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from pragma_sdk import Config, Field, ImmutableDependency, ImmutableField, Outputs, Resource
 
@@ -13,6 +13,7 @@ from gcp_provider.resources.cloudsql.database_instance import (
 )
 from gcp_provider.resources.cloudsql.helpers import (
     execute,
+    execute_insert,
     get_credentials,
     get_sqladmin_service,
     run_instance_operation,
@@ -56,8 +57,8 @@ class User(Resource[UserConfig, UserOutputs]):
     it inherits credentials and connection details.
 
     Lifecycle:
-        - on_create: Creates the user in the target instance. Idempotent --
-          succeeds if the user already exists.
+        - on_create: Creates the user in the target instance. Refuses a user
+          that already exists instead of adopting it.
         - on_observe: Reads the user by ``username``.
         - on_update: Applies the password in place; ``instance`` and ``username`` are immutable.
         - on_delete: Drops the user from the instance. Idempotent --
@@ -85,24 +86,23 @@ class User(Resource[UserConfig, UserOutputs]):
     async def on_create(self) -> UserOutputs:
         """Create the user in the Cloud SQL instance and wait until it exists.
 
-        Idempotent: If the user already exists, returns its current state.
-
         Returns:
             UserOutputs with user details.
 
         Raises:
+            AlreadyExistsError: If the user already exists.
             RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
                 or the operation finished with errors.
             TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.
         """
         instance_config = await resolve_instance_config(self.config.instance)
-        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, instance_config.credentials)))
 
         await run_instance_operation(
             service,
             instance_config,
             self.name,
-            lambda: execute(
+            lambda: execute_insert(
                 service.users().insert(
                     project=instance_config.project_id,
                     instance=instance_config.instance_name,
@@ -113,7 +113,7 @@ class User(Resource[UserConfig, UserOutputs]):
                         "instance": instance_config.instance_name,
                     },
                 ),
-                ignore_exists=True,
+                f"Cloud SQL user {self.config.username} on instance {instance_config.instance_name}",
             ),
             compute_operation_deadline(),
         )
@@ -127,7 +127,7 @@ class User(Resource[UserConfig, UserOutputs]):
             UserOutputs for the user, or None if it does not exist.
         """
         instance_config = await resolve_instance_config(self.config.instance)
-        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, instance_config.credentials)))
 
         user = await self.find_user(instance_config, service)
 
@@ -153,7 +153,7 @@ class User(Resource[UserConfig, UserOutputs]):
             TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.
         """
         instance_config = await resolve_instance_config(self.config.instance)
-        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, instance_config.credentials)))
 
         await run_instance_operation(
             service,
@@ -186,7 +186,7 @@ class User(Resource[UserConfig, UserOutputs]):
             TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.
         """
         instance_config = await resolve_instance_config(self.config.instance)
-        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, instance_config.credentials)))
         user = await self.find_user(instance_config, service)
 
         if user is None:
@@ -241,7 +241,7 @@ class User(Resource[UserConfig, UserOutputs]):
         """
         return UserOutputs(
             username=user["name"],
-            instance_name=instance_config.instance_name,
+            instance_name=cast(str, instance_config.instance_name),
             host=user.get("host", "%"),
         )
 

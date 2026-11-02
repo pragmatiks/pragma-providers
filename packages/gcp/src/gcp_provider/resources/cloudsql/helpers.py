@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from google.oauth2 import service_account
 from googleapiclient import discovery
 from googleapiclient.errors import HttpError
+from pragma_sdk import AlreadyExistsError
 
 from gcp_provider.resources.polling import poll_until
 
@@ -27,6 +28,8 @@ DB_CONNECTION_INFO = {
     "MYSQL": ("mysql", "3306"),
     "SQLSERVER": ("sqlserver", "1433"),
 }
+
+ALREADY_EXISTS_MESSAGES = ("already exists", "existing instance with the given name")
 
 
 def get_credentials(credentials_data: dict[str, Any] | str) -> service_account.Credentials:
@@ -90,11 +93,11 @@ def connection_info(database_version: str) -> tuple[str, str]:
     return DB_CONNECTION_INFO.get(db_family, ("postgresql", "5432"))
 
 
-async def execute(request: Any, ignore_404: bool = False, ignore_exists: bool = False) -> Any:
-    """Execute a GCP API request, optionally ignoring 404 or 409 (conflict/exists) errors.
+async def execute(request: Any, ignore_404: bool = False) -> Any:
+    """Execute a GCP API request, optionally ignoring a not-found refusal.
 
     Returns:
-        API response, or None if error was ignored.
+        API response, or None if the not-found refusal was ignored.
 
     Raises:
         HttpError: If request fails and error is not ignored.
@@ -106,9 +109,47 @@ async def execute(request: Any, ignore_404: bool = False, ignore_exists: bool = 
             return None
         if ignore_404 and e.resp.status == 400 and "does not exist" in str(e):
             return None
-        if ignore_exists and e.resp.status in (409, 400) and "already exists" in str(e):
-            return None
         raise
+
+
+async def execute_insert(request: Any, object_description: str) -> Any:
+    """Execute a GCP API insert request, refusing an object that already exists.
+
+    Args:
+        request: Insert request built from the Cloud SQL Admin API service.
+        object_description: Names the object to insert in the refusal message, such as ``Cloud SQL database x``.
+
+    Returns:
+        API response, the insert's operation.
+
+    Raises:
+        AlreadyExistsError: If Cloud SQL refuses the insert with HTTP 409 or 400 and a message saying the object
+            already exists, such as "already exists" or "There is an existing instance with the given name.".
+        HttpError: If Cloud SQL refuses the insert for any other reason, a busy instance's 409 included.
+    """
+    try:
+        return await run_in_executor(request.execute)
+    except HttpError as error:
+        if is_already_exists(error):
+            message = f"{object_description} already exists"
+            raise AlreadyExistsError(message) from error
+        raise
+
+
+def is_already_exists(error: HttpError) -> bool:
+    """Tell whether Cloud SQL refused a request because the object it names already exists.
+
+    Args:
+        error: Error the Cloud SQL Admin API raised.
+
+    Returns:
+        True for HTTP 409 or 400 whose message carries one of ``ALREADY_EXISTS_MESSAGES``, ignoring case.
+    """
+    if error.resp.status not in (400, 409):
+        return False
+
+    text = str(error).lower()
+    return any(message in text for message in ALREADY_EXISTS_MESSAGES)
 
 
 def format_operation(operation: dict) -> str:

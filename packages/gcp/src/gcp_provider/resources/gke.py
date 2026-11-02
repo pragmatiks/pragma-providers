@@ -28,7 +28,7 @@ from google.cloud.container_v1.types import (
 )
 from google.cloud.logging_v2 import Client as LoggingClient
 from google.oauth2 import service_account
-from pragma_sdk import Config, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
+from pragma_sdk import AlreadyExistsError, Config, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import Field as PydanticField
 from pydantic import field_validator, model_validator
 
@@ -277,7 +277,7 @@ class GKEConfig(Config):
         Raises:
             ValueError: If standard cluster has invalid node count.
         """
-        if not self.autopilot and self.initial_node_count < 1:
+        if not self.autopilot and cast(int, self.initial_node_count) < 1:
             msg = "Standard clusters require initial_node_count >= 1"
             raise ValueError(msg)
         return self
@@ -319,8 +319,8 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
 
     Lifecycle:
         - on_create: Creates the cluster and polls until it serves, in RUNNING
-          or DEGRADED state (up to 19 min). Idempotent -- if the cluster
-          already exists, waits for it to serve.
+          or DEGRADED state (up to 19 min). Refuses a cluster that already
+          exists instead of adopting it.
         - on_observe: Reads the cluster by project, location and name.
         - on_update: Applies ``release_channel`` when it differs and waits for
           the cluster to serve. ``credentials`` is mutable too; every other field
@@ -479,7 +479,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
         )
 
         if self.config.subnetwork:
-            cluster.subnetwork = self.config.subnetwork
+            cluster.subnetwork = cast(str, self.config.subnetwork)
 
         if self.config.autopilot:
             cluster.autopilot = Autopilot(enabled=True)
@@ -500,10 +500,11 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
     async def on_create(self) -> GKEOutputs:
         """Create GKE cluster and wait until it serves, in RUNNING or DEGRADED state.
 
-        Idempotent: If cluster already exists, returns its current state.
-
         Returns:
             GKEOutputs with cluster details.
+
+        Raises:
+            AlreadyExistsError: If a cluster with ``name`` already exists in the location.
         """
         client = self._get_client()
 
@@ -514,8 +515,9 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
                     cluster=self._build_cluster_config(),
                 )
             )
-        except AlreadyExists:
-            pass
+        except AlreadyExists as error:
+            message = f"GKE cluster {self.config.name} in {self._parent_path()} already exists"
+            raise AlreadyExistsError(message) from error
 
         cluster = await self.wait_for_serving(client, compute_operation_deadline())
 

@@ -8,7 +8,7 @@ from typing import Any, cast
 from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.secretmanager_v1 import SecretManagerServiceAsyncClient, SecretVersion
 from google.oauth2 import service_account
-from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
+from pragma_sdk import AlreadyExistsError, Config, Field, ImmutableField, Outputs, Resource
 
 
 class SecretConfig(Config):
@@ -51,8 +51,8 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
     automatic replication across GCP regions.
 
     Lifecycle:
-        - on_create: Creates the secret and an initial version. Idempotent --
-          if the secret already exists, adds a new version instead.
+        - on_create: Creates the secret and an initial version. Refuses a
+          secret that already exists instead of adopting it.
         - on_observe: Reads the secret and its latest enabled version.
         - on_update: Adds a new secret version when ``data`` differs from the
           latest enabled version. Previous versions are retained.
@@ -186,10 +186,11 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
     async def on_create(self) -> SecretOutputs:
         """Create GCP secret with initial version.
 
-        Idempotent: If secret already exists, adds a new version.
-
         Returns:
             SecretOutputs with resource name and version info.
+
+        Raises:
+            AlreadyExistsError: If a secret with ``secret_id`` already exists in the project.
         """
         client = self._get_client()
         parent = f"projects/{self.config.project_id}"
@@ -202,8 +203,9 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
                     "secret": {"replication": {"automatic": {}}},
                 }
             )
-        except AlreadyExists:
-            secret = await client.get_secret(name=self._secret_path())
+        except AlreadyExists as error:
+            message = f"Secret {self.config.secret_id} in project {self.config.project_id} already exists"
+            raise AlreadyExistsError(message) from error
 
         version = await self.add_version(client, secret.name)
 
