@@ -8,6 +8,7 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
+from typing import cast
 
 from kubernetes_provider import (
     KubernetesConfig,
@@ -145,7 +146,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             return self._resolved_api_key
 
         if self.config.api_key is not None:
-            self._resolved_api_key = self.config.api_key
+            self._resolved_api_key = cast(str, self.config.api_key)
             return self._resolved_api_key
 
         if self.config.generate_api_key:
@@ -317,14 +318,15 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
         resources_config = None
         if self.config.resources:
+            resources = cast(ResourceConfig, self.config.resources)
             resources_config = ResourcesConfig(
                 requests={
-                    "memory": self.config.resources.memory,
-                    "cpu": self.config.resources.cpu,
+                    "memory": resources.memory,
+                    "cpu": resources.cpu,
                 },
                 limits={
-                    "memory": self.config.resources.memory,
-                    "cpu": self.config.resources.cpu,
+                    "memory": resources.memory,
+                    "cpu": resources.cpu,
                 },
             )
 
@@ -341,7 +343,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
         container = ContainerConfig(
             name="qdrant",
-            image=self.config.image,
+            image=cast(str, self.config.image),
             ports=[
                 ContainerPortConfig(name="rest", container_port=6333),
                 ContainerPortConfig(name="grpc", container_port=6334),
@@ -357,8 +359,9 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         storage_size = "10Gi"
 
         if self.config.storage:
-            storage_class = self.config.storage.class_
-            storage_size = self.config.storage.size
+            storage = cast(StorageConfig, self.config.storage)
+            storage_class = storage.class_
+            storage_size = storage.size
 
         pvc_template = VolumeClaimTemplateConfig(
             name="qdrant-storage",
