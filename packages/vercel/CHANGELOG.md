@@ -1,3 +1,10 @@
+## vercel-v6.2.11 (2026-11-02)
+
+### Fix
+
+- **vercel**: cast SDK 22 field reads so the type check passes
+- **vercel**: refuse existing objects and wait for deployments to be observable
+
 ## vercel-v6.2.10 (2026-11-02)
 
 ### Fix
