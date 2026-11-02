@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, cast
 
 from lightkube.models.core_v1 import ServicePort, ServiceSpec
 from lightkube.models.meta_v1 import ObjectMeta
@@ -119,11 +119,11 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
                 targetPort=p.target_port or p.port,
                 protocol=p.protocol,
             )
-            for p in self.config.ports
+            for p in cast(list[PortConfig], self.config.ports)
         ]
 
-        service_type = self.config.type
-        cluster_ip = self.config.cluster_ip
+        service_type = cast(str, self.config.type)
+        cluster_ip = cast(str | None, self.config.cluster_ip)
 
         if service_type == "Headless":
             service_type = "ClusterIP"
@@ -131,7 +131,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
 
         spec = ServiceSpec(
             type=service_type,
-            selector=self.config.selector,
+            selector=cast(dict[str, str], self.config.selector),
             ports=ports,
         )
 
@@ -141,7 +141,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
         return K8sService(
             metadata=ObjectMeta(
                 name=self.name,
-                namespace=self.config.namespace,
+                namespace=cast(str, self.config.namespace),
             ),
             spec=spec,
         )
@@ -189,7 +189,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             ServiceOutputs, or ``None`` if the service does not exist.
         """
         async with self._get_client() as client:
-            service = await fetch_object(client, K8sService, self.name, self.config.namespace)
+            service = await fetch_object(client, K8sService, self.name, cast(str, self.config.namespace))
 
         if service is None:
             return None
@@ -235,8 +235,8 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             TimeoutError: If the service is still present after the deletion timeout.
         """
         async with self._get_client() as client:
-            await delete_object(client, K8sService, self.name, self.config.namespace)
-            await wait_for_absence(client, K8sService, self.name, self.config.namespace)
+            await delete_object(client, K8sService, self.name, cast(str, self.config.namespace))
+            await wait_for_absence(client, K8sService, self.name, cast(str, self.config.namespace))
 
     async def health(self) -> HealthStatus:
         """Check Service health by verifying existence and endpoints.
@@ -245,8 +245,8 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             HealthStatus indicating healthy/degraded/unhealthy.
         """
         async with self._get_client() as client:
-            service = await fetch_object(client, K8sService, self.name, self.config.namespace)
-            endpoints = await fetch_object(client, Endpoints, self.name, self.config.namespace)
+            service = await fetch_object(client, K8sService, self.name, cast(str, self.config.namespace))
+            endpoints = await fetch_object(client, Endpoints, self.name, cast(str, self.config.namespace))
 
         if service is None:
             return HealthStatus(

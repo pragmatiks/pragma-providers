@@ -6,6 +6,7 @@ import base64
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from typing import cast
 
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Secret as K8sSecret
@@ -99,16 +100,16 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         secret = K8sSecret(
             metadata=ObjectMeta(
                 name=self.name,
-                namespace=self.config.namespace,
+                namespace=cast(str, self.config.namespace),
             ),
-            type=self.config.type,
+            type=cast(str, self.config.type),
         )
 
         if self.config.data:
-            secret.data = self._encode_data(self.config.data)
+            secret.data = self._encode_data(cast(dict[str, str], self.config.data))
 
         if self.config.string_data:
-            secret.stringData = self.config.string_data
+            secret.stringData = cast(dict[str, str], self.config.string_data)
 
         return secret
 
@@ -128,7 +129,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
         return SecretOutputs(
             name=self.name,
-            namespace=self.config.namespace,
+            namespace=cast(str, self.config.namespace),
             type=secret.type or "Opaque",
             data={
                 key: base64.b64decode(value).decode()
@@ -158,7 +159,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             SecretOutputs, or ``None`` if the secret does not exist.
         """
         async with self._get_client() as client:
-            secret = await fetch_object(client, K8sSecret, self.name, self.config.namespace)
+            secret = await fetch_object(client, K8sSecret, self.name, cast(str, self.config.namespace))
 
         if secret is None:
             return None
@@ -188,8 +189,8 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             TimeoutError: If the secret is still present after the deletion timeout.
         """
         async with self._get_client() as client:
-            await delete_object(client, K8sSecret, self.name, self.config.namespace)
-            await wait_for_absence(client, K8sSecret, self.name, self.config.namespace)
+            await delete_object(client, K8sSecret, self.name, cast(str, self.config.namespace))
+            await wait_for_absence(client, K8sSecret, self.name, cast(str, self.config.namespace))
 
     async def health(self) -> HealthStatus:
         """Check Secret health by verifying it exists.
@@ -198,7 +199,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             HealthStatus indicating healthy/unhealthy.
         """
         async with self._get_client() as client:
-            secret = await fetch_object(client, K8sSecret, self.name, self.config.namespace)
+            secret = await fetch_object(client, K8sSecret, self.name, cast(str, self.config.namespace))
 
         if secret is None:
             return HealthStatus(

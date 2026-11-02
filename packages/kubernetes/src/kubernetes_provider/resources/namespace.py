@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from typing import cast
 
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Namespace as K8sNamespace
@@ -79,7 +80,7 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
         return K8sNamespace(
             metadata=ObjectMeta(
                 name=self.name,
-                labels=self.config.labels,
+                labels=cast(dict[str, str] | None, self.config.labels),
             ),
         )
 
