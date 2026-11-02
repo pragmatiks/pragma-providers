@@ -1,3 +1,9 @@
+## kubernetes-v2.2.10 (2026-11-02)
+
+### Fix
+
+- **kubernetes**: cast SDK 22 field reads so the type check passes
+
 ## kubernetes-v2.2.9 (2026-11-02)
 
 ## kubernetes-v2.2.8 (2026-11-02)
