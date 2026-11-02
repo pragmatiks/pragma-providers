@@ -1,3 +1,9 @@
+## qdrant-v8.2.12 (2026-11-02)
+
+### Fix
+
+- **qdrant**: cast SDK 22 field reads so the type check passes
+
 ## qdrant-v8.2.11 (2026-11-02)
 
 ## qdrant-v8.2.10 (2026-11-02)
