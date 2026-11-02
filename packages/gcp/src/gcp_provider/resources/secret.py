@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, cast
 
 from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.secretmanager_v1 import SecretManagerServiceAsyncClient, SecretVersion
 from google.oauth2 import service_account
 from pragma_sdk import AlreadyExistsError, Config, Field, ImmutableField, Outputs, Resource
+
+from gcp_provider.resources.marker import (
+    MARKER_MISMATCH_REASONS,
+    MarkerMatch,
+    build_resource_marker,
+    match_resource_marker,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 class SecretConfig(Config):
@@ -51,8 +62,10 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
     automatic replication across GCP regions.
 
     Lifecycle:
-        - on_create: Creates the secret and an initial version. Refuses a
-          secret that already exists instead of adopting it.
+        - on_create: Creates the secret, labelled ``pragma_resource`` with this
+          resource's marker, and an initial version. A secret carrying that label
+          is this resource's earlier create and is brought up to date as on_update
+          does; any other existing secret is refused instead of adopted.
         - on_observe: Reads the secret and its latest enabled version.
         - on_update: Adds a new secret version when ``data`` differs from the
           latest enabled version. Previous versions are retained.
@@ -183,6 +196,26 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             version_id=version.name.split("/")[-1],
         )
 
+    async def read_marker_match(self, client: SecretManagerServiceAsyncClient) -> MarkerMatch:
+        """Read the existing secret and compare its resource marker with this resource.
+
+        Args:
+            client: Secret Manager client.
+
+        Returns:
+            How the secret's ``pragma_resource`` label compares with this resource;
+            ``ABSENT`` when the secret is gone.
+
+        Raises:
+            GoogleAPICallError: If the read fails for any reason other than the secret being absent.
+        """
+        try:
+            secret = await client.get_secret(name=self._secret_path())
+        except NotFound:
+            return MarkerMatch.ABSENT
+
+        return match_resource_marker(secret.labels, self.id)
+
     async def on_create(self) -> SecretOutputs:
         """Create GCP secret with initial version.
 
@@ -190,7 +223,8 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             SecretOutputs with resource name and version info.
 
         Raises:
-            AlreadyExistsError: If a secret with ``secret_id`` already exists in the project.
+            AlreadyExistsError: If a secret with ``secret_id`` that this resource did not
+                create already exists in the project.
         """
         client = self._get_client()
         parent = f"projects/{self.config.project_id}"
@@ -200,11 +234,28 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
                 request={
                     "parent": parent,
                     "secret_id": self.config.secret_id,
-                    "secret": {"replication": {"automatic": {}}},
+                    "secret": {"replication": {"automatic": {}}, "labels": build_resource_marker(self.id)},
                 }
             )
         except AlreadyExists as error:
-            message = f"Secret {self.config.secret_id} in project {self.config.project_id} already exists"
+            match = await self.read_marker_match(client)
+
+            if match is MarkerMatch.OWN:
+                logger.warning(
+                    "gcp_create_conflict_recognized type=secret resource=%s secret=%s", self.id, self._secret_path()
+                )
+                return await self.on_update(None)
+
+            logger.warning(
+                "gcp_create_conflict_refused type=secret resource=%s secret=%s reason=%s",
+                self.id,
+                self._secret_path(),
+                match,
+            )
+            message = (
+                f"Secret {self.config.secret_id} in project {self.config.project_id} already exists and this "
+                f"resource did not create it: {MARKER_MISMATCH_REASONS[match]}"
+            )
             raise AlreadyExistsError(message) from error
 
         version = await self.add_version(client, secret.name)

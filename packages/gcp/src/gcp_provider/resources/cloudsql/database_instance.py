@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 import string
 from collections.abc import AsyncIterator
@@ -9,7 +10,17 @@ from datetime import datetime
 from typing import Any, Literal, cast
 
 from google.cloud.logging_v2 import Client as LoggingClient
-from pragma_sdk import Config, Dependency, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
+from pragma_sdk import (
+    AlreadyExistsError,
+    Config,
+    Dependency,
+    Field,
+    HealthStatus,
+    ImmutableField,
+    LogEntry,
+    Outputs,
+    Resource,
+)
 from pydantic import field_validator
 
 from gcp_provider.resources.cloudsql.helpers import (
@@ -21,7 +32,16 @@ from gcp_provider.resources.cloudsql.helpers import (
     run_in_executor,
     run_instance_operation,
 )
+from gcp_provider.resources.marker import (
+    MARKER_MISMATCH_REASONS,
+    MarkerMatch,
+    build_resource_marker,
+    match_resource_marker,
+)
 from gcp_provider.resources.polling import compute_operation_deadline, poll_until
+
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseInstanceConfig(Config):
@@ -139,9 +159,11 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
     Cloud Logging.
 
     Lifecycle:
-        - on_create: Creates the instance with a randomly generated root password
-          and polls until RUNNABLE (up to 19 minutes). Refuses an instance that
-          already exists instead of adopting it.
+        - on_create: Creates the instance with a randomly generated root password,
+          labelled ``pragma_resource`` with this resource's marker, and polls until
+          RUNNABLE (up to 19 minutes). An instance carrying that label is this
+          resource's earlier create and is brought up to date as on_update does;
+          any other existing instance is refused instead of adopted.
         - on_observe: Reads the instance by ``project_id`` and ``instance_name``.
         - on_update: Patches mutable settings (tier, availability_type, backups,
           network config, deletion_protection) and waits for RUNNABLE.
@@ -174,6 +196,29 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
                 field: outputs.credentials_json
     """
 
+    async def read_marker_match(self, service: Any) -> MarkerMatch:
+        """Read the existing instance and compare its resource marker with this resource.
+
+        Args:
+            service: Cloud SQL Admin API service.
+
+        Returns:
+            How the instance's ``pragma_resource`` user label compares with this resource;
+            ``ABSENT`` when the instance is gone.
+
+        Raises:
+            HttpError: If the read fails for any reason other than the instance being absent.
+        """
+        instance = await execute(
+            service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
+            ignore_404=True,
+        )
+
+        if instance is None:
+            return MarkerMatch.ABSENT
+
+        return match_resource_marker(instance.get("settings", {}).get("userLabels"), self.id)
+
     async def on_create(self) -> DatabaseInstanceOutputs:
         """Create Cloud SQL instance and wait for RUNNABLE state.
 
@@ -181,14 +226,39 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             DatabaseInstanceOutputs with instance details.
 
         Raises:
-            AlreadyExistsError: If an instance with ``instance_name`` already exists in the project.
+            AlreadyExistsError: If an instance with ``instance_name`` that this resource did not
+                create already exists in the project.
         """
         service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
 
-        await execute_insert(
-            service.instances().insert(project=self.config.project_id, body=self._build_instance_body()),
-            f"Cloud SQL instance {self.config.instance_name} in project {self.config.project_id}",
-        )
+        try:
+            await execute_insert(
+                service.instances().insert(project=self.config.project_id, body=self._build_instance_body()),
+                f"Cloud SQL instance {self.config.instance_name} in project {self.config.project_id}",
+            )
+        except AlreadyExistsError as error:
+            match = await self.read_marker_match(service)
+            instance_path = f"{self.config.project_id}/{self.config.instance_name}"
+
+            if match is MarkerMatch.OWN:
+                logger.warning(
+                    "gcp_create_conflict_recognized type=cloudsql_database_instance resource=%s instance=%s",
+                    self.id,
+                    instance_path,
+                )
+                return await self.on_update(None)
+
+            logger.warning(
+                "gcp_create_conflict_refused type=cloudsql_database_instance resource=%s instance=%s reason=%s",
+                self.id,
+                instance_path,
+                match,
+            )
+            message = (
+                f"Cloud SQL instance {self.config.instance_name} in project {self.config.project_id} already exists "
+                f"and this resource did not create it: {MARKER_MISMATCH_REASONS[match]}"
+            )
+            raise AlreadyExistsError(message) from error
 
         instance = await self._wait_for_runnable(service, compute_operation_deadline())
 
@@ -484,6 +554,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             "availabilityType": self.config.availability_type,
             "ipConfiguration": ip_configuration,
             "deletionProtectionEnabled": self.config.deletion_protection,
+            "userLabels": build_resource_marker(self.id),
         }
 
         if self.config.backup_enabled:
