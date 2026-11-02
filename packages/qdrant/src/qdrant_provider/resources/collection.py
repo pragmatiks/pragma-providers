@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from http import HTTPStatus
 from typing import Literal, cast
 
@@ -12,6 +13,12 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.exceptions import UnexpectedResponse
 
+from qdrant_provider.marker import MARKER_MISMATCH_REASONS, MarkerMatch, build_resource_marker, match_resource_marker
+
+
+logger = logging.getLogger(__name__)
+
+MINIMUM_SERVER_VERSION = (1, 16)
 
 COLLECTION_STATUS_HEALTH: dict[models.CollectionStatus, Literal["healthy", "degraded", "unhealthy"]] = {
     models.CollectionStatus.GREEN: "healthy",
@@ -87,7 +94,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
     Qdrant Cloud (with API key) and local instances.
 
     Lifecycle:
-        - on_create: Create the collection, refusing one that already exists
+        - on_create: Create the marked collection; update its own earlier create, refuse any other
         - on_observe: Look up the collection by name
         - on_update: Apply on_disk in place
         - on_delete: Delete collection
@@ -136,6 +143,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
                 distance=self._get_distance(),
                 on_disk=cast(bool, self.config.on_disk),
             ),
+            metadata=build_resource_marker(self.id),
         )
 
     def vector_config_changed(self, live_vectors: models.VectorsConfig | None) -> bool:
@@ -156,28 +164,91 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             or live_vectors.distance != self._get_distance()
         )
 
-    async def on_create(self) -> CollectionOutputs:
-        """Create the Qdrant collection.
+    async def check_server_version(self, client: AsyncQdrantClient) -> None:
+        """Refuse a Qdrant server too old to store the collection metadata the create marks it with.
 
-        A collection that already exists is refused, never adopted.
+        Args:
+            client: Client of the Qdrant server receiving the create.
+
+        Raises:
+            RuntimeError: If the server runs a Qdrant version before 1.16.
+            UnexpectedResponse: If Qdrant fails the version read.
+        """
+        version = (await client.info()).version
+        major, minor = (int(part) for part in version.split(".")[:2])
+
+        if (major, minor) < MINIMUM_SERVER_VERSION:
+            message = (
+                f"The Qdrant server at {self.config.url} runs version {version}; collections need Qdrant 1.16 "
+                "or later, which stores the collection metadata Pragmatiks recognizes its own collections by"
+            )
+            raise RuntimeError(message)
+
+    async def read_marker_match(self, client: AsyncQdrantClient) -> MarkerMatch:
+        """Read the existing collection and compare its resource marker with this resource.
+
+        Args:
+            client: Client of the Qdrant server holding the collection.
+
+        Returns:
+            How the collection's ``pragma_resource`` metadata compares with this resource;
+            ``ABSENT`` when the collection is gone.
+
+        Raises:
+            UnexpectedResponse: If the read fails for any reason other than the collection being absent.
+        """
+        try:
+            collection = await client.get_collection(cast(str, self.config.name))
+        except UnexpectedResponse as error:
+            if error.status_code != HTTPStatus.NOT_FOUND:
+                raise
+
+            return MarkerMatch.ABSENT
+
+        return match_resource_marker(collection.config.metadata, self.id)
+
+    async def on_create(self) -> CollectionOutputs:
+        """Create the Qdrant collection, marked with this resource's ID in its ``pragma_resource`` metadata.
+
+        A collection that already exists is refused, never adopted, unless its metadata
+        names this resource: then it is this resource's earlier create and is updated in place.
 
         Returns:
             CollectionOutputs naming the collection.
 
         Raises:
-            AlreadyExistsError: If a collection with the configured name already exists.
+            AlreadyExistsError: If a collection with the configured name that this resource
+                did not create already exists.
+            RuntimeError: If the server runs a Qdrant version before 1.16.
             UnexpectedResponse: If Qdrant refuses the create for any other reason.
+
+        Note:
+            Collection metadata needs Qdrant server 1.16 or later; an older server is refused
+            before the create, since it would not keep the marker.
         """
         client = self._get_client()
 
         try:
+            await self.check_server_version(client)
             await self._create_collection(client)
         except UnexpectedResponse as error:
             if not reports_existing_collection(error):
                 raise
 
-            msg = f"Collection {self.config.name!r} already exists"
-            raise AlreadyExistsError(msg) from error
+            match = await self.read_marker_match(client)
+
+            if match is MarkerMatch.OWN:
+                logger.warning("qdrant_create_conflict_recognized resource=%s collection=%s", self.id, self.config.name)
+                return await self.on_update(None)
+
+            logger.warning(
+                "qdrant_create_conflict_refused resource=%s collection=%s reason=%s", self.id, self.config.name, match
+            )
+            message = (
+                f"Collection {self.config.name!r} already exists and this resource did not create it: "
+                f"{MARKER_MISMATCH_REASONS[match]}"
+            )
+            raise AlreadyExistsError(message) from error
         finally:
             await client.close()
 
