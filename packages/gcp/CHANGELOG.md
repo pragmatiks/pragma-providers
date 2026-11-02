@@ -1,3 +1,9 @@
+## gcp-v7.2.10 (2026-11-02)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v22.0.1 (#133)
+
 ## gcp-v7.2.9 (2026-11-01)
 
 ### Fix
