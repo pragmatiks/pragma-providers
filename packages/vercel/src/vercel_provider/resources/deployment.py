@@ -54,6 +54,8 @@ class DeploymentOutputs(Outputs):
 
 POLL_INTERVAL_SECONDS = 10
 READY_TIMEOUT_SECONDS = 900
+LISTING_POLL_INTERVAL_SECONDS = 2
+LISTING_TIMEOUT_SECONDS = 300
 RESOURCE_ID_META_KEY = "pragma_resource"
 GIT_REF_META_KEY = "pragma_git_ref"
 TARGET_META_KEY = "pragma_target"
@@ -69,10 +71,10 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
     The deployment is located by its ``meta.pragma_resource`` stamp, set to the resource ID.
 
     Lifecycle:
-        - on_create: Triggers a new deployment and polls until it is READY.
+        - on_create: Triggers a new deployment and polls until it is READY and listed.
         - on_observe: Finds this resource's deployment.
         - on_update: Keeps the deployment if it is current, otherwise replaces it.
-        - on_delete: Deletes the deployment. Succeeds if there is none.
+        - on_delete: Deletes the deployment and polls until it is no longer listed. Succeeds if there is none.
 
     Example::
 
@@ -184,7 +186,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         )
 
     async def _trigger_deployment(self, client: httpx.AsyncClient) -> DeploymentOutputs:
-        """Trigger a new deployment and wait for completion.
+        """Trigger a new deployment and wait until it is READY and ``on_observe`` finds it.
 
         Args:
             client: Authenticated Vercel API client.
@@ -215,6 +217,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         deployment_id = deployment_data["id"]
 
         deployment_data = await self._wait_for_ready(client, deployment_id)
+        await self.wait_for_listed_deployment(client, deployment_id)
 
         return self._build_outputs(deployment_data)
 
@@ -289,6 +292,39 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             raise RuntimeError(msg)
 
         return stamped[0] if stamped else None
+
+    async def wait_for_listed_deployment(self, client: httpx.AsyncClient, deployment_id: str | None) -> None:
+        """Poll the deployments list until it shows ``deployment_id`` as this resource's deployment.
+
+        The list ``on_observe`` reads lags behind deployment creation and deletion, so a lifecycle
+        method waits here before returning to keep its result equal to what ``on_observe`` reads.
+
+        Args:
+            client: Authenticated Vercel API client.
+            deployment_id: The deployment the list must show, or ``None`` to wait until it shows none.
+
+        Raises:
+            TimeoutError: If the list does not show it within ``LISTING_TIMEOUT_SECONDS``; the message
+                carries the deployment ID the list showed last.
+        """
+        deadline = time.monotonic() + LISTING_TIMEOUT_SECONDS
+
+        while True:
+            listed_id = await self.find_deployment_id(client)
+
+            if listed_id == deployment_id:
+                return
+
+            if time.monotonic() >= deadline:
+                break
+
+            await asyncio.sleep(LISTING_POLL_INTERVAL_SECONDS)
+
+        msg = (
+            f"Vercel deployments list for {self.id} did not show {deployment_id or 'no deployment'} "
+            f"within {LISTING_TIMEOUT_SECONDS} seconds (last listed: {listed_id})"
+        )
+        raise TimeoutError(msg)
 
     async def fetch_deployment(self, client: httpx.AsyncClient) -> dict[str, Any] | None:
         """Fetch the deployment stamped with this resource's ID.
@@ -366,6 +402,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
             if not self.is_current(deployment):
                 await self.delete_deployment(client, deployment["id"])
+                await self.wait_for_listed_deployment(client, None)
 
                 return await self._trigger_deployment(client)
 
@@ -375,7 +412,10 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             return self._build_outputs(deployment)
 
     async def on_delete(self) -> None:
-        """Delete this resource's deployment; succeeds if there is none."""
+        """Delete this resource's deployment and wait until ``on_observe`` no longer finds it.
+
+        Succeeds if there is none.
+        """
         async with create_vercel_client(self.config.access_token) as client:
             deployment_id = await self.find_deployment_id(client)
 
@@ -383,3 +423,4 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
                 return
 
             await self.delete_deployment(client, deployment_id)
+            await self.wait_for_listed_deployment(client, None)
