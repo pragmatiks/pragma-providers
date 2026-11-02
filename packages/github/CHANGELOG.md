@@ -1,3 +1,9 @@
+## github-v6.2.11 (2026-11-02)
+
+### Fix
+
+- **github**: refuse an existing object on create instead of adopting it
+
 ## github-v6.2.10 (2026-11-02)
 
 ### Fix
