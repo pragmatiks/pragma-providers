@@ -20,7 +20,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
 from gcp_provider import GKE
 from lightkube import AsyncClient, KubeConfig
@@ -206,7 +206,7 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
 
         if self.config.mode == "kubeconfig_file":
             assert self.config.kubeconfig_path is not None
-            resolved = _validate_kubeconfig_path(self.config.kubeconfig_path)
+            resolved = _validate_kubeconfig_path(cast(str, self.config.kubeconfig_path))
 
             KubeConfig.from_file(str(resolved))
             return
@@ -245,12 +245,14 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
                 message = "GKE cluster outputs not available"
                 raise RuntimeError(message)
 
-            kubeconfig = await asyncio.to_thread(build_kubeconfig_from_gke, cluster.outputs, cluster.config.credentials)
+            kubeconfig = await asyncio.to_thread(
+                build_kubeconfig_from_gke, cluster.outputs, cast(dict[str, Any] | str, cluster.config.credentials)
+            )
             return AsyncClient(config=kubeconfig)
 
         if self.config.mode == "kubeconfig_file":
             assert self.config.kubeconfig_path is not None
-            resolved = _validate_kubeconfig_path(self.config.kubeconfig_path)
+            resolved = _validate_kubeconfig_path(cast(str, self.config.kubeconfig_path))
             kubeconfig = KubeConfig.from_file(str(resolved))
             return AsyncClient(config=kubeconfig)
 
@@ -284,7 +286,7 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
         """
         await self._validate()
 
-        return ConfigOutputs(mode=self.config.mode)
+        return ConfigOutputs(mode=cast(str, self.config.mode))
 
     async def on_update(self, previous_config: ConfigConfig | None) -> ConfigOutputs:
         """Re-validate the cluster config.
@@ -297,7 +299,7 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
         """
         await self._validate()
 
-        return ConfigOutputs(mode=self.config.mode)
+        return ConfigOutputs(mode=cast(str, self.config.mode))
 
     async def on_delete(self) -> None:
         """No external state to clean up."""

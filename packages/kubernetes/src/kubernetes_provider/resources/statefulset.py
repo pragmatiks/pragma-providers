@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, cast
 
 from lightkube import ApiError
 from lightkube.models.apps_v1 import StatefulSetPersistentVolumeClaimRetentionPolicy, StatefulSetSpec
@@ -337,13 +337,13 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
         Returns:
             Kubernetes StatefulSet object ready to apply.
         """
-        labels = self.config.selector or {"app": self.name}
+        labels = cast(dict[str, str] | None, self.config.selector) or {"app": self.name}
 
-        containers = [self._build_container(c) for c in self.config.containers]
+        containers = [self._build_container(c) for c in cast(list[ContainerConfig], self.config.containers)]
 
         spec = StatefulSetSpec(
-            replicas=self.config.replicas,
-            serviceName=self.config.service_name,
+            replicas=cast(int, self.config.replicas),
+            serviceName=cast(str, self.config.service_name),
             selector=LabelSelector(matchLabels=labels),
             persistentVolumeClaimRetentionPolicy=StatefulSetPersistentVolumeClaimRetentionPolicy(whenDeleted="Delete"),
             template=PodTemplateSpec(
@@ -353,12 +353,15 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
         )
 
         if self.config.volume_claim_templates:
-            spec.volumeClaimTemplates = [self._build_pvc_template(t) for t in self.config.volume_claim_templates]
+            spec.volumeClaimTemplates = [
+                self._build_pvc_template(t)
+                for t in cast(list[VolumeClaimTemplateConfig], self.config.volume_claim_templates)
+            ]
 
         return K8sStatefulSet(
             metadata=ObjectMeta(
                 name=self.name,
-                namespace=self.config.namespace,
+                namespace=cast(str, self.config.namespace),
             ),
             spec=spec,
         )
@@ -398,7 +401,7 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
         async with self._get_client() as client:
             await create_object(client, self._build_statefulset())
 
-            statefulset = await wait_for_rollout(client, K8sStatefulSet, self.name, self.config.namespace)
+            statefulset = await wait_for_rollout(client, K8sStatefulSet, self.name, cast(str, self.config.namespace))
 
         return self.build_outputs(statefulset)
 
@@ -409,7 +412,7 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
             StatefulSetOutputs, or ``None`` if the statefulset does not exist.
         """
         async with self._get_client() as client:
-            statefulset = await fetch_object(client, K8sStatefulSet, self.name, self.config.namespace)
+            statefulset = await fetch_object(client, K8sStatefulSet, self.name, cast(str, self.config.namespace))
 
         if statefulset is None:
             return None
@@ -431,7 +434,7 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
         async with self._get_client() as client:
             await client.apply(self._build_statefulset(), field_manager=FIELD_MANAGER)
 
-            statefulset = await wait_for_rollout(client, K8sStatefulSet, self.name, self.config.namespace)
+            statefulset = await wait_for_rollout(client, K8sStatefulSet, self.name, cast(str, self.config.namespace))
 
         return self.build_outputs(statefulset)
 
@@ -445,8 +448,8 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
             TimeoutError: If the statefulset is still present after the deletion timeout.
         """
         async with self._get_client() as client:
-            await delete_object(client, K8sStatefulSet, self.name, self.config.namespace)
-            await wait_for_absence(client, K8sStatefulSet, self.name, self.config.namespace)
+            await delete_object(client, K8sStatefulSet, self.name, cast(str, self.config.namespace))
+            await wait_for_absence(client, K8sStatefulSet, self.name, cast(str, self.config.namespace))
 
     async def health(self) -> HealthStatus:
         """Check StatefulSet health by comparing ready replicas to desired.
@@ -455,7 +458,7 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
             HealthStatus indicating healthy/degraded/unhealthy.
         """
         async with self._get_client() as client:
-            statefulset = await fetch_object(client, K8sStatefulSet, self.name, self.config.namespace)
+            statefulset = await fetch_object(client, K8sStatefulSet, self.name, cast(str, self.config.namespace))
 
         if statefulset is None:
             return HealthStatus(
@@ -480,12 +483,12 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
             LogEntry for each log line from pods.
         """
         async with self._get_client() as client:
-            labels = self.config.selector or {"app": self.name}
+            labels = cast(dict[str, str] | None, self.config.selector) or {"app": self.name}
             label_selector = ",".join(f"{k}={v}" for k, v in labels.items())
 
             pods = client.list(
                 Pod,
-                namespace=self.config.namespace,
+                namespace=cast(str, self.config.namespace),
                 labels=label_selector,
             )
 
