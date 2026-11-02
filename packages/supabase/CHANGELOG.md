@@ -1,3 +1,10 @@
+## supabase-v6.2.11 (2026-11-02)
+
+### Fix
+
+- **supabase**: wait until a project is observable after create, update and delete
+- **deps**: update pragmatiks-sdk to v22.0.1 (#133)
+
 ## supabase-v6.2.10 (2026-11-01)
 
 ### Fix
