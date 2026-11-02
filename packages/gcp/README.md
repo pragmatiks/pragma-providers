@@ -65,7 +65,7 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the secret and an initial version. Idempotent -- if the secret already exists, adds a new version.
+- Create: Creates the secret, labelled `pragma_resource` with a digest of this resource's ID, and an initial version. A secret carrying this resource's label is its own earlier create and is brought up to date as Update does; any other existing secret fails the resource and is left as is.
 - Observe: Reads the secret and its latest enabled version.
 - Update: Adds a new secret version when `data` differs from the latest enabled version. Previous versions are retained.
 - Delete: Deletes the secret and all its versions.
@@ -131,7 +131,7 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the cluster and polls until it serves, in RUNNING or DEGRADED state (up to 19 minutes). Idempotent -- if the cluster already exists, waits for it to serve.
+- Create: Creates the cluster, labelled `pragma_resource` with a digest of this resource's ID (GKE copies the label onto the cluster's Compute Engine resources), and polls until it serves, in RUNNING or DEGRADED state (up to 19 minutes). A cluster carrying this resource's label is its own earlier create and is brought up to date as Update does; any other existing cluster fails the resource and is left as is.
 - Observe: Reads the cluster by project, location and name.
 - Update: Waits for the cluster's pending operations; when the live channel differs, moves the cluster to the configured `release_channel` and waits for the update. Either way, waits for the cluster to serve, in RUNNING or DEGRADED state. `credentials` is mutable too; every other field is immutable and requires delete and recreate.
 - Delete: Deletes the cluster and polls until fully removed.
@@ -185,7 +185,7 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the instance and polls until RUNNABLE (up to 19 minutes). Generates a random root password. Idempotent.
+- Create: Creates the instance, labelled `pragma_resource` with a digest of this resource's ID, and polls until RUNNABLE (up to 19 minutes). Generates a random root password. An instance carrying this resource's label is its own earlier create and is brought up to date as Update does; any other existing instance fails the resource and is left as is.
 - Observe: Reads the instance by project and instance name.
 - Update: Patches mutable settings (tier, availability, backups, network config), waits for the patch operation, then for RUNNABLE.
 - Delete: Deletes the instance. Respects `deletion_protection` -- disable it first to allow deletion.
@@ -231,7 +231,7 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the database in the target instance and waits for the operation. Idempotent.
+- Create: Creates the database in the target instance and waits for the operation. An existing database of that name fails the resource and is left as is.
 - Observe: Reads the database by `database_name`.
 - Update: Returns current database state. Every field is immutable.
 - Delete: Drops the database from the instance and waits for the operation.
@@ -279,7 +279,7 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the user in the target instance and waits for the operation. Idempotent.
+- Create: Creates the user in the target instance and waits for the operation. An existing user of that name fails the resource and is left as is.
 - Observe: Reads the user by `username`.
 - Update: Password changes are applied in place and waited on.
 - Delete: Drops the user from the instance and waits for the operation.

@@ -32,6 +32,12 @@ from pragma_sdk import AlreadyExistsError, Config, Field, HealthStatus, Immutabl
 from pydantic import Field as PydanticField
 from pydantic import field_validator, model_validator
 
+from gcp_provider.resources.marker import (
+    MARKER_MISMATCH_REASONS,
+    MarkerMatch,
+    build_resource_marker,
+    match_resource_marker,
+)
 from gcp_provider.resources.polling import compute_operation_deadline, poll_until
 
 
@@ -318,9 +324,12 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
           and disk size. Set ``autopilot: false`` to use this mode.
 
     Lifecycle:
-        - on_create: Creates the cluster and polls until it serves, in RUNNING
-          or DEGRADED state (up to 19 min). Refuses a cluster that already
-          exists instead of adopting it.
+        - on_create: Creates the cluster, labelled ``pragma_resource`` with this
+          resource's marker, and polls until it serves, in RUNNING or DEGRADED state
+          (up to 19 min). A cluster carrying that label is this resource's earlier
+          create and is brought up to date as on_update does; any other existing
+          cluster is refused instead of adopted. GKE copies resource labels onto
+          the cluster's Compute Engine resources, so they carry the label too.
         - on_observe: Reads the cluster by project, location and name.
         - on_update: Applies ``release_channel`` when it differs and waits for
           the cluster to serve. ``credentials`` is mutable too; every other field
@@ -476,6 +485,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
             name=self.config.name,
             network=self.config.network,
             release_channel={"channel": self.config.release_channel},
+            resource_labels=build_resource_marker(self.id),
         )
 
         if self.config.subnetwork:
@@ -497,6 +507,26 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
 
         return cluster
 
+    async def read_marker_match(self, client: ClusterManagerAsyncClient) -> MarkerMatch:
+        """Read the existing cluster and compare its resource marker with this resource.
+
+        Args:
+            client: Cluster Manager client.
+
+        Returns:
+            How the cluster's ``pragma_resource`` resource label compares with this resource;
+            ``ABSENT`` when the cluster is gone.
+
+        Raises:
+            GoogleAPICallError: If the read fails for any reason other than the cluster being absent.
+        """
+        try:
+            cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
+        except NotFound:
+            return MarkerMatch.ABSENT
+
+        return match_resource_marker(cluster.resource_labels, self.id)
+
     async def on_create(self) -> GKEOutputs:
         """Create GKE cluster and wait until it serves, in RUNNING or DEGRADED state.
 
@@ -504,7 +534,8 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
             GKEOutputs with cluster details.
 
         Raises:
-            AlreadyExistsError: If a cluster with ``name`` already exists in the location.
+            AlreadyExistsError: If a cluster with ``name`` that this resource did not create
+                already exists in the location.
         """
         client = self._get_client()
 
@@ -516,7 +547,24 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
                 )
             )
         except AlreadyExists as error:
-            message = f"GKE cluster {self.config.name} in {self._parent_path()} already exists"
+            match = await self.read_marker_match(client)
+
+            if match is MarkerMatch.OWN:
+                logger.warning(
+                    "gcp_create_conflict_recognized type=gke resource=%s cluster=%s", self.id, self._cluster_path()
+                )
+                return await self.on_update(None)
+
+            logger.warning(
+                "gcp_create_conflict_refused type=gke resource=%s cluster=%s reason=%s",
+                self.id,
+                self._cluster_path(),
+                match,
+            )
+            message = (
+                f"GKE cluster {self.config.name} in {self._parent_path()} already exists and this resource "
+                f"did not create it: {MARKER_MISMATCH_REASONS[match]}"
+            )
             raise AlreadyExistsError(message) from error
 
         cluster = await self.wait_for_serving(client, compute_operation_deadline())
