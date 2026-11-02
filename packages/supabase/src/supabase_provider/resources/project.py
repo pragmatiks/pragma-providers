@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from pragma_sdk import Config, Field, HealthStatus, ImmutableField, Outputs, Resource, SensitiveField
@@ -16,6 +16,8 @@ from supabase_provider.client import create_management_client, raise_for_status
 
 POLL_INTERVAL_SECONDS = 10
 HEALTHY_TIMEOUT_SECONDS = 900
+LISTED_TIMEOUT_SECONDS = 300
+DELETED_TIMEOUT_SECONDS = 600
 READINESS_SERVICES = "auth,db,rest"
 EXTERNAL_PROVIDERS = ("google", "github", "apple")
 TRANSITIONAL_STATUSES = frozenset({"COMING_UP", "RESTORING", "UPGRADING", "RESTARTING", "RESIZING"})
@@ -135,7 +137,7 @@ def build_auth_settings(config: ProjectConfig) -> dict[str, Any]:
         "external_email_enabled": config.external_email_enabled,
         "external_phone_enabled": config.external_phone_enabled,
         "mailer_autoconfirm": config.mailer_autoconfirm,
-        "uri_allow_list": ",".join(config.additional_redirect_urls),
+        "uri_allow_list": ",".join(cast(list[str], config.additional_redirect_urls)),
     }
 
     if config.site_url is not None:
@@ -200,13 +202,16 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
     endpoints. The project is located by ``organization_slug`` and ``name``.
 
     Lifecycle:
-        - on_create: Creates the project, waits until healthy, then applies the auth settings.
+        - on_create: Creates the project, waits until healthy, applies the auth settings, then waits
+          until the project list shows it ``ACTIVE_HEALTHY`` and reads its outputs as on_observe does.
         - on_observe: Finds the project; does not wait for it to become healthy, and reads
           its API keys and auth config only while it is ``ACTIVE_HEALTHY``.
         - on_update: Waits until the existing project is healthy, then applies a changed
           database password and the auth settings; fails if the project does not exist
-          or is neither active nor transitioning.
-        - on_delete: Deletes the project; succeeds if it does not exist.
+          or is neither active nor transitioning; returns once the project list shows it
+          ``ACTIVE_HEALTHY``, with the outputs on_observe reads.
+        - on_delete: Deletes the project and returns once the project list no longer shows it live;
+          succeeds if it does not exist.
 
     Example::
 
@@ -329,6 +334,75 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         )
         raise TimeoutError(msg)
 
+    async def wait_for_listed_healthy(self, client: httpx.AsyncClient) -> dict[str, Any]:
+        """Poll the project list until it shows this resource's project ``ACTIVE_HEALTHY``.
+
+        The list's ``status`` can lag the per-service health endpoint, and on_observe reads keys and
+        auth config only from a listed ``ACTIVE_HEALTHY`` project, so outputs built from the project
+        this returns match what on_observe reads.
+
+        Args:
+            client: Authenticated Management API client.
+
+        Returns:
+            The project as listed by ``GET /projects``.
+
+        Raises:
+            TimeoutError: If the list does not show the project ``ACTIVE_HEALTHY`` within
+                ``LISTED_TIMEOUT_SECONDS``; the message carries the last listed status.
+        """
+        last_status = "not listed"
+        deadline = time.monotonic() + LISTED_TIMEOUT_SECONDS
+
+        while True:
+            project = await self.find_project(client)
+            last_status = "not listed" if project is None else project["status"]
+
+            if project is not None and last_status == "ACTIVE_HEALTHY":
+                return project
+
+            if time.monotonic() >= deadline:
+                break
+
+            await asyncio.sleep(POLL_INTERVAL_SECONDS)
+
+        msg = (
+            f"Project {self.config.name} was not listed as ACTIVE_HEALTHY within {LISTED_TIMEOUT_SECONDS} seconds "
+            f"(last_status={last_status})"
+        )
+        raise TimeoutError(msg)
+
+    async def wait_for_deleted(self, client: httpx.AsyncClient) -> None:
+        """Poll the project list until it no longer shows this resource's project live.
+
+        A project listed as ``GOING_DOWN`` or ``REMOVED`` counts as gone, as it does for on_observe.
+
+        Args:
+            client: Authenticated Management API client.
+
+        Raises:
+            TimeoutError: If the project is still listed live after ``DELETED_TIMEOUT_SECONDS``; the
+                message carries the last listed status.
+        """
+        deadline = time.monotonic() + DELETED_TIMEOUT_SECONDS
+
+        while True:
+            project = await self.find_project(client)
+
+            if project is None:
+                return
+
+            if time.monotonic() >= deadline:
+                break
+
+            await asyncio.sleep(POLL_INTERVAL_SECONDS)
+
+        msg = (
+            f"Project {self.config.name} was still listed after {DELETED_TIMEOUT_SECONDS} seconds "
+            f"(last_status={project['status']})"
+        )
+        raise TimeoutError(msg)
+
     async def apply_database_password(self, client: httpx.AsyncClient, project_ref: str) -> None:
         """Set the project's database password to this resource's password.
 
@@ -374,10 +448,17 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
     async def on_create(self) -> ProjectOutputs:
         """Create the project, wait until healthy, and apply the auth settings.
 
+        Returns only once the project list shows the project ``ACTIVE_HEALTHY``, so the
+        outputs equal what on_observe reads right after.
+
         Returns:
             ProjectOutputs with project details, API keys and auth settings.
+
+        Raises:
+            TimeoutError: If the project does not become healthy, or is not listed as
+                ``ACTIVE_HEALTHY``, in time.
         """
-        async with create_management_client(self.config.access_token) as client:
+        async with create_management_client(cast(str, self.config.access_token)) as client:
             response = await client.post(
                 "/projects",
                 json={
@@ -390,8 +471,9 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
             await raise_for_status(response)
             project = await self.wait_for_healthy(client, response.json()["ref"])
             await self.apply_auth_settings(client, project["ref"])
+            listed_project = await self.wait_for_listed_healthy(client)
 
-            return await self.fetch_outputs(client, project)
+            return await self.fetch_outputs(client, listed_project)
 
     async def on_observe(self) -> ProjectOutputs | None:
         """Find the project and read its outputs, whatever its health.
@@ -400,7 +482,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
             ProjectOutputs for the project, or ``None`` when it does not exist. The
             API keys and auth settings are left unread unless the project is ``ACTIVE_HEALTHY``.
         """
-        async with create_management_client(self.config.access_token) as client:
+        async with create_management_client(cast(str, self.config.access_token)) as client:
             project = await self.find_project(client)
 
             if project is None:
@@ -426,8 +508,10 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Raises:
             RuntimeError: If the project does not exist, or is neither ``ACTIVE_HEALTHY``
                 nor transitioning (for example paused).
+            TimeoutError: If the project does not become healthy, or is not listed as
+                ``ACTIVE_HEALTHY``, in time.
         """
-        async with create_management_client(self.config.access_token) as client:
+        async with create_management_client(cast(str, self.config.access_token)) as client:
             project = await self.find_project(client)
 
             if project is None:
@@ -445,12 +529,17 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
             await self.apply_database_password(client, project["ref"])
 
             await self.apply_auth_settings(client, project["ref"])
+            listed_project = await self.wait_for_listed_healthy(client)
 
-            return await self.fetch_outputs(client, project)
+            return await self.fetch_outputs(client, listed_project)
 
     async def on_delete(self) -> None:
-        """Delete the project; succeeds if it does not exist."""
-        async with create_management_client(self.config.access_token) as client:
+        """Delete the project and wait until on_observe no longer finds it; succeeds if it does not exist.
+
+        Raises:
+            TimeoutError: If the project is still listed live after ``DELETED_TIMEOUT_SECONDS``.
+        """
+        async with create_management_client(cast(str, self.config.access_token)) as client:
             project = await self.find_project(client)
 
             if project is None:
@@ -458,10 +547,10 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
 
             response = await client.delete(f"/projects/{project['ref']}")
 
-            if response.status_code == 404:
-                return
+            if response.status_code != 404:
+                await raise_for_status(response)
 
-            await raise_for_status(response)
+            await self.wait_for_deleted(client)
 
     async def health(self) -> HealthStatus:
         """Report the project's status as health.
@@ -469,7 +558,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Returns:
             Healthy when ``ACTIVE_HEALTHY``, degraded while transitioning, unhealthy otherwise.
         """
-        async with create_management_client(self.config.access_token) as client:
+        async with create_management_client(cast(str, self.config.access_token)) as client:
             project = await self.find_project(client)
 
         if project is None:
