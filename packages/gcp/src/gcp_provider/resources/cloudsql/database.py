@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from pragma_sdk import Config, ImmutableDependency, ImmutableField, Outputs, Resource
 
@@ -14,6 +14,7 @@ from gcp_provider.resources.cloudsql.database_instance import (
 from gcp_provider.resources.cloudsql.helpers import (
     connection_info,
     execute,
+    execute_insert,
     extract_ips,
     get_credentials,
     get_sqladmin_service,
@@ -60,8 +61,8 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
     it inherits credentials and connection details.
 
     Lifecycle:
-        - on_create: Creates the database in the target instance. Idempotent --
-          succeeds if the database already exists.
+        - on_create: Creates the database in the target instance. Refuses a database
+          that already exists instead of adopting it.
         - on_observe: Reads the database by ``database_name``.
         - on_update: Returns current state; ``instance`` and ``database_name`` are immutable.
         - on_delete: Drops the database from the instance. Idempotent --
@@ -87,24 +88,23 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
     async def on_create(self) -> DatabaseOutputs:
         """Create the database in the Cloud SQL instance and wait until it exists.
 
-        Idempotent: If the database already exists, returns its current state.
-
         Returns:
             DatabaseOutputs with database details.
 
         Raises:
+            AlreadyExistsError: If the database already exists.
             RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
                 or the operation finished with errors.
             TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.
         """
         instance_config = await resolve_instance_config(self.config.instance)
-        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, instance_config.credentials)))
 
         await run_instance_operation(
             service,
             instance_config,
             self.name,
-            lambda: execute(
+            lambda: execute_insert(
                 service.databases().insert(
                     project=instance_config.project_id,
                     instance=instance_config.instance_name,
@@ -114,7 +114,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
                         "instance": instance_config.instance_name,
                     },
                 ),
-                ignore_exists=True,
+                f"Cloud SQL database {self.config.database_name} on instance {instance_config.instance_name}",
             ),
             compute_operation_deadline(),
         )
@@ -128,7 +128,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             DatabaseOutputs for the database, or None if it does not exist.
         """
         instance_config = await resolve_instance_config(self.config.instance)
-        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, instance_config.credentials)))
 
         database = await execute(
             service.databases().get(
@@ -154,7 +154,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             DatabaseOutputs with database details.
         """
         instance_config = await resolve_instance_config(self.config.instance)
-        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, instance_config.credentials)))
 
         return await self.fetch_outputs(instance_config, service)
 
@@ -169,7 +169,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.
         """
         instance_config = await resolve_instance_config(self.config.instance)
-        service = await get_sqladmin_service(get_credentials(instance_config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, instance_config.credentials)))
 
         await run_instance_operation(
             service,
@@ -212,8 +212,8 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         )
 
         return DatabaseOutputs(
-            database_name=self.config.database_name,
-            instance_name=instance_config.instance_name,
+            database_name=cast(str, self.config.database_name),
+            instance_name=cast(str, instance_config.instance_name),
             host=host,
             port=int(db_port),
             url=f"{db_type}://{host}:{db_port}/{self.config.database_name}",

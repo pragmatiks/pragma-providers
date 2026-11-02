@@ -6,7 +6,7 @@ import secrets
 import string
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from google.cloud.logging_v2 import Client as LoggingClient
 from pragma_sdk import Config, Dependency, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
@@ -14,6 +14,7 @@ from pydantic import field_validator
 
 from gcp_provider.resources.cloudsql.helpers import (
     execute,
+    execute_insert,
     extract_ips,
     get_credentials,
     get_sqladmin_service,
@@ -139,8 +140,8 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
 
     Lifecycle:
         - on_create: Creates the instance with a randomly generated root password
-          and polls until RUNNABLE (up to 19 minutes). Idempotent -- if the
-          instance already exists, waits for RUNNABLE and returns current state.
+          and polls until RUNNABLE (up to 19 minutes). Refuses an instance that
+          already exists instead of adopting it.
         - on_observe: Reads the instance by ``project_id`` and ``instance_name``.
         - on_update: Patches mutable settings (tier, availability_type, backups,
           network config, deletion_protection) and waits for RUNNABLE.
@@ -176,20 +177,18 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
     async def on_create(self) -> DatabaseInstanceOutputs:
         """Create Cloud SQL instance and wait for RUNNABLE state.
 
-        Idempotent: If instance already exists, returns its current state.
-
         Returns:
             DatabaseInstanceOutputs with instance details.
+
+        Raises:
+            AlreadyExistsError: If an instance with ``instance_name`` already exists in the project.
         """
-        service = await get_sqladmin_service(get_credentials(self.config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
 
-        existing = await execute(
-            service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
-            ignore_404=True,
+        await execute_insert(
+            service.instances().insert(project=self.config.project_id, body=self._build_instance_body()),
+            f"Cloud SQL instance {self.config.instance_name} in project {self.config.project_id}",
         )
-
-        if existing is None:
-            await execute(service.instances().insert(project=self.config.project_id, body=self._build_instance_body()))
 
         instance = await self._wait_for_runnable(service, compute_operation_deadline())
 
@@ -201,7 +200,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         Returns:
             DatabaseInstanceOutputs for the instance, or None if it does not exist.
         """
-        service = await get_sqladmin_service(get_credentials(self.config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
 
         instance = await execute(
             service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
@@ -228,7 +227,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             TimeoutError: If a pending operation, the write's operation, or the instance reaching RUNNABLE
                 is not done by the operation deadline.
         """
-        service = await get_sqladmin_service(get_credentials(self.config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
         deadline = compute_operation_deadline()
 
         await run_instance_operation(
@@ -263,7 +262,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             TimeoutError: If a pending operation, the delete operation or the deletion is not done by the operation
                 deadline.
         """
-        service = await get_sqladmin_service(get_credentials(self.config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
         deadline = compute_operation_deadline()
 
         await run_instance_operation(
@@ -285,7 +284,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         Returns:
             HealthStatus indicating instance health.
         """
-        service = await get_sqladmin_service(get_credentials(self.config.credentials))
+        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
 
         instance = await execute(
             service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
@@ -319,7 +318,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         Yields:
             LogEntry objects from Cloud Logging.
         """
-        credentials = get_credentials(self.config.credentials)
+        credentials = get_credentials(cast(dict[str, Any] | str, self.config.credentials))
         project = self.config.project_id
 
         filter_parts = [
