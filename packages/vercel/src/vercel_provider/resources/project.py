@@ -113,9 +113,10 @@ def _build_create_body(config: ProjectConfig) -> dict[str, Any]:
         body["framework"] = config.framework
 
     if config.git_repository is not None:
+        repository = cast(GitRepositoryConfig, config.git_repository)
         body["gitRepository"] = {
-            "repo": config.git_repository.repo,
-            "type": config.git_repository.repo_type,
+            "repo": repository.repo,
+            "type": repository.repo_type,
         }
 
     if config.build_command is not None:
@@ -364,7 +365,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         params: dict[str, str] = {}
 
         if self.config.team_id:
-            params["teamId"] = self.config.team_id
+            params["teamId"] = cast(str, self.config.team_id)
 
         return params
 
@@ -377,7 +378,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Raises:
             AlreadyExistsError: If Vercel already has a project with this name.
         """
-        async with create_vercel_client(self.config.access_token) as client:
+        async with create_vercel_client(cast(str, self.config.access_token)) as client:
             body = _build_create_body(self.config)
             response = await client.post("/v10/projects", params=self._query_params(), json=body)
             await raise_for_create_status(response, f"Vercel project {self.config.name}")
@@ -386,7 +387,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
             await upsert_environment_variables(
                 client,
                 project_data["id"],
-                self.config.environment_variables,
+                cast(list[EnvironmentVariableConfig], self.config.environment_variables),
                 self._query_params(),
             )
 
@@ -398,7 +399,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Returns:
             ProjectOutputs, or ``None`` if the project does not exist.
         """
-        async with create_vercel_client(self.config.access_token) as client:
+        async with create_vercel_client(cast(str, self.config.access_token)) as client:
             project = await fetch_optional_json(client, self.project_path(), self._query_params())
 
         if project is None:
@@ -419,7 +420,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Returns:
             ProjectOutputs with current project state.
         """
-        async with create_vercel_client(self.config.access_token) as client:
+        async with create_vercel_client(cast(str, self.config.access_token)) as client:
             params = self._query_params()
 
             response = await client.patch(self.project_path(), params=params, json=_build_update_body(self.config))
@@ -431,15 +432,15 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
 
             await delete_dropped_environment_variables(
                 client,
-                self.config.name,
+                cast(str, self.config.name),
                 previous_variables,
-                self.config.environment_variables,
+                cast(list[EnvironmentVariableConfig], self.config.environment_variables),
                 params,
             )
             await upsert_environment_variables(
                 client,
-                self.config.name,
-                self.config.environment_variables,
+                cast(str, self.config.name),
+                cast(list[EnvironmentVariableConfig], self.config.environment_variables),
                 params,
             )
 
@@ -453,7 +454,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
 
         Succeeds if the project does not exist.
         """
-        async with create_vercel_client(self.config.access_token) as client:
+        async with create_vercel_client(cast(str, self.config.access_token)) as client:
             response = await client.delete(self.project_path(), params=self._query_params())
 
             if response.status_code == 404:
