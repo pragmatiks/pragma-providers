@@ -1,3 +1,9 @@
+## kubernetes-v2.2.11 (2026-11-02)
+
+### Fix
+
+- **kubernetes**: recognize a resource's own object on a create conflict
+
 ## kubernetes-v2.2.10 (2026-11-02)
 
 ### Fix
