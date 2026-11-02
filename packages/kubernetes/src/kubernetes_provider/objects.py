@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
 
 from lightkube import ApiError, AsyncClient
+from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.types import CascadeType
 from pragma_sdk import AlreadyExistsError
 
+from kubernetes_provider.marker import (
+    MARKER_MISMATCH_REASONS,
+    RESOURCE_MARKER_KEY,
+    MarkerMatch,
+    build_resource_marker,
+    match_resource_marker,
+)
 from kubernetes_provider.polling import poll_until
 
 
@@ -16,12 +25,39 @@ DELETION_TIMEOUT_SECONDS = 300
 FIELD_MANAGER = "pragma-kubernetes"
 ALREADY_EXISTS_STATUS_CODE = 409
 
+logger = logging.getLogger(__name__)
+
+
+def build_object_metadata(
+    resource_id: str,
+    name: str,
+    namespace: str | None = None,
+    labels: dict[str, str] | None = None,
+) -> ObjectMeta:
+    """Build the metadata of an object a Pragmatiks resource creates and applies.
+
+    Every object carries the resource marker, so a create that meets an existing object can
+    tell this resource's earlier create (``check_create_conflict``) from any other object.
+
+    Args:
+        resource_id: Canonical ID of the Pragmatiks resource that creates the object.
+        name: Object name.
+        namespace: Namespace of a namespaced object; ``None`` for cluster-scoped objects.
+        labels: Labels the object carries, if any.
+
+    Returns:
+        Object metadata carrying the ``pragma.io/resource`` annotation.
+    """
+    return ObjectMeta(
+        name=name,
+        namespace=namespace,
+        labels=labels,
+        annotations=build_resource_marker(resource_id),
+    )
+
 
 async def create_object[ObjectT](client: AsyncClient, kubernetes_object: ObjectT) -> ObjectT:
     """Create a Kubernetes object, refusing one that already exists.
-
-    The object is never adopted: an object the cluster already holds under the same name is
-    reported instead of taken over.
 
     Args:
         client: Lightkube client for the target cluster.
@@ -41,6 +77,87 @@ async def create_object[ObjectT](client: AsyncClient, kubernetes_object: ObjectT
             message = f"{type(kubernetes_object).__name__} already exists: {error.status.message}"
             raise AlreadyExistsError(message) from error
         raise
+
+
+async def check_create_conflict(
+    client: AsyncClient,
+    kubernetes_object: object,
+    resource_id: str,
+    error: AlreadyExistsError,
+) -> None:
+    """Return when the object a create met is this resource's earlier create, and raise otherwise.
+
+    Call it when ``create_object`` raised ``AlreadyExistsError``; once it returns, applying the
+    desired object (as ``on_update`` does) converges it. An object that was gone when read back
+    also returns, since applying creates it.
+
+    Args:
+        client: Lightkube client for the target cluster.
+        kubernetes_object: Object the create sent.
+        resource_id: Canonical ID of the Pragmatiks resource whose create met the object.
+        error: The refusal ``create_object`` raised.
+
+    Raises:
+        AlreadyExistsError: If the existing object carries no ``pragma.io/resource`` annotation
+            naming ``resource_id``; the message says which.
+        RuntimeError: If the existing object is this resource's earlier create and is being deleted.
+        ApiError: If reading the existing object fails for any reason other than not found.
+    """
+    metadata = cast(Any, kubernetes_object).metadata
+    kind = type(kubernetes_object).__name__
+    location = f"{metadata.namespace}/{metadata.name}" if metadata.namespace else metadata.name
+    existing = await fetch_object(client, type(kubernetes_object), metadata.name, metadata.namespace)
+
+    if existing is None:
+        logger.warning(
+            "kubernetes_create_conflict_absent kind=%s namespace=%s name=%s resource=%s",
+            kind,
+            metadata.namespace,
+            metadata.name,
+            resource_id,
+        )
+        return
+
+    existing_metadata = cast(Any, existing).metadata
+    match = match_resource_marker(existing_metadata.annotations, resource_id)
+
+    if match is not MarkerMatch.OWN:
+        logger.warning(
+            "kubernetes_create_conflict_refused kind=%s namespace=%s name=%s resource=%s reason=%s owner=%s",
+            kind,
+            metadata.namespace,
+            metadata.name,
+            resource_id,
+            match,
+            (existing_metadata.annotations or {}).get(RESOURCE_MARKER_KEY),
+        )
+        message = (
+            f"{kind} {location} already exists and this resource did not create it: {MARKER_MISMATCH_REASONS[match]}"
+        )
+        raise AlreadyExistsError(message) from error
+
+    if existing_metadata.deletionTimestamp is not None:
+        logger.warning(
+            "kubernetes_create_conflict_terminating kind=%s namespace=%s name=%s resource=%s deletion_timestamp=%s",
+            kind,
+            metadata.namespace,
+            metadata.name,
+            resource_id,
+            existing_metadata.deletionTimestamp,
+        )
+        message = (
+            f"{kind} {location}, created earlier by this resource, is being deleted since "
+            f"{existing_metadata.deletionTimestamp}; apply again once it is gone"
+        )
+        raise RuntimeError(message) from error
+
+    logger.warning(
+        "kubernetes_create_conflict_recognized kind=%s namespace=%s name=%s resource=%s",
+        kind,
+        metadata.namespace,
+        metadata.name,
+        resource_id,
+    )
 
 
 async def fetch_object[ObjectT](

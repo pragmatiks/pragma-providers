@@ -8,6 +8,8 @@ resource.
 from pragma_sdk import Provider
 
 from kubernetes_provider.client import build_kubeconfig_from_gke, create_client_from_gke
+from kubernetes_provider.marker import MarkerMatch, match_resource_marker
+from kubernetes_provider.objects import fetch_object
 from kubernetes_provider.resources import (
     ConfigConfig,
     ConfigMap,
@@ -53,6 +55,7 @@ __all__ = [
     "DeploymentConfig",
     "DeploymentOutputs",
     "KubernetesConfig",
+    "MarkerMatch",
     "Namespace",
     "NamespaceConfig",
     "NamespaceOutputs",
@@ -67,5 +70,7 @@ __all__ = [
     "StatefulSetOutputs",
     "build_kubeconfig_from_gke",
     "create_client_from_gke",
+    "fetch_object",
     "kubernetes",
+    "match_resource_marker",
 ]

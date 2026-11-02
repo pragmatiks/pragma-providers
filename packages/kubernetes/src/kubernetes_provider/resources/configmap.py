@@ -7,11 +7,28 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import cast
 
-from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import ConfigMap as K8sConfigMap
-from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
+from pragma_sdk import (
+    AlreadyExistsError,
+    Config,
+    Field,
+    HealthStatus,
+    ImmutableDependency,
+    ImmutableField,
+    LogEntry,
+    Outputs,
+    Resource,
+)
 
-from kubernetes_provider.objects import FIELD_MANAGER, create_object, delete_object, fetch_object, wait_for_absence
+from kubernetes_provider.objects import (
+    FIELD_MANAGER,
+    build_object_metadata,
+    check_create_conflict,
+    create_object,
+    delete_object,
+    fetch_object,
+    wait_for_absence,
+)
 from kubernetes_provider.resources.config import KubernetesConfig
 
 
@@ -49,12 +66,15 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
     Stores non-sensitive configuration data as key-value pairs that can be
     mounted as files or exposed as environment variables in pods.
 
-    Creates the ConfigMap, refusing one that already exists, and updates it with
-    server-side apply under ``field_manager="pragma-kubernetes"``. Health checks
+    Creates the ConfigMap, marked with this resource's ``pragma.io/resource``
+    annotation; an existing ConfigMap carrying it is this resource's earlier
+    create and is applied over, any other is refused. Updates use server-side
+    apply under ``field_manager="pragma-kubernetes"``, forcing conflicts. Health checks
     verify the ConfigMap exists and report the number of stored keys.
 
     Lifecycle:
-        - on_create: Create the configmap, refusing an existing one
+        - on_create: Create the configmap; apply over this resource's earlier
+          create, refuse any other existing configmap
         - on_observe: Look up the configmap by name and namespace
         - on_update: Apply updated configmap configuration
         - on_delete: Delete the configmap and wait until it is gone (idempotent)
@@ -79,10 +99,7 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
             Kubernetes ConfigMap object ready to apply.
         """
         return K8sConfigMap(
-            metadata=ObjectMeta(
-                name=self.name,
-                namespace=cast(str, self.config.namespace),
-            ),
+            metadata=build_object_metadata(self.id, self.name, cast(str, self.config.namespace)),
             data=cast(dict[str, str], self.config.data),
         )
 
@@ -108,12 +125,21 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
             ConfigMapOutputs with configmap details.
 
         Raises:
-            AlreadyExistsError: If the namespace already holds a configmap with this name.
+            AlreadyExistsError: If the namespace holds a configmap of this name that this resource
+                did not create.
+            RuntimeError: If this resource's earlier configmap is being deleted.
         """
-        async with self._get_client() as client:
-            configmap = await create_object(client, self._build_configmap())
+        desired = self._build_configmap()
 
-            return self.build_outputs(configmap)
+        async with self._get_client() as client:
+            try:
+                configmap = await create_object(client, desired)
+            except AlreadyExistsError as error:
+                await check_create_conflict(client, desired, self.id, error)
+            else:
+                return self.build_outputs(configmap)
+
+        return await self.on_update(None)
 
     async def on_observe(self) -> ConfigMapOutputs | None:
         """Look up the Kubernetes ConfigMap named after this resource.
@@ -139,7 +165,7 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
             ConfigMapOutputs with updated configmap details.
         """
         async with self._get_client() as client:
-            configmap = await client.apply(self._build_configmap(), field_manager=FIELD_MANAGER)
+            configmap = await client.apply(self._build_configmap(), field_manager=FIELD_MANAGER, force=True)
 
         return self.build_outputs(configmap)
 

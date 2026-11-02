@@ -2,7 +2,9 @@
 
 Generic Kubernetes resource management for [Pragmatiks](https://pragmatiks.io) using [lightkube](https://github.com/gtsystem/lightkube).
 
-Declaratively manage Kubernetes workloads, networking, configuration, and cluster-scoped resources. Workload resources authenticate through a shared `kubernetes/config` resource. Creating a resource refuses an object that already exists in the cluster instead of adopting it; updates use server-side apply.
+Declaratively manage Kubernetes workloads, networking, configuration, and cluster-scoped resources. Workload resources authenticate through a shared `kubernetes/config` resource. Updates use server-side apply.
+
+Every object a resource writes carries the annotation `pragma.io/resource`, set to the resource's ID. When a create meets an object of the same type and name, the resource applies over it only if that annotation names the resource itself (its own earlier create, for example one interrupted before it settled); while that object is being deleted, the create fails; apply again once the object is gone. Any other existing object, unannotated or annotated for another resource, fails the create and is left as is, never adopted.
 
 ## Prerequisites
 
