@@ -1,3 +1,10 @@
+## qdrant-v8.2.10 (2026-11-02)
+
+### Fix
+
+- **qdrant**: refuse an existing collection on create instead of adopting it
+- **deps**: update pragmatiks-sdk to v22.0.1 (#133)
+
 ## qdrant-v8.2.9 (2026-11-01)
 
 ### Fix
