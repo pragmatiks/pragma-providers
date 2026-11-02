@@ -2035,7 +2035,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-qdrant"
-version = "8.2.13"
+version = "8.2.14"
 source = { editable = "packages/qdrant" }
 dependencies = [
     { name = "pragmatiks-kubernetes" },
