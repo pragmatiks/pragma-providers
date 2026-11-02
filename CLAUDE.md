@@ -75,6 +75,27 @@ class Bucket(Resource[BucketConfig, BucketOutputs]):
 
 - No mocks, no `tests/`
 
+## Findability audit
+
+Pragmatiks can stop a handler at any moment, including after a create is sent and before its answer arrives; the retry calls `on_observe` first. So the object a create sends must be findable by `on_observe` from the resource's own identity from the moment the create is sent, and every handler must be safe to rerun. Each provider records how every resource type meets this in `packages/<provider>/FINDABILITY.md`, one row per type:
+
+| Column | Content |
+|---|---|
+| Type | `<provider>/<type>`; `computed` for a type that writes nothing outside Pragmatiks |
+| Identity | Request fields that name the object; each field `on_observe` reads must be `ImmutableField` or `ImmutableDependency` |
+| `on_observe` lookup | Call and key, cited as `Class.method` |
+| Uniqueness | Does the vendor refuse a second object with that identity, or does the create carry an idempotency key that returns the original object? Vendor URL |
+| Findable from send | Once the vendor has stored the object, even for a create whose answer never arrived, does that lookup find it? One of: sync / LRO visible while pending / eventually consistent / unknown. Vendor URL |
+| Conflict on create | What the create does when the vendor reports the identity taken: idempotency key returns the original / marker re-observe (recognizes its own object by the resource marker the create request carried, else fails) / raises / adopts any object |
+| Partial create | Writes after the first one (or between child applies); does `on_update(previous_config=None)` finish every prefix? |
+| Rerun | `on_update` converges from a partial earlier update; `on_delete` succeeds on an absent object |
+| Verdict | `holds`, or `gap (PRA-n)` naming the filed issue |
+| Evidence | Symbols, vendor URL and the date it was read |
+
+A verdict is `holds` only when Uniqueness is yes, Findable from send is `sync` or `LRO visible while pending`, every lookup field is immutable, Conflict on create is the idempotency key or the marker re-observe, Partial create is finishable and Rerun converges. Where the vendor is silent, assume not unique and not findable; no timing argument replaces a check, since a vendor can store the object after its client gave up. A type that cannot hold is a gap with a filed issue; a fix lands with the row it turns to `holds`.
+
+**Resource marker.** The marker a create request carries is the resource marker: the key `pragma_resource` holding the canonical resource ID (`self.id`), written in the vendor's own medium (label, annotation, metadata). A provider whose create recognizes its own object by the marker keeps it in one `marker.py` module (`RESOURCE_MARKER_KEY`, `build_resource_marker`, `match_resource_marker`, `MarkerMatch`) and logs `<provider>_create_conflict_recognized` or `<provider>_create_conflict_refused ... reason=<absent|unmarked|other_resource>` on a conflict; kubernetes, which recreates an object gone when read back and refuses its own object while it is being deleted, logs those two cases as `kubernetes_create_conflict_absent` and `kubernetes_create_conflict_terminating`. A vendor naming rule that forces another key spelling or value encoding is named in that provider's `FINDABILITY.md`. The marker tells this resource's earlier create from an object made outside Pragmatiks or by another resource; it is not proof against someone who can write the object, and it names the resource identity, so an object left by an earlier incarnation of the same resource ID is recognized as its own.
+
 ## Delivery
 
 Canonical: pragma-kit `project-instructions.md` (Delivery, Cloud threads). In short:
@@ -345,6 +366,7 @@ Every reviewer dispatch must:
 4. Final verdict: `APPROVE` / `APPROVE_WITH_NITS` / `REQUEST_CHANGES`.
 5. **Evidence-check the diff.** If the diff cites library behavior, version-specific features, or external API shapes you cannot fully verify from the code alone, query exa to confirm. Cloud SDKs change often — verify before approving.
 6. **Dependency scrutiny.** If the diff adds a new top-level dependency, confirm the PR description includes the new-dependency proposal (research, alternatives, maintainer signals). Missing proposal = blocker. Spot-check the proposal's claims via exa. Confirm no existing provider dependency could have solved the problem.
+7. **Findability row.** A diff that changes a resource type's create, observe, update, delete or conflict path, or adds a type, updates that type's row in `packages/<provider>/FINDABILITY.md` with the columns and verdict rule of `## Findability audit`. A missing or stale row = blocker. A row whose verdict is not `holds` names its gap issue.
 
 A reviewer who fails to invoke programmatic tooling but only eyeballs the diff is incomplete and should be re-run.
 
