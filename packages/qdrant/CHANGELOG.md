@@ -1,3 +1,9 @@
+## qdrant-v8.2.14 (2026-11-02)
+
+### Fix
+
+- **qdrant**: recognize a resource's own collection and keep its API key
+
 ## qdrant-v8.2.13 (2026-11-02)
 
 ## qdrant-v8.2.12 (2026-11-02)
