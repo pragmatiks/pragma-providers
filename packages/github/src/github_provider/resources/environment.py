@@ -8,7 +8,13 @@ from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, Sensiti
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
-from github_provider.client import create_github_client, delete_if_present, fetch_optional_json, raise_for_status
+from github_provider.client import (
+    create_github_client,
+    delete_if_present,
+    ensure_absent,
+    fetch_optional_json,
+    raise_for_status,
+)
 
 
 class ReviewerConfig(BaseModel):
@@ -146,8 +152,8 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
     wait timers and required reviewers.
 
     Lifecycle:
-        - on_create: Creates or updates an environment using PUT (the
-          GitHub API uses PUT for both create and update). Idempotent.
+        - on_create: Creates the environment. Fails when the environment
+          already exists, since GitHub's create-or-update PUT would take it over.
         - on_observe: Reads the environment by name.
         - on_update: Updates the environment configuration by re-applying
           the PUT request with the new settings.
@@ -197,19 +203,29 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
         Returns:
             EnvironmentOutputs with environment details.
         """
-        async with create_github_client(self.config.access_token) as client:
+        async with create_github_client(cast(str, self.config.access_token)) as client:
             body = _build_create_body(self.config, previous_config)
             response = await client.put(self.environment_path(), json=body)
             await raise_for_status(response)
 
-            return _build_outputs(response.json(), self.config.owner, self.config.repository)
+            return _build_outputs(response.json(), cast(str, self.config.owner), cast(str, self.config.repository))
 
     async def on_create(self) -> EnvironmentOutputs:
         """Create a deployment environment on the repository.
 
         Returns:
             EnvironmentOutputs with environment details.
+
+        Raises:
+            AlreadyExistsError: If the environment already exists on the repository.
         """
+        async with create_github_client(cast(str, self.config.access_token)) as client:
+            await ensure_absent(
+                client,
+                self.environment_path(),
+                f"Environment {self.config.environment_name!r} on {self.config.owner}/{self.config.repository}",
+            )
+
         return await self._apply_environment(None)
 
     async def on_observe(self) -> EnvironmentOutputs | None:
@@ -218,13 +234,13 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
         Returns:
             EnvironmentOutputs, or ``None`` when the environment does not exist.
         """
-        async with create_github_client(self.config.access_token) as client:
+        async with create_github_client(cast(str, self.config.access_token)) as client:
             environment = await fetch_optional_json(client, self.environment_path())
 
         if environment is None:
             return None
 
-        return _build_outputs(environment, self.config.owner, self.config.repository)
+        return _build_outputs(environment, cast(str, self.config.owner), cast(str, self.config.repository))
 
     async def on_update(self, previous_config: EnvironmentConfig | None) -> EnvironmentOutputs:
         """Update the environment configuration.
@@ -242,5 +258,5 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
 
         Idempotent: Succeeds if the environment does not exist.
         """
-        async with create_github_client(self.config.access_token) as client:
+        async with create_github_client(cast(str, self.config.access_token)) as client:
             await delete_if_present(client, self.environment_path())

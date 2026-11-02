@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import base64
-from typing import Any
+from typing import Any, cast
 
 from nacl.encoding import Base64Encoder
 from nacl.public import PublicKey, SealedBox
 from pragma_sdk import Config, ImmutableField, Outputs, Resource, SensitiveField
 
-from github_provider.client import create_github_client, delete_if_present, fetch_optional_json, raise_for_status
+from github_provider.client import (
+    create_github_client,
+    delete_if_present,
+    ensure_absent,
+    fetch_optional_json,
+    raise_for_status,
+)
 
 
 class SecretConfig(Config):
@@ -88,8 +94,8 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
     Lifecycle:
         - on_create: Fetches the public key, encrypts the secret value,
-          and creates or replaces the secret. Idempotent -- creating an
-          existing secret replaces its value.
+          and creates the secret. Fails when the secret already exists,
+          since GitHub's create-or-replace PUT would overwrite it.
         - on_observe: Reads the secret's metadata.
         - on_update: Re-encrypts and replaces the secret value using PUT.
           Same operation as create.
@@ -234,7 +240,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         return SecretOutputs(
             secret_name=metadata["name"],
             scope=scope,
-            environment_name=self.config.environment_name or "",
+            environment_name=cast(str | None, self.config.environment_name) or "",
             created_at=metadata.get("created_at", ""),
             updated_at=metadata.get("updated_at", ""),
         )
@@ -245,20 +251,28 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         Returns:
             SecretOutputs with secret metadata.
         """
-        async with create_github_client(self.config.access_token) as client:
+        async with create_github_client(cast(str, self.config.access_token)) as client:
             key_b64, key_id = await self._fetch_public_key(client)
-            encrypted_value = _encrypt_secret(key_b64, self.config.secret_value)
+            encrypted_value = _encrypt_secret(key_b64, cast(str, self.config.secret_value))
             await self._put_secret(client, encrypted_value, key_id)
             metadata = await self._fetch_secret_metadata(client)
 
             return self._build_outputs(metadata)
 
     async def on_create(self) -> SecretOutputs:
-        """Create or replace a GitHub secret.
+        """Create a GitHub secret.
 
         Returns:
             SecretOutputs with secret metadata.
+
+        Raises:
+            AlreadyExistsError: If the secret already exists in its repository or environment.
         """
+        async with create_github_client(cast(str, self.config.access_token)) as client:
+            await ensure_absent(
+                client, self.secret_path(), f"Secret {self.config.secret_name!r} at {self.secret_path()}"
+            )
+
         return await self._apply_secret()
 
     async def on_observe(self) -> SecretOutputs | None:
@@ -267,7 +281,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         Returns:
             SecretOutputs, or ``None`` when the secret does not exist.
         """
-        async with create_github_client(self.config.access_token) as client:
+        async with create_github_client(cast(str, self.config.access_token)) as client:
             metadata = await fetch_optional_json(client, self.secret_path())
 
         if metadata is None:
@@ -294,5 +308,5 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
         Idempotent: Succeeds if the secret does not exist.
         """
-        async with create_github_client(self.config.access_token) as client:
+        async with create_github_client(cast(str, self.config.access_token)) as client:
             await delete_if_present(client, self.secret_path())

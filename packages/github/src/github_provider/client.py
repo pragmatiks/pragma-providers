@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
+from pragma_sdk import AlreadyExistsError
 
 
 _BASE_URL = "https://api.github.com"
@@ -98,6 +99,26 @@ async def fetch_optional_json(client: httpx.AsyncClient, path: str) -> dict[str,
     await raise_for_status(response)
 
     return response.json()
+
+
+async def ensure_absent(client: httpx.AsyncClient, path: str, description: str) -> None:
+    """Refuse to create an object GitHub already holds at ``path``.
+
+    GitHub creates environments and secrets with a create-or-replace PUT, so a
+    create calls this first to never take over an object Pragmatiks did not create.
+
+    Args:
+        client: Authenticated GitHub API client.
+        path: REST path of the object about to be created.
+        description: What the object is, named in the error message.
+
+    Raises:
+        AlreadyExistsError: If GitHub already holds an object at ``path``.
+        httpx.HTTPStatusError: If GitHub answers the read with an error status other than 404.
+    """
+    if await fetch_optional_json(client, path) is not None:
+        msg = f"{description} already exists"
+        raise AlreadyExistsError(msg)
 
 
 async def delete_if_present(client: httpx.AsyncClient, path: str) -> None:
