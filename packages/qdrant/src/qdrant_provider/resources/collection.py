@@ -5,7 +5,7 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import Literal, cast
 
-from pragma_sdk import Config, Field, HealthStatus, ImmutableField, Outputs, Resource
+from pragma_sdk import AlreadyExistsError, Config, Field, HealthStatus, ImmutableField, Outputs, Resource
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 from qdrant_client import AsyncQdrantClient
@@ -19,6 +19,24 @@ COLLECTION_STATUS_HEALTH: dict[models.CollectionStatus, Literal["healthy", "degr
     models.CollectionStatus.GREY: "degraded",
     models.CollectionStatus.RED: "unhealthy",
 }
+
+
+def reports_existing_collection(error: UnexpectedResponse) -> bool:
+    """Tell whether Qdrant refused a create because the collection already exists.
+
+    Qdrant answers 409 Conflict for an existing collection; older servers
+    answer 400 Bad Request with a body saying it already exists.
+
+    Args:
+        error: The refusal Qdrant returned for a create request.
+
+    Returns:
+        True if the refusal reports an existing collection.
+    """
+    if error.status_code == HTTPStatus.CONFLICT:
+        return True
+
+    return error.status_code == HTTPStatus.BAD_REQUEST and b"already exists" in error.content
 
 
 class VectorConfig(BaseModel):
@@ -69,7 +87,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
     Qdrant Cloud (with API key) and local instances.
 
     Lifecycle:
-        - on_create: Create collection if not exists
+        - on_create: Create the collection, refusing one that already exists
         - on_observe: Look up the collection by name
         - on_update: Apply on_disk in place
         - on_delete: Delete collection
@@ -84,7 +102,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         api_key = cast(str, self.config.api_key) if self.config.api_key else None
 
         return AsyncQdrantClient(
-            url=self.config.url,
+            url=cast(str, self.config.url),
             api_key=api_key,
         )
 
@@ -99,7 +117,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             "Euclid": models.Distance.EUCLID,
             "Dot": models.Distance.DOT,
         }
-        return distance_map[self.config.vectors.distance]
+        return distance_map[cast(VectorConfig, self.config.vectors).distance]
 
     def build_outputs(self) -> CollectionOutputs:
         """Build outputs for the configured collection.
@@ -107,16 +125,16 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         Returns:
             CollectionOutputs naming the collection.
         """
-        return CollectionOutputs(name=self.config.name)
+        return CollectionOutputs(name=cast(str, self.config.name))
 
     async def _create_collection(self, client: AsyncQdrantClient) -> None:
         """Create the collection with configured parameters."""
         await client.create_collection(
-            collection_name=self.config.name,
+            collection_name=cast(str, self.config.name),
             vectors_config=models.VectorParams(
-                size=self.config.vectors.size,
+                size=cast(VectorConfig, self.config.vectors).size,
                 distance=self._get_distance(),
-                on_disk=self.config.on_disk,
+                on_disk=cast(bool, self.config.on_disk),
             ),
         )
 
@@ -133,27 +151,37 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         if not isinstance(live_vectors, models.VectorParams):
             return True
 
-        return live_vectors.size != self.config.vectors.size or live_vectors.distance != self._get_distance()
+        return (
+            live_vectors.size != cast(VectorConfig, self.config.vectors).size
+            or live_vectors.distance != self._get_distance()
+        )
 
     async def on_create(self) -> CollectionOutputs:
-        """Create Qdrant collection if it doesn't exist.
+        """Create the Qdrant collection.
 
-        Idempotent: If collection already exists, leaves it as is.
+        A collection that already exists is refused, never adopted.
 
         Returns:
             CollectionOutputs naming the collection.
+
+        Raises:
+            AlreadyExistsError: If a collection with the configured name already exists.
+            UnexpectedResponse: If Qdrant refuses the create for any other reason.
         """
         client = self._get_client()
 
         try:
-            exists = await client.collection_exists(self.config.name)
+            await self._create_collection(client)
+        except UnexpectedResponse as error:
+            if not reports_existing_collection(error):
+                raise
 
-            if not exists:
-                await self._create_collection(client)
-
-            return self.build_outputs()
+            msg = f"Collection {self.config.name!r} already exists"
+            raise AlreadyExistsError(msg) from error
         finally:
             await client.close()
+
+        return self.build_outputs()
 
     async def on_observe(self) -> CollectionOutputs | None:
         """Look up the configured collection.
@@ -164,7 +192,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         client = self._get_client()
 
         try:
-            if not await client.collection_exists(self.config.name):
+            if not await client.collection_exists(cast(str, self.config.name)):
                 return None
 
             return self.build_outputs()
@@ -216,9 +244,9 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         client = self._get_client()
 
         try:
-            exists = await client.collection_exists(self.config.name)
-            if exists:
-                await client.delete_collection(self.config.name)
+            name = cast(str, self.config.name)
+            if await client.collection_exists(name):
+                await client.delete_collection(name)
         finally:
             await client.close()
 
