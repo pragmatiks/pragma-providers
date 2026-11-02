@@ -6,7 +6,12 @@ from typing import Literal
 
 from pragma_sdk import Config, Field, HealthStatus, ImmutableField, Outputs, Resource, SensitiveField
 
-from vercel_provider.client import create_vercel_client, fetch_optional_json, raise_for_status
+from vercel_provider.client import (
+    create_vercel_client,
+    fetch_optional_json,
+    raise_for_create_status,
+    raise_for_status,
+)
 
 
 class DomainConfig(Config):
@@ -142,6 +147,9 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
 
         Returns:
             DomainOutputs with domain details.
+
+        Raises:
+            AlreadyExistsError: If Vercel answers 409 because the domain is already assigned to a project.
         """
         async with create_vercel_client(self.config.access_token) as client:
             response = await client.post(
@@ -149,7 +157,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
                 params=self._query_params(),
                 json={"name": self.config.domain, **self.build_settings_body()},
             )
-            await raise_for_status(response)
+            await raise_for_create_status(response, f"Vercel domain {self.config.domain}")
 
             return self._build_outputs(response.json())
 

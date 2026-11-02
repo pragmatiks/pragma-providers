@@ -9,7 +9,12 @@ from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, Sensiti
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
-from vercel_provider.client import create_vercel_client, fetch_optional_json, raise_for_status
+from vercel_provider.client import (
+    create_vercel_client,
+    fetch_optional_json,
+    raise_for_create_status,
+    raise_for_status,
+)
 
 
 class EnvironmentVariableConfig(BaseModel):
@@ -368,11 +373,14 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
 
         Returns:
             ProjectOutputs with project details.
+
+        Raises:
+            AlreadyExistsError: If Vercel already has a project with this name.
         """
         async with create_vercel_client(self.config.access_token) as client:
             body = _build_create_body(self.config)
             response = await client.post("/v10/projects", params=self._query_params(), json=body)
-            await raise_for_status(response)
+            await raise_for_create_status(response, f"Vercel project {self.config.name}")
             project_data = response.json()
 
             await upsert_environment_variables(
