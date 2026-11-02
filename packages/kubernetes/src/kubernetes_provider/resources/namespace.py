@@ -7,11 +7,18 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import cast
 
-from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Namespace as K8sNamespace
-from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
+from pragma_sdk import AlreadyExistsError, Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
 
-from kubernetes_provider.objects import FIELD_MANAGER, create_object, delete_object, fetch_object, wait_for_absence
+from kubernetes_provider.objects import (
+    FIELD_MANAGER,
+    build_object_metadata,
+    check_create_conflict,
+    create_object,
+    delete_object,
+    fetch_object,
+    wait_for_absence,
+)
 from kubernetes_provider.resources.config import KubernetesConfig
 
 
@@ -48,12 +55,15 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
     Manages cluster-scoped Namespace objects for workload isolation. Namespaces
     do not belong to another namespace and have no ``namespace`` config field.
 
-    Creates the namespace, refusing one that already exists, and updates it with
-    server-side apply under ``field_manager="pragma-kubernetes"``. Health checks
+    Creates the namespace, marked with this resource's ``pragma.io/resource``
+    annotation; an existing namespace carrying it is this resource's earlier
+    create and is applied over, any other is refused. Updates use server-side
+    apply under ``field_manager="pragma-kubernetes"``, forcing conflicts. Health checks
     verify the namespace exists and reports its phase (Active or Terminating).
 
     Lifecycle:
-        - on_create: Create the namespace, refusing an existing one
+        - on_create: Create the namespace; apply over this resource's earlier
+          create, refuse any other existing namespace
         - on_observe: Look up the namespace by name
         - on_update: Apply updated namespace configuration (labels)
         - on_delete: Delete the namespace and wait until it is gone (idempotent)
@@ -78,10 +88,7 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
             Kubernetes Namespace object ready to apply.
         """
         return K8sNamespace(
-            metadata=ObjectMeta(
-                name=self.name,
-                labels=cast(dict[str, str] | None, self.config.labels),
-            ),
+            metadata=build_object_metadata(self.id, self.name, labels=cast(dict[str, str] | None, self.config.labels)),
         )
 
     def build_outputs(self, namespace: K8sNamespace) -> NamespaceOutputs:
@@ -105,12 +112,21 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
             NamespaceOutputs with namespace name.
 
         Raises:
-            AlreadyExistsError: If the cluster already holds a namespace with this name.
+            AlreadyExistsError: If the cluster holds a namespace of this name that this resource
+                did not create.
+            RuntimeError: If this resource's earlier namespace is being deleted.
         """
-        async with self._get_client() as client:
-            namespace = await create_object(client, self._build_namespace())
+        desired = self._build_namespace()
 
-        return self.build_outputs(namespace)
+        async with self._get_client() as client:
+            try:
+                namespace = await create_object(client, desired)
+            except AlreadyExistsError as error:
+                await check_create_conflict(client, desired, self.id, error)
+            else:
+                return self.build_outputs(namespace)
+
+        return await self.on_update(None)
 
     async def on_observe(self) -> NamespaceOutputs | None:
         """Look up the Kubernetes Namespace named after this resource.
@@ -136,7 +152,7 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
             NamespaceOutputs with namespace name.
         """
         async with self._get_client() as client:
-            namespace = await client.apply(self._build_namespace(), field_manager=FIELD_MANAGER)
+            namespace = await client.apply(self._build_namespace(), field_manager=FIELD_MANAGER, force=True)
 
         return self.build_outputs(namespace)
 

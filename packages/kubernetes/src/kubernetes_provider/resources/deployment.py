@@ -24,10 +24,28 @@ from lightkube.models.core_v1 import (
 from lightkube.models.meta_v1 import LabelSelector, ObjectMeta
 from lightkube.resources.apps_v1 import Deployment as K8sDeployment
 from lightkube.resources.core_v1 import Pod
-from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
+from pragma_sdk import (
+    AlreadyExistsError,
+    Config,
+    Field,
+    HealthStatus,
+    ImmutableDependency,
+    ImmutableField,
+    LogEntry,
+    Outputs,
+    Resource,
+)
 from pydantic import BaseModel
 
-from kubernetes_provider.objects import FIELD_MANAGER, create_object, delete_object, fetch_object, wait_for_absence
+from kubernetes_provider.objects import (
+    FIELD_MANAGER,
+    build_object_metadata,
+    check_create_conflict,
+    create_object,
+    delete_object,
+    fetch_object,
+    wait_for_absence,
+)
 from kubernetes_provider.resources.config import KubernetesConfig
 from kubernetes_provider.rollout import build_replica_health, wait_for_rollout
 
@@ -180,15 +198,17 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
     references to Kubernetes Secrets), and resource limits.
 
     Waits for all replicas to reach ready state before reporting success
-    (polls every 5s, timeout 300s). Creates the deployment, refusing one that
-    already exists, and updates it with server-side apply under
-    ``field_manager="pragma-kubernetes"``.
+    (polls every 5s, timeout 300s). Creates the deployment, marked with this
+    resource's ``pragma.io/resource`` annotation; an existing deployment carrying
+    it is this resource's earlier create and is applied over, any other is
+    refused. Updates use server-side apply under ``field_manager="pragma-kubernetes"``, forcing conflicts.
 
     Supports fetching aggregated logs from all pods matching the label
     selector, and health checks that compare ready replicas to desired count.
 
     Lifecycle:
-        - on_create: Create deployment, refusing an existing one, wait for all replicas ready
+        - on_create: Create deployment (apply over this resource's earlier create,
+          refuse any other existing deployment), wait for all replicas ready
         - on_observe: Look up the deployment by name and namespace
         - on_update: Apply updated deployment, wait for all replicas ready
         - on_delete: Delete the deployment and wait until it is gone (idempotent)
@@ -349,10 +369,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         )
 
         return K8sDeployment(
-            metadata=ObjectMeta(
-                name=self.name,
-                namespace=cast(str, self.config.namespace),
-            ),
+            metadata=build_object_metadata(self.id, self.name, cast(str, self.config.namespace)),
             spec=spec,
         )
 
@@ -383,15 +400,24 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             DeploymentOutputs with deployment details.
 
         Raises:
-            AlreadyExistsError: If the namespace already holds a deployment with this name.
+            AlreadyExistsError: If the namespace holds a deployment of this name that this resource
+                did not create.
+            RuntimeError: If this resource's earlier deployment is being deleted.
             TimeoutError: If the rollout does not complete within the rollout timeout.
         """
+        desired = self._build_deployment()
+
         async with self._get_client() as client:
-            await create_object(client, self._build_deployment())
+            try:
+                await create_object(client, desired)
+            except AlreadyExistsError as error:
+                await check_create_conflict(client, desired, self.id, error)
+            else:
+                deployment = await wait_for_rollout(client, K8sDeployment, self.name, cast(str, self.config.namespace))
 
-            deployment = await wait_for_rollout(client, K8sDeployment, self.name, cast(str, self.config.namespace))
+                return self.build_outputs(deployment)
 
-        return self.build_outputs(deployment)
+        return await self.on_update(None)
 
     async def on_observe(self) -> DeploymentOutputs | None:
         """Look up the Kubernetes Deployment named after this resource.
@@ -420,7 +446,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             TimeoutError: If the rollout does not complete within the rollout timeout.
         """
         async with self._get_client() as client:
-            await client.apply(self._build_deployment(), field_manager=FIELD_MANAGER)
+            await client.apply(self._build_deployment(), field_manager=FIELD_MANAGER, force=True)
 
             deployment = await wait_for_rollout(client, K8sDeployment, self.name, cast(str, self.config.namespace))
 

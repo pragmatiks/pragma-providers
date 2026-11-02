@@ -8,13 +8,30 @@ from datetime import UTC, datetime
 from typing import Literal, cast
 
 from lightkube.models.core_v1 import ServicePort, ServiceSpec
-from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Endpoints
 from lightkube.resources.core_v1 import Service as K8sService
-from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
+from pragma_sdk import (
+    AlreadyExistsError,
+    Config,
+    Field,
+    HealthStatus,
+    ImmutableDependency,
+    ImmutableField,
+    LogEntry,
+    Outputs,
+    Resource,
+)
 from pydantic import BaseModel
 
-from kubernetes_provider.objects import FIELD_MANAGER, create_object, delete_object, fetch_object, wait_for_absence
+from kubernetes_provider.objects import (
+    FIELD_MANAGER,
+    build_object_metadata,
+    check_create_conflict,
+    create_object,
+    delete_object,
+    fetch_object,
+    wait_for_absence,
+)
 from kubernetes_provider.resources.config import KubernetesConfig
 
 
@@ -84,11 +101,14 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
     checks verify both the Service existence and the presence of backend
     endpoints.
 
-    Creates the service, refusing one that already exists, and updates it with
-    server-side apply under ``field_manager="pragma-kubernetes"``.
+    Creates the service, marked with this resource's ``pragma.io/resource``
+    annotation; an existing service carrying it is this resource's earlier
+    create and is applied over, any other is refused. Updates use server-side
+    apply under ``field_manager="pragma-kubernetes"``, forcing conflicts.
 
     Lifecycle:
-        - on_create: Create the service, refusing an existing one
+        - on_create: Create the service; apply over this resource's earlier
+          create, refuse any other existing service
         - on_observe: Look up the service by name and namespace
         - on_update: Apply updated service configuration
         - on_delete: Delete the service and wait until it is gone (idempotent)
@@ -139,10 +159,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             spec.clusterIP = cluster_ip
 
         return K8sService(
-            metadata=ObjectMeta(
-                name=self.name,
-                namespace=cast(str, self.config.namespace),
-            ),
+            metadata=build_object_metadata(self.id, self.name, cast(str, self.config.namespace)),
             spec=spec,
         )
 
@@ -175,12 +192,21 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             ServiceOutputs with service details.
 
         Raises:
-            AlreadyExistsError: If the namespace already holds a service with this name.
+            AlreadyExistsError: If the namespace holds a service of this name that this resource
+                did not create.
+            RuntimeError: If this resource's earlier service is being deleted.
         """
-        async with self._get_client() as client:
-            service = await create_object(client, self._build_service())
+        desired = self._build_service()
 
-        return self.build_outputs(service)
+        async with self._get_client() as client:
+            try:
+                service = await create_object(client, desired)
+            except AlreadyExistsError as error:
+                await check_create_conflict(client, desired, self.id, error)
+            else:
+                return self.build_outputs(service)
+
+        return await self.on_update(None)
 
     async def on_observe(self) -> ServiceOutputs | None:
         """Look up the Kubernetes Service named after this resource.
@@ -222,7 +248,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             raise ValueError(message)
 
         async with self._get_client() as client:
-            service = await client.apply(self._build_service(), field_manager=FIELD_MANAGER)
+            service = await client.apply(self._build_service(), field_manager=FIELD_MANAGER, force=True)
 
         return self.build_outputs(service)
 

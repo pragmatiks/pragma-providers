@@ -26,11 +26,29 @@ from lightkube.models.core_v1 import (
 from lightkube.models.meta_v1 import LabelSelector, ObjectMeta
 from lightkube.resources.apps_v1 import StatefulSet as K8sStatefulSet
 from lightkube.resources.core_v1 import Pod
-from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
+from pragma_sdk import (
+    AlreadyExistsError,
+    Config,
+    Field,
+    HealthStatus,
+    ImmutableDependency,
+    ImmutableField,
+    LogEntry,
+    Outputs,
+    Resource,
+)
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
-from kubernetes_provider.objects import FIELD_MANAGER, create_object, delete_object, fetch_object, wait_for_absence
+from kubernetes_provider.objects import (
+    FIELD_MANAGER,
+    build_object_metadata,
+    check_create_conflict,
+    create_object,
+    delete_object,
+    fetch_object,
+    wait_for_absence,
+)
 from kubernetes_provider.resources.config import KubernetesConfig
 from kubernetes_provider.rollout import build_replica_health, wait_for_rollout
 
@@ -218,13 +236,16 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
     Waits for all replicas to reach ready state before reporting success
     (polls every 5s, max 300s).
 
-    Creates the statefulset, refusing one that already exists, and updates it
-    with server-side apply under ``field_manager="pragma-kubernetes"``. Deletes use background cascade
+    Creates the statefulset, marked with this resource's ``pragma.io/resource``
+    annotation; an existing statefulset carrying it is this resource's earlier
+    create and is applied over, any other is refused. Updates use server-side
+    apply under ``field_manager="pragma-kubernetes"``, forcing conflicts. Deletes use background cascade
     to clean up owned pods, and the cluster then deletes the PersistentVolumeClaims
     created from ``volume_claim_templates``, with their data.
 
     Lifecycle:
-        - on_create: Create statefulset, refusing an existing one, wait for ready
+        - on_create: Create statefulset (apply over this resource's earlier create,
+          refuse any other existing statefulset), wait for ready
         - on_observe: Look up the statefulset by name and namespace
         - on_update: Apply updated statefulset, wait for ready
         - on_delete: Delete statefulset with background cascade and wait until it is gone
@@ -359,10 +380,7 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
             ]
 
         return K8sStatefulSet(
-            metadata=ObjectMeta(
-                name=self.name,
-                namespace=cast(str, self.config.namespace),
-            ),
+            metadata=build_object_metadata(self.id, self.name, cast(str, self.config.namespace)),
             spec=spec,
         )
 
@@ -395,15 +413,26 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
             StatefulSetOutputs with statefulset details.
 
         Raises:
-            AlreadyExistsError: If the namespace already holds a statefulset with this name.
+            AlreadyExistsError: If the namespace holds a statefulset of this name that this resource
+                did not create.
+            RuntimeError: If this resource's earlier statefulset is being deleted.
             TimeoutError: If the rollout does not complete within the rollout timeout.
         """
+        desired = self._build_statefulset()
+
         async with self._get_client() as client:
-            await create_object(client, self._build_statefulset())
+            try:
+                await create_object(client, desired)
+            except AlreadyExistsError as error:
+                await check_create_conflict(client, desired, self.id, error)
+            else:
+                statefulset = await wait_for_rollout(
+                    client, K8sStatefulSet, self.name, cast(str, self.config.namespace)
+                )
 
-            statefulset = await wait_for_rollout(client, K8sStatefulSet, self.name, cast(str, self.config.namespace))
+                return self.build_outputs(statefulset)
 
-        return self.build_outputs(statefulset)
+        return await self.on_update(None)
 
     async def on_observe(self) -> StatefulSetOutputs | None:
         """Look up the Kubernetes StatefulSet named after this resource.
@@ -432,7 +461,7 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
             TimeoutError: If the rollout does not complete within the rollout timeout.
         """
         async with self._get_client() as client:
-            await client.apply(self._build_statefulset(), field_manager=FIELD_MANAGER)
+            await client.apply(self._build_statefulset(), field_manager=FIELD_MANAGER, force=True)
 
             statefulset = await wait_for_rollout(client, K8sStatefulSet, self.name, cast(str, self.config.namespace))
 
