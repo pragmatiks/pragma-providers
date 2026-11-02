@@ -14,7 +14,7 @@ from lightkube.resources.core_v1 import Service as K8sService
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import BaseModel
 
-from kubernetes_provider.objects import delete_object, fetch_object, wait_for_absence
+from kubernetes_provider.objects import FIELD_MANAGER, create_object, delete_object, fetch_object, wait_for_absence
 from kubernetes_provider.resources.config import KubernetesConfig
 
 
@@ -84,11 +84,11 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
     checks verify both the Service existence and the presence of backend
     endpoints.
 
-    Uses server-side apply with ``field_manager="pragma-kubernetes"`` for
-    idempotent operations.
+    Creates the service, refusing one that already exists, and updates it with
+    server-side apply under ``field_manager="pragma-kubernetes"``.
 
     Lifecycle:
-        - on_create: Apply service configuration
+        - on_create: Create the service, refusing an existing one
         - on_observe: Look up the service by name and namespace
         - on_update: Apply updated service configuration
         - on_delete: Delete the service and wait until it is gone (idempotent)
@@ -169,15 +169,16 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
         )
 
     async def on_create(self) -> ServiceOutputs:
-        """Create or update Kubernetes Service.
-
-        Idempotent: Uses apply() which handles both create and update.
+        """Create the Kubernetes Service.
 
         Returns:
             ServiceOutputs with service details.
+
+        Raises:
+            AlreadyExistsError: If the namespace already holds a service with this name.
         """
         async with self._get_client() as client:
-            service = await client.apply(self._build_service(), field_manager="pragma-kubernetes")
+            service = await create_object(client, self._build_service())
 
         return self.build_outputs(service)
 
@@ -220,7 +221,10 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             )
             raise ValueError(message)
 
-        return await self.on_create()
+        async with self._get_client() as client:
+            service = await client.apply(self._build_service(), field_manager=FIELD_MANAGER)
+
+        return self.build_outputs(service)
 
     async def on_delete(self) -> None:
         """Delete Kubernetes Service and wait until it is gone.

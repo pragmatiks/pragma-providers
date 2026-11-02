@@ -30,7 +30,7 @@ from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, Immutab
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
-from kubernetes_provider.objects import delete_object, fetch_object, wait_for_absence
+from kubernetes_provider.objects import FIELD_MANAGER, create_object, delete_object, fetch_object, wait_for_absence
 from kubernetes_provider.resources.config import KubernetesConfig
 from kubernetes_provider.rollout import build_replica_health, wait_for_rollout
 
@@ -218,13 +218,13 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
     Waits for all replicas to reach ready state before reporting success
     (polls every 5s, max 300s).
 
-    Uses server-side apply with ``field_manager="pragma-kubernetes"`` for
-    idempotent create and update operations. Deletes use background cascade
+    Creates the statefulset, refusing one that already exists, and updates it
+    with server-side apply under ``field_manager="pragma-kubernetes"``. Deletes use background cascade
     to clean up owned pods, and the cluster then deletes the PersistentVolumeClaims
     created from ``volume_claim_templates``, with their data.
 
     Lifecycle:
-        - on_create: Apply statefulset, wait for ready
+        - on_create: Create statefulset, refusing an existing one, wait for ready
         - on_observe: Look up the statefulset by name and namespace
         - on_update: Apply updated statefulset, wait for ready
         - on_delete: Delete statefulset with background cascade and wait until it is gone
@@ -388,16 +388,15 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
     async def on_create(self) -> StatefulSetOutputs:
         """Create Kubernetes StatefulSet and wait for ready.
 
-        Idempotent: Uses apply() which handles both create and update.
-
         Returns:
             StatefulSetOutputs with statefulset details.
 
         Raises:
+            AlreadyExistsError: If the namespace already holds a statefulset with this name.
             TimeoutError: If the rollout does not complete within the rollout timeout.
         """
         async with self._get_client() as client:
-            await client.apply(self._build_statefulset(), field_manager="pragma-kubernetes")
+            await create_object(client, self._build_statefulset())
 
             statefulset = await wait_for_rollout(client, K8sStatefulSet, self.name, self.config.namespace)
 
@@ -425,8 +424,16 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
 
         Returns:
             StatefulSetOutputs with updated statefulset details.
+
+        Raises:
+            TimeoutError: If the rollout does not complete within the rollout timeout.
         """
-        return await self.on_create()
+        async with self._get_client() as client:
+            await client.apply(self._build_statefulset(), field_manager=FIELD_MANAGER)
+
+            statefulset = await wait_for_rollout(client, K8sStatefulSet, self.name, self.config.namespace)
+
+        return self.build_outputs(statefulset)
 
     async def on_delete(self) -> None:
         """Delete Kubernetes StatefulSet with background cascade and wait until it is gone.

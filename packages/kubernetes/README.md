@@ -2,7 +2,7 @@
 
 Generic Kubernetes resource management for [Pragmatiks](https://pragmatiks.io) using [lightkube](https://github.com/gtsystem/lightkube).
 
-Declaratively manage Kubernetes workloads, networking, configuration, and cluster-scoped resources. Workload resources authenticate through a shared `kubernetes/config` resource and use server-side apply for idempotent operations.
+Declaratively manage Kubernetes workloads, networking, configuration, and cluster-scoped resources. Workload resources authenticate through a shared `kubernetes/config` resource. Creating a resource refuses an object that already exists in the cluster instead of adopting it; updates use server-side apply.
 
 ## Prerequisites
 
