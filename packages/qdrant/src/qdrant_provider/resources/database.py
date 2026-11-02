@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import secrets
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import cast
+from typing import Literal, NamedTuple, cast
 
 from kubernetes_provider import (
     KubernetesConfig,
+    MarkerMatch,
     Service,
     ServiceConfig,
     StatefulSet,
     StatefulSetConfig,
+    fetch_object,
+    match_resource_marker,
 )
 from kubernetes_provider.resources.service import PortConfig
 from kubernetes_provider.resources.statefulset import (
@@ -28,6 +32,7 @@ from kubernetes_provider.resources.statefulset import (
     VolumeMountConfig,
 )
 from lightkube import ApiError
+from lightkube.resources.apps_v1 import StatefulSet as K8sStatefulSet
 from lightkube.resources.core_v1 import Service as K8sService
 from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
 from pydantic import BaseModel, model_validator
@@ -36,6 +41,23 @@ from pydantic import Field as PydanticField
 
 LOAD_BALANCER_POLL_INTERVAL_SECONDS = 5
 OPERATION_BUDGET_SECONDS = 1140
+API_KEY_ENVIRONMENT_VARIABLE = "QDRANT__SERVICE__API_KEY"
+
+logger = logging.getLogger(__name__)
+
+
+class LiveApiKey(NamedTuple):
+    """The API key read back from a database's live StatefulSet.
+
+    Attributes:
+        key: The key the live StatefulSet passes to Qdrant, or ``None`` when none counts.
+        reason: Why ``key`` is ``None``: ``absent`` (no StatefulSet of that name), ``unmarked`` or
+            ``other_resource`` (its resource marker does not name this database's StatefulSet
+            child), or ``no_key`` (it passes no key); ``None`` when ``key`` is set.
+    """
+
+    key: str | None
+    reason: MarkerMatch | Literal["no_key"] | None
 
 
 class StorageConfig(BaseModel):
@@ -74,7 +96,8 @@ class DatabaseConfig(Config):
         storage: Persistent storage configuration.
         resources: CPU and memory limits.
         api_key: API key for Qdrant authentication. If provided, used directly.
-        generate_api_key: If True and api_key is None, generates a secure 32-char key.
+        generate_api_key: If True and api_key is None, generates a secure 32-char key once and
+            keeps the key the live StatefulSet already carries.
     """
 
     config: ImmutableDependency[KubernetesConfig]
@@ -128,32 +151,79 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         - on_create: Create child resources, wait for ready
         - on_update: Update child resources
         - on_delete: Delete child resources and wait until each is gone
+
+    With ``generate_api_key``, every run reads the key back from the live StatefulSet and
+    generates one only when it carries none, so a rerun that finds the StatefulSet keeps the key
+    and does not roll the pods; a rerun that finds no StatefulSet yet generates a new key and rolls
+    the pods once more.
     """
 
     computed = True
 
-    _resolved_api_key: str | None = None
+    async def read_live_api_key(self) -> LiveApiKey:
+        """Read the API key this database's live StatefulSet passes to Qdrant.
 
-    def _resolve_api_key(self) -> str | None:
-        """Resolve the API key from config.
+        Only a StatefulSet carrying this database's StatefulSet child's resource marker counts,
+        so a same-named StatefulSet of another resource never lends its key.
 
         Returns:
-            - The provided api_key if set
-            - A generated 32-char hex key if generate_api_key is True
-            - None otherwise
+            The key, or no key with the reason none counts.
+
+        Raises:
+            ApiError: If reading the StatefulSet fails for any reason other than not found.
         """
-        if self._resolved_api_key is not None:
-            return self._resolved_api_key
+        async with self._get_client() as client:
+            live = await fetch_object(client, K8sStatefulSet, self._statefulset_name(), self._namespace())
 
+        if live is None:
+            return LiveApiKey(None, MarkerMatch.ABSENT)
+
+        annotations = live.metadata.annotations if live.metadata else None
+        match = match_resource_marker(annotations, self._build_statefulset(None).id)
+
+        if match is not MarkerMatch.OWN:
+            return LiveApiKey(None, match)
+
+        template_spec = live.spec.template.spec if live.spec else None
+
+        for container in template_spec.containers if template_spec else []:
+            for variable in container.env or []:
+                if variable.name == API_KEY_ENVIRONMENT_VARIABLE and variable.value:
+                    return LiveApiKey(variable.value, None)
+
+        return LiveApiKey(None, "no_key")
+
+    async def resolve_api_key(self) -> str | None:
+        """Resolve the API key the database runs with.
+
+        Returns:
+            ``api_key`` when set; with ``generate_api_key``, the key the live StatefulSet already
+            carries, or a new 32-character hex key when it carries none, logged as
+            ``qdrant_api_key_generated`` with the reason (never the key); ``None`` otherwise.
+
+        Raises:
+            ApiError: If reading the live StatefulSet fails for any reason other than not found.
+        """
         if self.config.api_key is not None:
-            self._resolved_api_key = cast(str, self.config.api_key)
-            return self._resolved_api_key
+            return cast(str, self.config.api_key)
 
-        if self.config.generate_api_key:
-            self._resolved_api_key = secrets.token_hex(16)
-            return self._resolved_api_key
+        if not self.config.generate_api_key:
+            return None
 
-        return None
+        live_api_key = await self.read_live_api_key()
+
+        if live_api_key.key is not None:
+            return live_api_key.key
+
+        logger.warning(
+            "qdrant_api_key_generated resource=%s statefulset=%s/%s reason=%s",
+            self.id,
+            self._namespace(),
+            self._statefulset_name(),
+            live_api_key.reason,
+        )
+
+        return secrets.token_hex(16)
 
     def _headless_service_name(self) -> str:
         """Get headless service name for pod DNS.
@@ -308,8 +378,11 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             config=config,
         )
 
-    def _build_statefulset(self) -> StatefulSet:
+    def _build_statefulset(self, api_key: str | None) -> StatefulSet:
         """Build StatefulSet for Qdrant pods.
+
+        Args:
+            api_key: Key Qdrant requires from clients, or ``None`` for none.
 
         Returns:
             Configured StatefulSet resource.
@@ -335,10 +408,9 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         ]
 
         env_vars = None
-        api_key = self._resolve_api_key()
         if api_key:
             env_vars = [
-                EnvVarConfig(name="QDRANT__SERVICE__API_KEY", value=api_key),
+                EnvVarConfig(name=API_KEY_ENVIRONMENT_VARIABLE, value=api_key),
             ]
 
         container = ContainerConfig(
@@ -385,11 +457,12 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             config=config,
         )
 
-    async def fetch_outputs(self, deadline: float) -> DatabaseOutputs:
+    async def fetch_outputs(self, deadline: float, api_key: str | None) -> DatabaseOutputs:
         """Wait for the client Service's LoadBalancer address and return the outputs.
 
         Args:
             deadline: Time on the ``time.monotonic`` clock by which the address must be assigned.
+            api_key: Key the database runs with, reported in the outputs.
 
         Returns:
             DatabaseOutputs with external URLs and API key.
@@ -405,7 +478,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         return DatabaseOutputs(
             url=url,
             grpc_url=grpc_url,
-            api_key=self._resolve_api_key(),
+            api_key=api_key,
         )
 
     def is_statefulset_changed(self, previous_config: DatabaseConfig) -> bool:
@@ -415,11 +488,8 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             previous_config: The configuration last applied.
 
         Returns:
-            ``True`` when a StatefulSet setting changed or the API key is generated anew on every apply.
+            ``True`` when a StatefulSet setting changed.
         """
-        if self.config.generate_api_key:
-            return True
-
         return previous_config.model_dump(exclude={"config"}) != self.config.model_dump(exclude={"config"})
 
     async def apply_child(self, child: Service | StatefulSet) -> None:
@@ -462,12 +532,13 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
                 message names what was waited for.
         """
         deadline = time.monotonic() + OPERATION_BUDGET_SECONDS
+        api_key = await self.resolve_api_key()
 
-        for child in (self._build_headless_service(), self._build_statefulset(), self._build_client_service()):
+        for child in (self._build_headless_service(), self._build_statefulset(api_key), self._build_client_service()):
             await self.apply_child(child)
             await self.wait_for_child(child, deadline)
 
-        return await self.fetch_outputs(deadline)
+        return await self.fetch_outputs(deadline, api_key)
 
     async def on_update(self, previous_config: DatabaseConfig | None) -> DatabaseOutputs:
         """Reapply every child resource with the desired configuration.
@@ -490,7 +561,8 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             return await self.on_create()
 
         deadline = time.monotonic() + OPERATION_BUDGET_SECONDS
-        statefulset = self._build_statefulset()
+        api_key = await self.resolve_api_key()
+        statefulset = self._build_statefulset(api_key)
 
         await self.apply_child(self._build_headless_service())
         await self.apply_child(statefulset)
@@ -500,7 +572,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
         await self.apply_child(self._build_client_service())
 
-        return await self.fetch_outputs(deadline)
+        return await self.fetch_outputs(deadline, api_key)
 
     async def on_delete(self) -> None:
         """Delete the client Service, the StatefulSet and the headless Service, and wait until each is gone.
@@ -512,7 +584,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         client_svc = self._build_client_service()
         await client_svc.on_delete()
 
-        statefulset = self._build_statefulset()
+        statefulset = self._build_statefulset(None)
         await statefulset.on_delete()
 
         headless_svc = self._build_headless_service()
@@ -524,7 +596,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         Returns:
             HealthStatus indicating healthy/degraded/unhealthy.
         """
-        statefulset = self._build_statefulset()
+        statefulset = self._build_statefulset(None)
 
         return await statefulset.health()
 
@@ -544,7 +616,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         Yields:
             LogEntry for each log line from Qdrant pods.
         """
-        statefulset = self._build_statefulset()
+        statefulset = self._build_statefulset(None)
 
         async for entry in statefulset.logs(since=since, tail=tail):
             yield entry

@@ -35,7 +35,7 @@ Deploys a Qdrant vector database to a Kubernetes cluster as a StatefulSet with p
 | `replicas` | int | no | yes | `1` | Number of Qdrant StatefulSet pods |
 | `image` | string | no | yes | `"qdrant/qdrant:latest"` | Qdrant Docker image |
 | `api_key` | string | no | yes | -- | Explicit API key for authentication (mutually exclusive with `generate_api_key`) |
-| `generate_api_key` | bool | no | yes | `false` | Generate a secure 32-character hex API key |
+| `generate_api_key` | bool | no | yes | `false` | Generate a secure 32-character hex API key once; later runs keep the key the running database already has |
 | `storage` | object | no | yes | -- | Persistent volume configuration (see below) |
 | `resources` | object | no | yes | -- | CPU and memory limits (see below) |
 
@@ -142,7 +142,7 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the collection if it does not already exist. Idempotent -- if the collection exists, leaves it as is.
+- Create: Creates the collection with this resource's ID under the `pragma_resource` key of its collection metadata. A collection carrying this resource's ID is its own earlier create and is brought up to date as Update does; any other existing collection fails the resource and is left as is. Needs Qdrant server 1.16 or later, which stores collection metadata; an older server fails the create before anything is written.
 - Observe: Reports the collection present when the server has a collection with the configured name.
 - Update: Applies `on_disk` to the live collection in place, keeping its vectors. Fails if the live vector size or distance differs from the config. Vector configuration, collection name and server URL changes are not allowed; changing them requires delete and recreate.
 - Delete: Deletes the collection and all its vectors. Idempotent -- succeeds if the collection does not exist.
