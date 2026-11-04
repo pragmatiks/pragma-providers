@@ -6,7 +6,7 @@ keywords = ["vector-database", "search", "ai", "embeddings"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk>=22.0.1",
+    "pragmatiks-sdk>=23.0.0",
     "pragmatiks-kubernetes>=2.2.11",
     "qdrant-client>=1.16.0",
 ]
