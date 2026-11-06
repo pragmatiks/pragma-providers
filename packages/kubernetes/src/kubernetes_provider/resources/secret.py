@@ -28,6 +28,7 @@ from kubernetes_provider.objects import (
     create_object,
     delete_object,
     fetch_object,
+    fetch_own_object,
     wait_for_absence,
 )
 from kubernetes_provider.resources.config import KubernetesConfig
@@ -83,7 +84,8 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
     Lifecycle:
         - on_create: Create the secret; apply over this resource's earlier
           create, refuse any other existing secret
-        - on_observe: Look up the secret by name and namespace
+        - on_observe: Look up the secret by name and namespace; refuse a secret without this
+          resource's annotation, as on_create refuses it
         - on_update: Apply updated secret configuration
         - on_delete: Delete the secret and wait until it is gone (idempotent)
     """
@@ -183,9 +185,13 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
         Returns:
             SecretOutputs, or ``None`` if the secret does not exist.
+
+        Raises:
+            AlreadyExistsError: If the secret carries no ``pragma.io/resource`` annotation naming this
+                resource.
         """
         async with self._get_client() as client:
-            secret = await fetch_object(client, K8sSecret, self.name, cast(str, self.config.namespace))
+            secret = await fetch_own_object(client, K8sSecret, self.id, self.name, cast(str, self.config.namespace))
 
         if secret is None:
             return None

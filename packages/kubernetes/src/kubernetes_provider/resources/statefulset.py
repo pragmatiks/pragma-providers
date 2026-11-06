@@ -47,6 +47,7 @@ from kubernetes_provider.objects import (
     create_object,
     delete_object,
     fetch_object,
+    fetch_own_object,
     wait_for_absence,
 )
 from kubernetes_provider.resources.config import KubernetesConfig
@@ -246,7 +247,8 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
     Lifecycle:
         - on_create: Create statefulset (apply over this resource's earlier create,
           refuse any other existing statefulset), wait for ready
-        - on_observe: Look up the statefulset by name and namespace
+        - on_observe: Look up the statefulset by name and namespace; refuse a statefulset without this
+          resource's annotation, as on_create refuses it
         - on_update: Apply updated statefulset, wait for ready
         - on_delete: Delete statefulset with background cascade and wait until it is gone
     """
@@ -439,9 +441,15 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
 
         Returns:
             StatefulSetOutputs, or ``None`` if the statefulset does not exist.
+
+        Raises:
+            AlreadyExistsError: If the statefulset carries no ``pragma.io/resource`` annotation naming this
+                resource.
         """
         async with self._get_client() as client:
-            statefulset = await fetch_object(client, K8sStatefulSet, self.name, cast(str, self.config.namespace))
+            statefulset = await fetch_own_object(
+                client, K8sStatefulSet, self.id, self.name, cast(str, self.config.namespace)
+            )
 
         if statefulset is None:
             return None

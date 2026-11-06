@@ -79,6 +79,38 @@ async def create_object[ObjectT](client: AsyncClient, kubernetes_object: ObjectT
         raise
 
 
+def format_location(name: str, namespace: str | None) -> str:
+    """Format where an object lives as messages name it.
+
+    Args:
+        name: Object name.
+        namespace: Namespace of a namespaced object; ``None`` for cluster-scoped objects.
+
+    Returns:
+        ``namespace/name`` for a namespaced object, ``name`` otherwise.
+    """
+    return f"{namespace}/{name}" if namespace else name
+
+
+def build_conflict_message(kind: str, name: str, namespace: str | None, match: MarkerMatch) -> str:
+    """Build the reason an object at a resource's identity is refused as not this resource's.
+
+    Args:
+        kind: Kubernetes kind of the object, such as ``ConfigMap``.
+        name: Object name.
+        namespace: Namespace of a namespaced object; ``None`` for cluster-scoped objects.
+        match: How the object's resource marker compares with the resource; ``UNMARKED`` or
+            ``OTHER_RESOURCE``.
+
+    Returns:
+        The message both a create's conflict and ``on_observe`` raise ``AlreadyExistsError`` with.
+    """
+    return (
+        f"{kind} {format_location(name, namespace)} already exists and this resource did not create it: "
+        f"{MARKER_MISMATCH_REASONS[match]}"
+    )
+
+
 async def check_create_conflict(
     client: AsyncClient,
     kubernetes_object: object,
@@ -105,7 +137,7 @@ async def check_create_conflict(
     """
     metadata = cast(Any, kubernetes_object).metadata
     kind = type(kubernetes_object).__name__
-    location = f"{metadata.namespace}/{metadata.name}" if metadata.namespace else metadata.name
+    location = format_location(metadata.name, metadata.namespace)
     existing = await fetch_object(client, type(kubernetes_object), metadata.name, metadata.namespace)
 
     if existing is None:
@@ -131,10 +163,7 @@ async def check_create_conflict(
             match,
             (existing_metadata.annotations or {}).get(RESOURCE_MARKER_KEY),
         )
-        message = (
-            f"{kind} {location} already exists and this resource did not create it: {MARKER_MISMATCH_REASONS[match]}"
-        )
-        raise AlreadyExistsError(message) from error
+        raise AlreadyExistsError(build_conflict_message(kind, metadata.name, metadata.namespace, match)) from error
 
     if existing_metadata.deletionTimestamp is not None:
         logger.warning(
@@ -190,6 +219,48 @@ async def fetch_object[ObjectT](
         raise
 
 
+async def fetch_own_object[ObjectT](
+    client: AsyncClient,
+    object_type: type[ObjectT],
+    resource_id: str,
+    name: str,
+    namespace: str | None = None,
+) -> ObjectT | None:
+    """Fetch the object a resource created at its name, refusing any other object there.
+
+    This is the lookup every ``on_observe`` makes: an object whose ``pragma.io/resource``
+    annotation names ``resource_id`` is returned, also while its deletion is in progress; any
+    other object is refused as ``check_create_conflict`` refuses it, so Pragmatiks never writes
+    or deletes it.
+
+    Args:
+        client: Lightkube client for the target cluster.
+        object_type: Lightkube resource type of the object.
+        resource_id: Canonical ID of the Pragmatiks resource observing the object.
+        name: Object name.
+        namespace: Namespace of a namespaced object; ``None`` for cluster-scoped objects.
+
+    Returns:
+        The object, or ``None`` when the cluster has no object with that name.
+
+    Raises:
+        AlreadyExistsError: If the object carries no ``pragma.io/resource`` annotation naming
+            ``resource_id``; the message says which.
+        ApiError: If the request fails for any reason other than not found.
+    """
+    existing = await fetch_object(client, object_type, name, namespace)
+
+    if existing is None:
+        return None
+
+    match = match_resource_marker(cast(Any, existing).metadata.annotations, resource_id)
+
+    if match is not MarkerMatch.OWN:
+        raise AlreadyExistsError(build_conflict_message(object_type.__name__, name, namespace, match))
+
+    return existing
+
+
 async def delete_object(
     client: AsyncClient,
     object_type: type,
@@ -238,7 +309,7 @@ async def wait_for_absence(
         TimeoutError: If the object is still present after ``timeout_seconds``; the message
             names its deletion timestamp and the finalizers holding it.
     """
-    location = f"{namespace}/{name}" if namespace else name
+    location = format_location(name, namespace)
 
     def describe_timeout(remaining: object) -> str:
         metadata = cast(Any, remaining).metadata
