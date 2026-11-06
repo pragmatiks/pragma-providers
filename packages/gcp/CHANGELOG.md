@@ -1,3 +1,16 @@
+## gcp-v7.3.0 (2026-11-06)
+
+### Feat
+
+- **gcp**: refuse at observe a secret, cluster or instance this resource did not create (PRA-598)
+
+### Fix
+
+- **gcp**: state only what the recognized-conflict log does (PRA-598)
+- **gcp**: recognize create conflicts and observes through one marker check (PRA-598)
+- **deps**: update pragmatiks-sdk to v25.1.0 (#158)
+- **deps**: update pragmatiks-sdk to v25.0.0 (#156)
+
 ## gcp-v7.2.15 (2026-11-05)
 
 ### Fix
