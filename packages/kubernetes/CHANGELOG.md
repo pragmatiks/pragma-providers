@@ -1,3 +1,9 @@
+## kubernetes-v2.4.0 (2026-11-06)
+
+### Feat
+
+- **kubernetes**: report a LoadBalancer Service's address
+
 ## kubernetes-v2.3.0 (2026-11-06)
 
 ### Feat
