@@ -35,7 +35,7 @@ Deploys a Qdrant vector database to a Kubernetes cluster as a StatefulSet with p
 | `replicas` | int | no | yes | `1` | Number of Qdrant StatefulSet pods |
 | `image` | string | no | yes | `"qdrant/qdrant:latest"` | Qdrant Docker image |
 | `api_key` | string | no | yes | -- | Explicit API key for authentication (mutually exclusive with `generate_api_key`) |
-| `generate_api_key` | bool | no | yes | `false` | Generate a secure 32-character hex API key once; later runs keep the key the running database already has |
+| `generate_api_key` | bool | no | yes | `false` | Generate a secure 32-character hex API key once; later runs keep the key the database's StatefulSet already carries |
 | `storage` | object | no | yes | -- | Persistent volume configuration (see below) |
 | `resources` | object | no | yes | -- | CPU and memory limits (see below) |
 
@@ -76,9 +76,9 @@ resources:
 ```
 
 **Behavior:**
-- Create: Deploys headless Service, StatefulSet, and LoadBalancer Service sequentially. Waits for each to be ready and for the LoadBalancer to receive an external IP, up to 19 minutes in total.
-- Update: Reapplies all child Kubernetes resources with the full configuration, waiting for the StatefulSet only when its settings changed, then reapplies the LoadBalancer Service. The `config` dependency is immutable; changing it requires delete and recreate.
-- Delete: Explicitly deletes child Kubernetes resources (LoadBalancer Service, StatefulSet, headless Service). The stored vectors live on the StatefulSet's PersistentVolumeClaims; whether they are deleted with the StatefulSet follows the kubernetes provider's StatefulSet.
+- Create: Applies the headless Service, the StatefulSet and the LoadBalancer Service as resources the database owns. The database waits until all three are ready, the LoadBalancer Service once it has its external address, then reports its outputs.
+- Update: Reapplies all three owned resources with the full configuration and waits until all are ready; resources whose configuration did not change stay ready. The `config` dependency is immutable; changing it requires delete and recreate.
+- Delete: The owned resources (LoadBalancer Service, StatefulSet, headless Service) are deleted before the database. The stored vectors live on the StatefulSet's PersistentVolumeClaims; whether they are deleted with the StatefulSet follows the kubernetes provider's StatefulSet.
 - Health: Delegates to the underlying StatefulSet health check.
 - Logs: Streams pod logs from the underlying StatefulSet.
 

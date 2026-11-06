@@ -2,24 +2,18 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import secrets
-import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Literal, NamedTuple, cast
+from typing import cast
 
 from kubernetes_provider import (
     KubernetesConfig,
-    MarkerMatch,
     Service,
     ServiceConfig,
     StatefulSet,
     StatefulSetConfig,
-    fetch_object,
-    match_resource_marker,
 )
 from kubernetes_provider.resources.service import PortConfig
 from kubernetes_provider.resources.statefulset import (
@@ -31,33 +25,42 @@ from kubernetes_provider.resources.statefulset import (
     VolumeClaimTemplateConfig,
     VolumeMountConfig,
 )
-from lightkube import ApiError
-from lightkube.resources.apps_v1 import StatefulSet as K8sStatefulSet
-from lightkube.resources.core_v1 import Service as K8sService
-from pragma_sdk import Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
+from pragma_sdk import (
+    ChildrenPending,
+    Config,
+    Field,
+    HealthStatus,
+    ImmutableDependency,
+    LifecycleState,
+    LogEntry,
+    Outputs,
+    Resource,
+)
 from pydantic import BaseModel, model_validator
 from pydantic import Field as PydanticField
 
 
-LOAD_BALANCER_POLL_INTERVAL_SECONDS = 5
-OPERATION_BUDGET_SECONDS = 1140
 API_KEY_ENVIRONMENT_VARIABLE = "QDRANT__SERVICE__API_KEY"
 
 logger = logging.getLogger(__name__)
 
 
-class LiveApiKey(NamedTuple):
-    """The API key read back from a database's live StatefulSet.
+def extract_api_key(statefulset: StatefulSet) -> str | None:
+    """Read the API key a StatefulSet's containers pass to Qdrant.
 
-    Attributes:
-        key: The key the live StatefulSet passes to Qdrant, or ``None`` when none counts.
-        reason: Why ``key`` is ``None``: ``absent`` (no StatefulSet of that name), ``unmarked`` or
-            ``other_resource`` (its resource marker does not name this database's StatefulSet
-            child), or ``no_key`` (it passes no key); ``None`` when ``key`` is set.
+    Args:
+        statefulset: The StatefulSet child as the platform records it.
+
+    Returns:
+        The first non-empty ``QDRANT__SERVICE__API_KEY`` value of its containers, or ``None``
+        when none passes one.
     """
+    for container in cast(list[ContainerConfig], statefulset.config.containers):
+        for variable in container.env or []:
+            if variable.name == API_KEY_ENVIRONMENT_VARIABLE and variable.value:
+                return variable.value
 
-    key: str | None
-    reason: MarkerMatch | Literal["no_key"] | None
+    return None
 
 
 class StorageConfig(BaseModel):
@@ -97,7 +100,7 @@ class DatabaseConfig(Config):
         resources: CPU and memory limits.
         api_key: API key for Qdrant authentication. If provided, used directly.
         generate_api_key: If True and api_key is None, generates a secure 32-char key once and
-            keeps the key the live StatefulSet already carries.
+            keeps the key its StatefulSet child already carries.
     """
 
     config: ImmutableDependency[KubernetesConfig]
@@ -140,69 +143,36 @@ class DatabaseOutputs(Outputs):
 
 
 class Database(Resource[DatabaseConfig, DatabaseOutputs]):
-    """Qdrant database deployed to Kubernetes via child resources.
+    """Qdrant database deployed to Kubernetes through owned child resources.
 
-    Creates child resources:
+    Applies three child resources through the platform, which records this database as their owner:
     - Headless Service for pod DNS
     - StatefulSet with persistent storage
-    - Client Service for cluster access
+    - LoadBalancer client Service for external access
 
     Lifecycle:
-        - on_create: Create child resources, wait for ready
-        - on_update: Update child resources
-        - on_delete: Delete child resources and wait until each is gone
+        - on_create, on_update: ``converge``: apply the three children, read them, and return
+          ``ChildrenPending()`` until all three are READY, then the outputs
+        - on_delete: Do nothing; the owned children are deleted with this database
 
-    With ``generate_api_key``, every run reads the key back from the live StatefulSet and
-    generates one only when it carries none, so a rerun that finds the StatefulSet keeps the key
-    and does not roll the pods; a rerun that finds no StatefulSet yet generates a new key and rolls
-    the pods once more.
+    With ``generate_api_key``, the key is the one the StatefulSet child already carries; a key is
+    generated only when there is no such child or it carries none, so a rerun keeps the key and
+    does not roll the pods. The outputs report the key the StatefulSet child carries when all
+    three children are READY.
     """
 
     computed = True
-
-    async def read_live_api_key(self) -> LiveApiKey:
-        """Read the API key this database's live StatefulSet passes to Qdrant.
-
-        Only a StatefulSet carrying this database's StatefulSet child's resource marker counts,
-        so a same-named StatefulSet of another resource never lends its key.
-
-        Returns:
-            The key, or no key with the reason none counts.
-
-        Raises:
-            ApiError: If reading the StatefulSet fails for any reason other than not found.
-        """
-        async with self._get_client() as client:
-            live = await fetch_object(client, K8sStatefulSet, self._statefulset_name(), self._namespace())
-
-        if live is None:
-            return LiveApiKey(None, MarkerMatch.ABSENT)
-
-        annotations = live.metadata.annotations if live.metadata else None
-        match = match_resource_marker(annotations, self._build_statefulset(None).id)
-
-        if match is not MarkerMatch.OWN:
-            return LiveApiKey(None, match)
-
-        template_spec = live.spec.template.spec if live.spec else None
-
-        for container in template_spec.containers if template_spec else []:
-            for variable in container.env or []:
-                if variable.name == API_KEY_ENVIRONMENT_VARIABLE and variable.value:
-                    return LiveApiKey(variable.value, None)
-
-        return LiveApiKey(None, "no_key")
 
     async def resolve_api_key(self) -> str | None:
         """Resolve the API key the database runs with.
 
         Returns:
-            ``api_key`` when set; with ``generate_api_key``, the key the live StatefulSet already
-            carries, or a new 32-character hex key when it carries none, logged as
-            ``qdrant_api_key_generated`` with the reason (never the key); ``None`` otherwise.
+            ``api_key`` when set; with ``generate_api_key``, the key its StatefulSet child already
+            carries, or a new 32-character hex key when there is no such child or it carries
+            none; ``None`` otherwise.
 
         Raises:
-            ApiError: If reading the live StatefulSet fails for any reason other than not found.
+            CallbackRefusedError: If the platform refuses the read of the StatefulSet child.
         """
         if self.config.api_key is not None:
             return cast(str, self.config.api_key)
@@ -210,17 +180,17 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         if not self.config.generate_api_key:
             return None
 
-        live_api_key = await self.read_live_api_key()
+        recorded = await self._build_statefulset(None).read()
+        recorded_key = extract_api_key(recorded) if recorded is not None else None
 
-        if live_api_key.key is not None:
-            return live_api_key.key
+        if recorded_key is not None:
+            return recorded_key
 
         logger.warning(
-            "qdrant_api_key_generated resource=%s statefulset=%s/%s reason=%s",
+            "qdrant_api_key_generated resource=%s statefulset=%s reason=%s",
             self.id,
-            self._namespace(),
             self._statefulset_name(),
-            live_api_key.reason,
+            "absent" if recorded is None else "no_key",
         )
 
         return secrets.token_hex(16)
@@ -268,69 +238,6 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             "app.kubernetes.io/name": "qdrant",
             "app.kubernetes.io/instance": self.name,
         }
-
-    @asynccontextmanager
-    async def _get_client(self):
-        """Yield lightkube client from the kubernetes config dependency.
-
-        Yields:
-            Lightkube async client, closed on exit.
-        """
-        cluster_config = await self.config.config.resolve()
-
-        async with cluster_config.build_client() as client:
-            yield client
-
-    async def wait_for_load_balancer_address(self, deadline: float) -> str:
-        """Wait for the client Service's LoadBalancer to receive an external address.
-
-        Args:
-            deadline: Time on the ``time.monotonic`` clock by which the address must be assigned.
-
-        Returns:
-            External IP address, or hostname when the load balancer reports no IP.
-
-        Raises:
-            ApiError: If reading the Service fails for any reason other than not found.
-            TimeoutError: If no address is assigned by the deadline; the message names the Service.
-        """
-        namespace = self._namespace()
-        service_name = self._client_service_name()
-
-        async with self._get_client() as client:
-            while True:
-                try:
-                    service = await client.get(K8sService, name=service_name, namespace=namespace)
-                except ApiError as error:
-                    if error.status.code != 404:
-                        raise
-                    service = None
-
-                if service is None:
-                    last_status = "service not found"
-                elif service.status and service.status.loadBalancer and service.status.loadBalancer.ingress:
-                    ingress = service.status.loadBalancer.ingress[0]
-
-                    if ingress.ip:
-                        return ingress.ip
-
-                    if ingress.hostname:
-                        return ingress.hostname
-
-                    last_status = "ingress without ip or hostname"
-                else:
-                    last_status = "no ingress"
-
-                if time.monotonic() >= deadline:
-                    break
-
-                await asyncio.sleep(LOAD_BALANCER_POLL_INTERVAL_SECONDS)
-
-        message = (
-            f"LoadBalancer Service {namespace}/{service_name} did not receive an external address "
-            f"by the operation deadline; last status: {last_status}"
-        )
-        raise TimeoutError(message)
 
     def _build_headless_service(self) -> Service:
         """Build headless service for pod DNS.
@@ -457,138 +364,120 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             config=config,
         )
 
-    async def fetch_outputs(self, deadline: float, api_key: str | None) -> DatabaseOutputs:
-        """Wait for the client Service's LoadBalancer address and return the outputs.
+    def build_outputs(self, recorded_statefulset: StatefulSet, recorded_client_service: Service) -> DatabaseOutputs:
+        """Build the outputs from the READY children as the platform records them.
 
         Args:
-            deadline: Time on the ``time.monotonic`` clock by which the address must be assigned.
-            api_key: Key the database runs with, reported in the outputs.
+            recorded_statefulset: The StatefulSet child as read.
+            recorded_client_service: The client Service child as read.
 
         Returns:
-            DatabaseOutputs with external URLs and API key.
+            DatabaseOutputs with the client Service's external URLs and the StatefulSet's key.
 
         Raises:
-            TimeoutError: If the LoadBalancer gets no external address by the deadline.
+            RuntimeError: If the READY client Service reports no load-balancer address.
         """
-        external_address = await self.wait_for_load_balancer_address(deadline)
+        service_outputs = recorded_client_service.outputs
+        address = service_outputs.load_balancer_address if service_outputs is not None else None
 
-        url = f"http://{external_address}:6333"
-        grpc_url = f"http://{external_address}:6334"
+        if address is None:
+            logger.error(
+                "qdrant_load_balancer_address_missing resource=%s service=%s",
+                self.id,
+                recorded_client_service.name,
+            )
+            message = (
+                f"Resource {self.id}: Service {recorded_client_service.name} is ready but reports no "
+                "load-balancer address"
+            )
+            raise RuntimeError(message)
 
         return DatabaseOutputs(
-            url=url,
-            grpc_url=grpc_url,
-            api_key=api_key,
+            url=f"http://{address}:6333",
+            grpc_url=f"http://{address}:6334",
+            api_key=extract_api_key(recorded_statefulset),
         )
 
-    def is_statefulset_changed(self, previous_config: DatabaseConfig) -> bool:
-        """Tell whether the StatefulSet built from this configuration differs from the previous one.
+    def log_pending_children(self, recorded_children: dict[str, StatefulSet | Service | None]) -> None:
+        """Log each child that is absent or not READY, the reason this pass returns ``ChildrenPending()``.
+
+        A child absent right after its apply is logged at warning, one not READY at info.
 
         Args:
-            previous_config: The configuration last applied.
+            recorded_children: Each child as read, keyed by its resource ID.
+        """
+        for child_id, recorded_child in recorded_children.items():
+            if recorded_child is None:
+                logger.warning("qdrant_children_pending resource=%s child=%s reason=absent", self.id, child_id)
+            elif recorded_child.lifecycle_state != LifecycleState.READY:
+                logger.info(
+                    "qdrant_children_pending resource=%s child=%s reason=not_ready lifecycle_state=%s",
+                    self.id,
+                    child_id,
+                    recorded_child.lifecycle_state,
+                )
+
+    async def converge(self) -> DatabaseOutputs | ChildrenPending:
+        """Apply the three children, then report the outputs once all of them are READY.
 
         Returns:
-            ``True`` when a StatefulSet setting changed.
-        """
-        return previous_config.model_dump(exclude={"config"}) != self.config.model_dump(exclude={"config"})
-
-    async def apply_child(self, child: Service | StatefulSet) -> None:
-        """Apply a child resource owned by this database.
-
-        Args:
-            child: The child resource to apply.
-        """
-        child.set_owner(self)
-        await child.apply()
-
-    async def wait_for_child(self, child: Service | StatefulSet, deadline: float) -> None:
-        """Wait for an applied child resource to become ready by the operation deadline.
-
-        Args:
-            child: The applied child resource.
-            deadline: Time on the ``time.monotonic`` clock by which the child must be ready.
+            DatabaseOutputs when every child reads READY, else ``ChildrenPending()``.
 
         Raises:
-            TimeoutError: If the child is not ready by the deadline; the message names the child.
+            CallbackRefusedError: If the platform refuses an apply or a read of a child.
+            RuntimeError: If the READY client Service reports no load-balancer address.
         """
-        try:
-            await child.wait_ready(timeout=max(deadline - time.monotonic(), 0.0))
-        except TimeoutError as error:
-            message = f"{type(child).__name__} {child.name} did not become ready by the operation deadline"
-            raise TimeoutError(message) from error
-
-    async def on_create(self) -> DatabaseOutputs:
-        """Deploy Qdrant using child Kubernetes resources.
-
-        Creates headless service (for pod DNS), StatefulSet, and client service, waiting for each
-        to be ready and for the LoadBalancer address, all within one ``OPERATION_BUDGET_SECONDS``
-        budget.
-
-        Returns:
-            DatabaseOutputs with external LoadBalancer URLs.
-
-        Raises:
-            TimeoutError: If a child or the LoadBalancer address is not ready within the budget; the
-                message names what was waited for.
-        """
-        deadline = time.monotonic() + OPERATION_BUDGET_SECONDS
         api_key = await self.resolve_api_key()
 
-        for child in (self._build_headless_service(), self._build_statefulset(api_key), self._build_client_service()):
-            await self.apply_child(child)
-            await self.wait_for_child(child, deadline)
+        headless_service = self._build_headless_service()
+        statefulset = self._build_statefulset(api_key)
+        client_service = self._build_client_service()
 
-        return await self.fetch_outputs(deadline, api_key)
+        for child in (headless_service, statefulset, client_service):
+            await child.apply()
 
-    async def on_update(self, previous_config: DatabaseConfig | None) -> DatabaseOutputs:
+        recorded_statefulset = await statefulset.read()
+        recorded_client_service = await client_service.read()
+        recorded_children = {
+            headless_service.id: await headless_service.read(),
+            statefulset.id: recorded_statefulset,
+            client_service.id: recorded_client_service,
+        }
+
+        if any(child is None or child.lifecycle_state != LifecycleState.READY for child in recorded_children.values()):
+            self.log_pending_children(recorded_children)
+
+            return ChildrenPending()
+
+        return self.build_outputs(cast(StatefulSet, recorded_statefulset), cast(Service, recorded_client_service))
+
+    async def on_create(self) -> DatabaseOutputs | ChildrenPending:
+        """Deploy Qdrant through owned child resources.
+
+        Returns:
+            DatabaseOutputs once every child is READY, else ``ChildrenPending()``.
+        """
+        return await self.converge()
+
+    async def on_update(self, previous_config: DatabaseConfig | None) -> DatabaseOutputs | ChildrenPending:
         """Reapply every child resource with the desired configuration.
 
-        Without a previous configuration, behaves as ``on_create``. Otherwise waits only for the
-        StatefulSet, and only when its settings changed, before reapplying the client Service. All
-        waits share one ``OPERATION_BUDGET_SECONDS`` budget.
-
         Args:
-            previous_config: The previous configuration, if any.
+            previous_config: The previous configuration, if any; every pass reapplies all
+                children, so it is not read.
 
         Returns:
-            DatabaseOutputs with external LoadBalancer URLs.
-
-        Raises:
-            TimeoutError: If a waited-for child or the LoadBalancer address is not ready within the
-                budget; the message names what was waited for.
+            DatabaseOutputs once every child is READY, else ``ChildrenPending()``.
         """
-        if previous_config is None:
-            return await self.on_create()
-
-        deadline = time.monotonic() + OPERATION_BUDGET_SECONDS
-        api_key = await self.resolve_api_key()
-        statefulset = self._build_statefulset(api_key)
-
-        await self.apply_child(self._build_headless_service())
-        await self.apply_child(statefulset)
-
-        if self.is_statefulset_changed(previous_config):
-            await self.wait_for_child(statefulset, deadline)
-
-        await self.apply_child(self._build_client_service())
-
-        return await self.fetch_outputs(deadline, api_key)
+        return await self.converge()
 
     async def on_delete(self) -> None:
-        """Delete the client Service, the StatefulSet and the headless Service, and wait until each is gone.
+        """Do nothing; the owned children are deleted with this database.
 
         Note:
             The stored vectors live on the StatefulSet's PersistentVolumeClaims; whether they are
             deleted with the StatefulSet follows the kubernetes provider's StatefulSet.
         """
-        client_svc = self._build_client_service()
-        await client_svc.on_delete()
-
-        statefulset = self._build_statefulset(None)
-        await statefulset.on_delete()
-
-        headless_svc = self._build_headless_service()
-        await headless_svc.on_delete()
 
     async def health(self) -> HealthStatus:
         """Check Qdrant database health via StatefulSet status.
