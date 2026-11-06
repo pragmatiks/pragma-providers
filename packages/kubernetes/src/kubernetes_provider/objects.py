@@ -1,4 +1,10 @@
-"""Creation, lookup and deletion of Kubernetes objects."""
+"""Creation, lookup and deletion of Kubernetes objects.
+
+``on_observe`` and a create's conflict path read the object at a resource's name through
+``fetch_own_object``, which refuses one this resource did not create. ``on_update``,
+``on_delete`` and ``health`` act by name through ``fetch_object`` and the client: the host
+never runs them after an observe answered already-exists.
+"""
 
 from __future__ import annotations
 
@@ -11,9 +17,10 @@ from lightkube.types import CascadeType
 from pragma_sdk import AlreadyExistsError
 
 from kubernetes_provider.marker import (
-    MARKER_MISMATCH_REASONS,
     RESOURCE_MARKER_KEY,
     MarkerMatch,
+    MarkerRefusal,
+    build_conflict_message,
     build_resource_marker,
     match_resource_marker,
 )
@@ -79,8 +86,8 @@ async def create_object[ObjectT](client: AsyncClient, kubernetes_object: ObjectT
         raise
 
 
-def format_location(name: str, namespace: str | None) -> str:
-    """Format where an object lives as messages name it.
+def format_qualified_name(name: str, namespace: str | None) -> str:
+    """Format an object's name qualified by its namespace, as messages name it.
 
     Args:
         name: Object name.
@@ -90,25 +97,6 @@ def format_location(name: str, namespace: str | None) -> str:
         ``namespace/name`` for a namespaced object, ``name`` otherwise.
     """
     return f"{namespace}/{name}" if namespace else name
-
-
-def build_conflict_message(kind: str, name: str, namespace: str | None, match: MarkerMatch) -> str:
-    """Build the reason an object at a resource's identity is refused as not this resource's.
-
-    Args:
-        kind: Kubernetes kind of the object, such as ``ConfigMap``.
-        name: Object name.
-        namespace: Namespace of a namespaced object; ``None`` for cluster-scoped objects.
-        match: How the object's resource marker compares with the resource; ``UNMARKED`` or
-            ``OTHER_RESOURCE``.
-
-    Returns:
-        The message both a create's conflict and ``on_observe`` raise ``AlreadyExistsError`` with.
-    """
-    return (
-        f"{kind} {format_location(name, namespace)} already exists and this resource did not create it: "
-        f"{MARKER_MISMATCH_REASONS[match]}"
-    )
 
 
 async def check_create_conflict(
@@ -137,8 +125,9 @@ async def check_create_conflict(
     """
     metadata = cast(Any, kubernetes_object).metadata
     kind = type(kubernetes_object).__name__
-    location = format_location(metadata.name, metadata.namespace)
-    existing = await fetch_object(client, type(kubernetes_object), metadata.name, metadata.namespace)
+    existing = await fetch_own_object(
+        client, type(kubernetes_object), resource_id, metadata.name, metadata.namespace, MarkerRefusal.CREATE_CONFLICT
+    )
 
     if existing is None:
         logger.warning(
@@ -151,19 +140,6 @@ async def check_create_conflict(
         return
 
     existing_metadata = cast(Any, existing).metadata
-    match = match_resource_marker(existing_metadata.annotations, resource_id)
-
-    if match is not MarkerMatch.OWN:
-        logger.warning(
-            "kubernetes_create_conflict_refused kind=%s namespace=%s name=%s resource=%s reason=%s owner=%s",
-            kind,
-            metadata.namespace,
-            metadata.name,
-            resource_id,
-            match,
-            (existing_metadata.annotations or {}).get(RESOURCE_MARKER_KEY),
-        )
-        raise AlreadyExistsError(build_conflict_message(kind, metadata.name, metadata.namespace, match)) from error
 
     if existing_metadata.deletionTimestamp is not None:
         logger.warning(
@@ -174,8 +150,9 @@ async def check_create_conflict(
             resource_id,
             existing_metadata.deletionTimestamp,
         )
+        qualified_name = format_qualified_name(metadata.name, metadata.namespace)
         message = (
-            f"{kind} {location}, created earlier by this resource, is being deleted since "
+            f"{kind} {qualified_name}, created earlier by this resource, is being deleted since "
             f"{existing_metadata.deletionTimestamp}; apply again once it is gone"
         )
         raise RuntimeError(message) from error
@@ -224,21 +201,22 @@ async def fetch_own_object[ObjectT](
     object_type: type[ObjectT],
     resource_id: str,
     name: str,
-    namespace: str | None = None,
+    namespace: str | None,
+    refusal: MarkerRefusal,
 ) -> ObjectT | None:
-    """Fetch the object a resource created at its name, refusing any other object there.
+    """Fetch the object at a name, refusing one this resource did not create.
 
-    This is the lookup every ``on_observe`` makes: an object whose ``pragma.io/resource``
-    annotation names ``resource_id`` is returned, also while its deletion is in progress; any
-    other object is refused as ``check_create_conflict`` refuses it, so Pragmatiks never writes
-    or deletes it.
+    An object whose ``pragma.io/resource`` annotation names ``resource_id`` is returned, also
+    while its deletion is in progress; any other object is logged as ``refusal`` with its
+    ``reason`` and ``owner`` and raises.
 
     Args:
         client: Lightkube client for the target cluster.
         object_type: Lightkube resource type of the object.
-        resource_id: Canonical ID of the Pragmatiks resource observing the object.
+        resource_id: Canonical ID of the Pragmatiks resource reading the object.
         name: Object name.
         namespace: Namespace of a namespaced object; ``None`` for cluster-scoped objects.
+        refusal: The step reading the object, which names the log event of a refusal.
 
     Returns:
         The object, or ``None`` when the cluster has no object with that name.
@@ -253,10 +231,22 @@ async def fetch_own_object[ObjectT](
     if existing is None:
         return None
 
-    match = match_resource_marker(cast(Any, existing).metadata.annotations, resource_id)
+    annotations = cast(Any, existing).metadata.annotations
+    match = match_resource_marker(annotations, resource_id)
 
     if match is not MarkerMatch.OWN:
-        raise AlreadyExistsError(build_conflict_message(object_type.__name__, name, namespace, match))
+        logger.warning(
+            "%s kind=%s namespace=%s name=%s resource=%s reason=%s owner=%s",
+            refusal,
+            object_type.__name__,
+            namespace,
+            name,
+            resource_id,
+            match,
+            (annotations or {}).get(RESOURCE_MARKER_KEY),
+        )
+        subject = f"{object_type.__name__} {format_qualified_name(name, namespace)}"
+        raise AlreadyExistsError(build_conflict_message(subject, match))
 
     return existing
 
@@ -309,12 +299,12 @@ async def wait_for_absence(
         TimeoutError: If the object is still present after ``timeout_seconds``; the message
             names its deletion timestamp and the finalizers holding it.
     """
-    location = format_location(name, namespace)
+    qualified_name = format_qualified_name(name, namespace)
 
     def describe_timeout(remaining: object) -> str:
         metadata = cast(Any, remaining).metadata
         return (
-            f"{object_type.__name__} {location} still present {timeout_seconds}s after deletion "
+            f"{object_type.__name__} {qualified_name} still present {timeout_seconds}s after deletion "
             f"(deletionTimestamp: {metadata.deletionTimestamp}, finalizers: {metadata.finalizers})"
         )
 

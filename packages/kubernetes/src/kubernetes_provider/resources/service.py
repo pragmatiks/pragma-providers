@@ -23,6 +23,7 @@ from pragma_sdk import (
 )
 from pydantic import BaseModel
 
+from kubernetes_provider.marker import MarkerRefusal
 from kubernetes_provider.objects import (
     FIELD_MANAGER,
     build_object_metadata,
@@ -110,8 +111,8 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
     Lifecycle:
         - on_create: Create the service; apply over this resource's earlier
           create, refuse any other existing service
-        - on_observe: Look up the service by name and namespace; refuse a service without this
-          resource's annotation, as on_create refuses it
+        - on_observe: Look up the service by name and namespace; raise AlreadyExistsError for one
+          without this resource's annotation
         - on_update: Apply updated service configuration
         - on_delete: Delete the service and wait until it is gone (idempotent)
     """
@@ -221,7 +222,9 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
                 resource.
         """
         async with self._get_client() as client:
-            service = await fetch_own_object(client, K8sService, self.id, self.name, cast(str, self.config.namespace))
+            service = await fetch_own_object(
+                client, K8sService, self.id, self.name, cast(str, self.config.namespace), MarkerRefusal.OBSERVE
+            )
 
         if service is None:
             return None
@@ -238,24 +241,23 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             ServiceOutputs with updated service details.
 
         Raises:
-            AlreadyExistsError: If the service in the cluster carries no ``pragma.io/resource``
-                annotation naming this resource (``on_observe``).
             ValueError: If the service in the cluster is headless and the desired one is not, or
                 the reverse; the cluster IP of an existing service cannot change.
         """
-        live_service = await self.on_observe()
-        live_headless = live_service is not None and live_service.cluster_ip == "None"
         desired_headless = self.config.type == "Headless" or self.config.cluster_ip == "None"
 
-        if live_service is not None and live_headless != desired_headless:
-            requested_change = "become headless" if desired_headless else "stop being headless"
-            message = (
-                f"Service {self.name} cannot {requested_change}: the cluster IP of the service in the "
-                "cluster cannot change"
-            )
-            raise ValueError(message)
-
         async with self._get_client() as client:
+            live_service = await fetch_object(client, K8sService, self.name, cast(str, self.config.namespace))
+            live_headless = live_service is not None and self.build_outputs(live_service).cluster_ip == "None"
+
+            if live_service is not None and live_headless != desired_headless:
+                requested_change = "become headless" if desired_headless else "stop being headless"
+                message = (
+                    f"Service {self.name} cannot {requested_change}: the cluster IP of the service in the "
+                    "cluster cannot change"
+                )
+                raise ValueError(message)
+
             service = await client.apply(self._build_service(), field_manager=FIELD_MANAGER, force=True)
 
         return self.build_outputs(service)

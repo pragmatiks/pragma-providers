@@ -21,6 +21,7 @@ from pragma_sdk import (
     Resource,
 )
 
+from kubernetes_provider.marker import MarkerRefusal
 from kubernetes_provider.objects import (
     FIELD_MANAGER,
     build_object_metadata,
@@ -84,8 +85,8 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
     Lifecycle:
         - on_create: Create the secret; apply over this resource's earlier
           create, refuse any other existing secret
-        - on_observe: Look up the secret by name and namespace; refuse a secret without this
-          resource's annotation, as on_create refuses it
+        - on_observe: Look up the secret by name and namespace; raise AlreadyExistsError for one
+          without this resource's annotation
         - on_update: Apply updated secret configuration
         - on_delete: Delete the secret and wait until it is gone (idempotent)
     """
@@ -191,7 +192,9 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
                 resource.
         """
         async with self._get_client() as client:
-            secret = await fetch_own_object(client, K8sSecret, self.id, self.name, cast(str, self.config.namespace))
+            secret = await fetch_own_object(
+                client, K8sSecret, self.id, self.name, cast(str, self.config.namespace), MarkerRefusal.OBSERVE
+            )
 
         if secret is None:
             return None

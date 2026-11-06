@@ -10,6 +10,7 @@ from typing import cast
 from lightkube.resources.core_v1 import Namespace as K8sNamespace
 from pragma_sdk import AlreadyExistsError, Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
 
+from kubernetes_provider.marker import MarkerRefusal
 from kubernetes_provider.objects import (
     FIELD_MANAGER,
     build_object_metadata,
@@ -65,8 +66,8 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
     Lifecycle:
         - on_create: Create the namespace; apply over this resource's earlier
           create, refuse any other existing namespace
-        - on_observe: Look up the namespace by name; refuse a namespace without this
-          resource's annotation, as on_create refuses it
+        - on_observe: Look up the namespace by name; raise AlreadyExistsError for one
+          without this resource's annotation
         - on_update: Apply updated namespace configuration (labels)
         - on_delete: Delete the namespace and wait until it is gone (idempotent)
     """
@@ -141,7 +142,7 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
                 resource.
         """
         async with self._get_client() as client:
-            namespace = await fetch_own_object(client, K8sNamespace, self.id, self.name)
+            namespace = await fetch_own_object(client, K8sNamespace, self.id, self.name, None, MarkerRefusal.OBSERVE)
 
         if namespace is None:
             return None

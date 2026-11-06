@@ -22,6 +22,13 @@ class MarkerMatch(StrEnum):
     OTHER_RESOURCE = "other_resource"
 
 
+class MarkerRefusal(StrEnum):
+    """The step that refuses an object at a resource's identity, valued as its log event."""
+
+    CREATE_CONFLICT = "kubernetes_create_conflict_refused"
+    OBSERVE = "kubernetes_observe_refused"
+
+
 MARKER_MISMATCH_REASONS = {
     MarkerMatch.UNMARKED: f"it carries no {RESOURCE_MARKER_KEY} annotation, so Pragmatiks did not create it",
     MarkerMatch.OTHER_RESOURCE: f"its {RESOURCE_MARKER_KEY} annotation names another Pragmatiks resource",
@@ -60,3 +67,17 @@ def match_resource_marker(annotations: Mapping[str, str] | None, resource_id: st
         return MarkerMatch.OWN
 
     return MarkerMatch.OTHER_RESOURCE
+
+
+def build_conflict_message(subject: str, match: MarkerMatch) -> str:
+    """Build the reason an object at a resource's identity is refused as not this resource's.
+
+    Args:
+        subject: The object as the refusal names it, such as ``ConfigMap default/settings``.
+        match: How the object's resource marker compares with the resource; ``UNMARKED`` or
+            ``OTHER_RESOURCE``.
+
+    Returns:
+        The message a refusal raises ``AlreadyExistsError`` with.
+    """
+    return f"{subject} already exists and this resource did not create it: {MARKER_MISMATCH_REASONS[match]}"

@@ -20,6 +20,7 @@ from pragma_sdk import (
     Resource,
 )
 
+from kubernetes_provider.marker import MarkerRefusal
 from kubernetes_provider.objects import (
     FIELD_MANAGER,
     build_object_metadata,
@@ -76,8 +77,8 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
     Lifecycle:
         - on_create: Create the configmap; apply over this resource's earlier
           create, refuse any other existing configmap
-        - on_observe: Look up the configmap by name and namespace; refuse a configmap without this
-          resource's annotation, as on_create refuses it
+        - on_observe: Look up the configmap by name and namespace; raise AlreadyExistsError for one
+          without this resource's annotation
         - on_update: Apply updated configmap configuration
         - on_delete: Delete the configmap and wait until it is gone (idempotent)
     """
@@ -155,7 +156,7 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
         """
         async with self._get_client() as client:
             configmap = await fetch_own_object(
-                client, K8sConfigMap, self.id, self.name, cast(str, self.config.namespace)
+                client, K8sConfigMap, self.id, self.name, cast(str, self.config.namespace), MarkerRefusal.OBSERVE
             )
 
         if configmap is None:
