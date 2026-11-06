@@ -213,7 +213,7 @@ resources:
 
 ### Service
 
-Exposes workloads via ClusterIP, NodePort, LoadBalancer, or Headless service types. Services are immediately ready after apply (no polling). Headless services automatically set `clusterIP: None`. An update cannot make the service in the cluster headless, or stop it being headless, whether through `type: Headless` or `cluster_ip: "None"`: the cluster IP of an existing service cannot change.
+Exposes workloads via ClusterIP, NodePort, LoadBalancer, or Headless service types. A LoadBalancer Service is ready only once the cluster assigns it an external address, which it reports as `load_balancer_address`; on a cluster that assigns none (kind, bare metal without a load-balancer controller) it fails when its operation deadline passes. Every other type is ready once applied. Headless services automatically set `clusterIP: None`. An update cannot make the service in the cluster headless, or stop it being headless, whether through `type: Headless` or `cluster_ip: "None"`: the cluster IP of an existing service cannot change.
 
 **Config:**
 - `config` (dependency) -- `kubernetes/config` resource for cluster access
@@ -225,6 +225,7 @@ Exposes workloads via ClusterIP, NodePort, LoadBalancer, or Headless service typ
 
 **Outputs:**
 - `name`, `namespace`, `cluster_ip`, `type`
+- `load_balancer_address` -- external IP of a LoadBalancer Service, else its hostname; null for every other type
 
 ```yaml
 resources:
