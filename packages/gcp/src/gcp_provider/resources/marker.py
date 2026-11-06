@@ -167,7 +167,7 @@ def check_resource_marker(labels: Mapping[str, str] | None, target: MarkerTarget
 
 
 def log_conflict_recognized(target: MarkerTarget) -> None:
-    """Log that a create met this resource's own earlier create and brings it up to date.
+    """Log that a create met this resource's own earlier create.
 
     Args:
         target: The object the create met, whose labels name the resource.
