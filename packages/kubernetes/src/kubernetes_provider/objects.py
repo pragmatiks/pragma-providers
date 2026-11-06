@@ -1,9 +1,7 @@
 """Creation, lookup and deletion of Kubernetes objects.
 
-``on_observe`` and a create's conflict path read the object at a resource's name through
-``fetch_own_object``, which refuses one this resource did not create. ``on_update``,
-``on_delete`` and ``health`` act by name through ``fetch_object`` and the client: the host
-never runs them after an observe answered already-exists.
+``fetch_own_object`` refuses an object this resource did not create; ``fetch_object`` and
+the client act by name and check no marker.
 """
 
 from __future__ import annotations
