@@ -6,14 +6,20 @@ import logging
 from http import HTTPStatus
 from typing import Literal, cast
 
-from pragma_sdk import AlreadyExistsError, Config, Field, HealthStatus, ImmutableField, Outputs, Resource
+from pragma_sdk import Config, Field, HealthStatus, ImmutableField, Outputs, Resource
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.exceptions import UnexpectedResponse
 
-from qdrant_provider.marker import MARKER_MISMATCH_REASONS, MarkerMatch, build_resource_marker, match_resource_marker
+from qdrant_provider.marker import (
+    MarkerMatch,
+    MarkerRefusal,
+    build_resource_marker,
+    check_resource_marker,
+    refuse_collection,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -95,8 +101,8 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
 
     Lifecycle:
         - on_create: Create the marked collection; update its own earlier create, refuse any other
-        - on_observe: Look up the collection by name; refuse one without this resource's
-          metadata, as on_create refuses it
+        - on_observe: Look up the collection by name; raise AlreadyExistsError for one
+          without this resource's metadata
         - on_update: Apply on_disk in place
         - on_delete: Delete collection
     """
@@ -185,42 +191,25 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             )
             raise RuntimeError(message)
 
-    def build_conflict_message(self, match: MarkerMatch) -> str:
-        """Build the reason the collection at this resource's name is refused as not this resource's.
-
-        Args:
-            match: How the collection's resource marker compares with this resource; any value but ``OWN``.
-
-        Returns:
-            The message both the create's conflict and ``on_observe`` raise ``AlreadyExistsError`` with.
-        """
-        return (
-            f"Collection {self.config.name!r} already exists and this resource did not create it: "
-            f"{MARKER_MISMATCH_REASONS[match]}"
-        )
-
-    async def read_marker_match(self, client: AsyncQdrantClient) -> MarkerMatch:
-        """Read the existing collection and compare its resource marker with this resource.
+    async def fetch_collection(self, client: AsyncQdrantClient) -> models.CollectionInfo | None:
+        """Fetch the collection at this resource's name.
 
         Args:
             client: Client of the Qdrant server holding the collection.
 
         Returns:
-            How the collection's ``pragma_resource`` metadata compares with this resource;
-            ``ABSENT`` when the collection is gone.
+            The collection, or ``None`` if it does not exist.
 
         Raises:
             UnexpectedResponse: If the read fails for any reason other than the collection being absent.
         """
         try:
-            collection = await client.get_collection(cast(str, self.config.name))
+            return await client.get_collection(cast(str, self.config.name))
         except UnexpectedResponse as error:
             if error.status_code != HTTPStatus.NOT_FOUND:
                 raise
 
-            return MarkerMatch.ABSENT
-
-        return match_resource_marker(collection.config.metadata, self.id)
+            return None
 
     async def on_create(self) -> CollectionOutputs:
         """Create the Qdrant collection, marked with this resource's ID in its ``pragma_resource`` metadata.
@@ -250,16 +239,15 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             if not reports_existing_collection(error):
                 raise
 
-            match = await self.read_marker_match(client)
+            name = cast(str, self.config.name)
+            existing = await self.fetch_collection(client)
 
-            if match is MarkerMatch.OWN:
-                logger.warning("qdrant_create_conflict_recognized resource=%s collection=%s", self.id, self.config.name)
-                return await self.on_update(None)
+            if existing is None:
+                refuse_collection(self.id, name, MarkerRefusal.CREATE_CONFLICT, MarkerMatch.ABSENT, None)
 
-            logger.warning(
-                "qdrant_create_conflict_refused resource=%s collection=%s reason=%s", self.id, self.config.name, match
-            )
-            raise AlreadyExistsError(self.build_conflict_message(match)) from error
+            check_resource_marker(existing.config.metadata, self.id, name, MarkerRefusal.CREATE_CONFLICT)
+            logger.warning("qdrant_create_conflict_recognized resource=%s collection=%s", self.id, name)
+            return await self.on_update(None)
         finally:
             await client.close()
 
@@ -279,15 +267,14 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         client = self._get_client()
 
         try:
-            match = await self.read_marker_match(client)
+            collection = await self.fetch_collection(client)
         finally:
             await client.close()
 
-        if match is MarkerMatch.ABSENT:
+        if collection is None:
             return None
 
-        if match is not MarkerMatch.OWN:
-            raise AlreadyExistsError(self.build_conflict_message(match))
+        check_resource_marker(collection.config.metadata, self.id, cast(str, self.config.name), MarkerRefusal.OBSERVE)
 
         return self.build_outputs()
 
