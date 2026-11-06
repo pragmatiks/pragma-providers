@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
+from typing import NoReturn
 
 from pragma_sdk import AlreadyExistsError
 
 
 RESOURCE_MARKER_KEY = "pragma_resource"
 RESOURCE_MARKER_DIGEST_SIZE_BYTES = 31
+
+logger = logging.getLogger(__name__)
 
 
 class MarkerMatch(StrEnum):
@@ -20,6 +25,30 @@ class MarkerMatch(StrEnum):
     ABSENT = "absent"
     UNMARKED = "unmarked"
     OTHER_RESOURCE = "other_resource"
+
+
+class MarkerRefusal(StrEnum):
+    """The step that refuses an object at a resource's identity, valued as its log event."""
+
+    CREATE_CONFLICT = "gcp_create_conflict_refused"
+    OBSERVE = "gcp_observe_refused"
+
+
+@dataclass(frozen=True)
+class MarkerTarget:
+    """An object at a resource's identity, as marker checks name it in logs and refusals.
+
+    Attributes:
+        resource_id: Canonical ID of the Pragmatiks resource whose identity names the object.
+        type_name: Resource type in log events, such as ``secret``.
+        object_path: Google Cloud resource path of the object.
+        subject: The object as the refusal message names it, such as ``Secret api-key in project shop``.
+    """
+
+    resource_id: str
+    type_name: str
+    object_path: str
+    subject: str
 
 
 MARKER_MISMATCH_REASONS = {
@@ -87,24 +116,65 @@ def build_conflict_message(subject: str, match: MarkerMatch) -> str:
         match: How the object's resource marker compares with the resource; any value but ``OWN``.
 
     Returns:
-        The message both the create's conflict and ``on_observe`` raise ``AlreadyExistsError`` with.
+        The message a refusal raises ``AlreadyExistsError`` with.
     """
     return f"{subject} already exists and this resource did not create it: {MARKER_MISMATCH_REASONS[match]}"
 
 
-def verify_resource_marker(labels: Mapping[str, str] | None, resource_id: str, subject: str) -> None:
-    """Refuse an observed object whose labels do not name the resource as the one that created it.
+def refuse_object(target: MarkerTarget, refusal: MarkerRefusal, match: MarkerMatch, owner: str | None) -> NoReturn:
+    """Log the refusal of an object at a resource's identity and raise it.
 
     Args:
-        labels: Labels read from the observed object, or ``None`` when it has none.
-        resource_id: Canonical ID of the Pragmatiks resource observing the object.
-        subject: The object as the refusal names it.
+        target: The object refused.
+        refusal: The step refusing it, which names the log event.
+        match: How the object's resource marker compares with the resource; any value but ``OWN``.
+        owner: The object's ``pragma_resource`` label value, or ``None`` when it carries none.
+
+    Raises:
+        AlreadyExistsError: Always, with ``build_conflict_message``.
+    """
+    logger.warning(
+        "%s type=%s resource=%s object=%s reason=%s owner=%s",
+        refusal,
+        target.type_name,
+        target.resource_id,
+        target.object_path,
+        match,
+        owner,
+    )
+    raise AlreadyExistsError(build_conflict_message(target.subject, match))
+
+
+def check_resource_marker(labels: Mapping[str, str] | None, target: MarkerTarget, refusal: MarkerRefusal) -> None:
+    """Return when an object's labels name the resource as the one that created it, and refuse it otherwise.
+
+    The create's conflict path and ``on_observe`` both recognize the object through it, so they
+    refuse the same objects.
+
+    Args:
+        labels: Labels read from the object, or ``None`` when it has none.
+        target: The object checked.
+        refusal: The step checking it, which names the log event of a refusal.
 
     Raises:
         AlreadyExistsError: If the object carries no ``pragma_resource`` label or one naming
             another resource.
     """
-    match = match_resource_marker(labels, resource_id)
+    match = match_resource_marker(labels, target.resource_id)
 
     if match is not MarkerMatch.OWN:
-        raise AlreadyExistsError(build_conflict_message(subject, match))
+        refuse_object(target, refusal, match, (labels or {}).get(RESOURCE_MARKER_KEY))
+
+
+def log_conflict_recognized(target: MarkerTarget) -> None:
+    """Log that a create met this resource's own earlier create and brings it up to date.
+
+    Args:
+        target: The object the create met, whose labels name the resource.
+    """
+    logger.warning(
+        "gcp_create_conflict_recognized type=%s resource=%s object=%s",
+        target.type_name,
+        target.resource_id,
+        target.object_path,
+    )

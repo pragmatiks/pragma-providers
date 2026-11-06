@@ -28,16 +28,18 @@ from google.cloud.container_v1.types import (
 )
 from google.cloud.logging_v2 import Client as LoggingClient
 from google.oauth2 import service_account
-from pragma_sdk import AlreadyExistsError, Config, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
+from pragma_sdk import Config, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
 from pydantic import Field as PydanticField
 from pydantic import field_validator, model_validator
 
 from gcp_provider.resources.marker import (
     MarkerMatch,
-    build_conflict_message,
+    MarkerRefusal,
+    MarkerTarget,
     build_resource_marker,
-    match_resource_marker,
-    verify_resource_marker,
+    check_resource_marker,
+    log_conflict_recognized,
+    refuse_object,
 )
 from gcp_provider.resources.polling import compute_operation_deadline, poll_until
 
@@ -331,8 +333,8 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
           create and is brought up to date as on_update does; any other existing
           cluster is refused instead of adopted. GKE copies resource labels onto
           the cluster's Compute Engine resources, so they carry the label too.
-        - on_observe: Reads the cluster by project, location and name. A cluster
-          without this resource's label is refused, as on_create refuses it.
+        - on_observe: Reads the cluster by project, location and name; raises
+          AlreadyExistsError for a cluster without this resource's label.
         - on_update: Applies ``release_channel`` when it differs and waits for
           the cluster to serve. ``credentials`` is mutable too; every other field
           is immutable and requires delete and recreate.
@@ -391,14 +393,6 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
             Parent path (project/location).
         """
         return f"projects/{self.config.project_id}/locations/{self.config.location}"
-
-    def describe_object(self) -> str:
-        """Name the cluster as a refusal shows it.
-
-        Returns:
-            The cluster name and its project and location.
-        """
-        return f"GKE cluster {self.config.name} in {self._parent_path()}"
 
     def _build_outputs(self, cluster: Cluster) -> GKEOutputs:
         """Build outputs from cluster object.
@@ -517,25 +511,35 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
 
         return cluster
 
-    async def read_marker_match(self, client: ClusterManagerAsyncClient) -> MarkerMatch:
-        """Read the existing cluster and compare its resource marker with this resource.
+    def build_marker_target(self) -> MarkerTarget:
+        """Build the cluster's identity as marker checks name it.
+
+        Returns:
+            The marker target of the cluster at this resource's identity.
+        """
+        return MarkerTarget(
+            resource_id=self.id,
+            type_name="gke",
+            object_path=self._cluster_path(),
+            subject=f"GKE cluster {self.config.name} in {self._parent_path()}",
+        )
+
+    async def fetch_cluster(self, client: ClusterManagerAsyncClient) -> Cluster | None:
+        """Fetch the cluster at this resource's identity.
 
         Args:
             client: Cluster Manager client.
 
         Returns:
-            How the cluster's ``pragma_resource`` resource label compares with this resource;
-            ``ABSENT`` when the cluster is gone.
+            The cluster, or None if it does not exist.
 
         Raises:
             GoogleAPICallError: If the read fails for any reason other than the cluster being absent.
         """
         try:
-            cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
+            return await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
         except NotFound:
-            return MarkerMatch.ABSENT
-
-        return match_resource_marker(cluster.resource_labels, self.id)
+            return None
 
     async def on_create(self) -> GKEOutputs:
         """Create GKE cluster and wait until it serves, in RUNNING or DEGRADED state.
@@ -556,22 +560,16 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
                     cluster=self._build_cluster_config(),
                 )
             )
-        except AlreadyExists as error:
-            match = await self.read_marker_match(client)
+        except AlreadyExists:
+            target = self.build_marker_target()
+            existing = await self.fetch_cluster(client)
 
-            if match is MarkerMatch.OWN:
-                logger.warning(
-                    "gcp_create_conflict_recognized type=gke resource=%s cluster=%s", self.id, self._cluster_path()
-                )
-                return await self.on_update(None)
+            if existing is None:
+                refuse_object(target, MarkerRefusal.CREATE_CONFLICT, MarkerMatch.ABSENT, None)
 
-            logger.warning(
-                "gcp_create_conflict_refused type=gke resource=%s cluster=%s reason=%s",
-                self.id,
-                self._cluster_path(),
-                match,
-            )
-            raise AlreadyExistsError(build_conflict_message(self.describe_object(), match)) from error
+            check_resource_marker(existing.resource_labels, target, MarkerRefusal.CREATE_CONFLICT)
+            log_conflict_recognized(target)
+            return await self.on_update(None)
 
         cluster = await self.wait_for_serving(client, compute_operation_deadline())
 
@@ -588,13 +586,12 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
                 resource.
         """
         client = self._get_client()
+        cluster = await self.fetch_cluster(client)
 
-        try:
-            cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
-        except NotFound:
+        if cluster is None:
             return None
 
-        verify_resource_marker(cluster.resource_labels, self.id, self.describe_object())
+        check_resource_marker(cluster.resource_labels, self.build_marker_target(), MarkerRefusal.OBSERVE)
 
         return self._build_outputs(cluster)
 

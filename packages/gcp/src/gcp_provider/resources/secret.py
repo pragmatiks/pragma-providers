@@ -3,24 +3,23 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any, cast
 
 from google.api_core.exceptions import AlreadyExists, NotFound
+from google.cloud.secretmanager_v1 import Secret as SecretManagerSecret
 from google.cloud.secretmanager_v1 import SecretManagerServiceAsyncClient, SecretVersion
 from google.oauth2 import service_account
-from pragma_sdk import AlreadyExistsError, Config, Field, ImmutableField, Outputs, Resource
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
 
 from gcp_provider.resources.marker import (
     MarkerMatch,
-    build_conflict_message,
+    MarkerRefusal,
+    MarkerTarget,
     build_resource_marker,
-    match_resource_marker,
-    verify_resource_marker,
+    check_resource_marker,
+    log_conflict_recognized,
+    refuse_object,
 )
-
-
-logger = logging.getLogger(__name__)
 
 
 class SecretConfig(Config):
@@ -67,8 +66,8 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
           resource's marker, and an initial version. A secret carrying that label
           is this resource's earlier create and is brought up to date as on_update
           does; any other existing secret is refused instead of adopted.
-        - on_observe: Reads the secret and its latest enabled version. A secret
-          without this resource's label is refused, as on_create refuses it.
+        - on_observe: Reads the secret and its latest enabled version; raises
+          AlreadyExistsError for a secret without this resource's label.
         - on_update: Adds a new secret version when ``data`` differs from the
           latest enabled version. Previous versions are retained.
         - on_delete: Deletes the secret and all its versions. Idempotent --
@@ -120,14 +119,6 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             Full GCP resource path for this secret.
         """
         return f"projects/{self.config.project_id}/secrets/{self.config.secret_id}"
-
-    def describe_object(self) -> str:
-        """Name the secret as a refusal shows it.
-
-        Returns:
-            The secret ID and its project.
-        """
-        return f"Secret {self.config.secret_id} in project {self.config.project_id}"
 
     def encode_payload(self) -> bytes:
         """Encode ``data`` as the payload bytes Secret Manager stores.
@@ -206,25 +197,35 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             version_id=version.name.split("/")[-1],
         )
 
-    async def read_marker_match(self, client: SecretManagerServiceAsyncClient) -> MarkerMatch:
-        """Read the existing secret and compare its resource marker with this resource.
+    def build_marker_target(self) -> MarkerTarget:
+        """Build the secret's identity as marker checks name it.
+
+        Returns:
+            The marker target of the secret at this resource's identity.
+        """
+        return MarkerTarget(
+            resource_id=self.id,
+            type_name="secret",
+            object_path=self._secret_path(),
+            subject=f"Secret {self.config.secret_id} in project {self.config.project_id}",
+        )
+
+    async def fetch_secret(self, client: SecretManagerServiceAsyncClient) -> SecretManagerSecret | None:
+        """Fetch the secret at this resource's identity.
 
         Args:
             client: Secret Manager client.
 
         Returns:
-            How the secret's ``pragma_resource`` label compares with this resource;
-            ``ABSENT`` when the secret is gone.
+            The secret, or None if it does not exist.
 
         Raises:
             GoogleAPICallError: If the read fails for any reason other than the secret being absent.
         """
         try:
-            secret = await client.get_secret(name=self._secret_path())
+            return await client.get_secret(name=self._secret_path())
         except NotFound:
-            return MarkerMatch.ABSENT
-
-        return match_resource_marker(secret.labels, self.id)
+            return None
 
     async def on_create(self) -> SecretOutputs:
         """Create GCP secret with initial version.
@@ -247,22 +248,16 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
                     "secret": {"replication": {"automatic": {}}, "labels": build_resource_marker(self.id)},
                 }
             )
-        except AlreadyExists as error:
-            match = await self.read_marker_match(client)
+        except AlreadyExists:
+            target = self.build_marker_target()
+            existing = await self.fetch_secret(client)
 
-            if match is MarkerMatch.OWN:
-                logger.warning(
-                    "gcp_create_conflict_recognized type=secret resource=%s secret=%s", self.id, self._secret_path()
-                )
-                return await self.on_update(None)
+            if existing is None:
+                refuse_object(target, MarkerRefusal.CREATE_CONFLICT, MarkerMatch.ABSENT, None)
 
-            logger.warning(
-                "gcp_create_conflict_refused type=secret resource=%s secret=%s reason=%s",
-                self.id,
-                self._secret_path(),
-                match,
-            )
-            raise AlreadyExistsError(build_conflict_message(self.describe_object(), match)) from error
+            check_resource_marker(existing.labels, target, MarkerRefusal.CREATE_CONFLICT)
+            log_conflict_recognized(target)
+            return await self.on_update(None)
 
         version = await self.add_version(client, secret.name)
 
@@ -278,13 +273,13 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             AlreadyExistsError: If the secret carries no ``pragma_resource`` label naming this resource.
         """
         client = self._get_client()
+        secret = await self.fetch_secret(client)
 
-        try:
-            secret = await client.get_secret(name=self._secret_path())
-        except NotFound:
+        if secret is None:
             return None
 
-        verify_resource_marker(secret.labels, self.id, self.describe_object())
+        check_resource_marker(secret.labels, self.build_marker_target(), MarkerRefusal.OBSERVE)
+
         version = await self.fetch_latest_enabled_version(client)
 
         return self.build_outputs(secret.name, version)
