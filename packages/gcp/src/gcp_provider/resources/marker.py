@@ -6,6 +6,8 @@ import hashlib
 from collections.abc import Mapping
 from enum import StrEnum
 
+from pragma_sdk import AlreadyExistsError
+
 
 RESOURCE_MARKER_KEY = "pragma_resource"
 RESOURCE_MARKER_DIGEST_SIZE_BYTES = 31
@@ -75,3 +77,34 @@ def match_resource_marker(labels: Mapping[str, str] | None, resource_id: str) ->
         return MarkerMatch.OWN
 
     return MarkerMatch.OTHER_RESOURCE
+
+
+def build_conflict_message(subject: str, match: MarkerMatch) -> str:
+    """Build the reason an object at a resource's identity is refused as not this resource's.
+
+    Args:
+        subject: The object as the refusal names it, such as ``Secret api-key in project shop``.
+        match: How the object's resource marker compares with the resource; any value but ``OWN``.
+
+    Returns:
+        The message both the create's conflict and ``on_observe`` raise ``AlreadyExistsError`` with.
+    """
+    return f"{subject} already exists and this resource did not create it: {MARKER_MISMATCH_REASONS[match]}"
+
+
+def verify_resource_marker(labels: Mapping[str, str] | None, resource_id: str, subject: str) -> None:
+    """Refuse an observed object whose labels do not name the resource as the one that created it.
+
+    Args:
+        labels: Labels read from the observed object, or ``None`` when it has none.
+        resource_id: Canonical ID of the Pragmatiks resource observing the object.
+        subject: The object as the refusal names it.
+
+    Raises:
+        AlreadyExistsError: If the object carries no ``pragma_resource`` label or one naming
+            another resource.
+    """
+    match = match_resource_marker(labels, resource_id)
+
+    if match is not MarkerMatch.OWN:
+        raise AlreadyExistsError(build_conflict_message(subject, match))

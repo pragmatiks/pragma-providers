@@ -12,10 +12,11 @@ from google.oauth2 import service_account
 from pragma_sdk import AlreadyExistsError, Config, Field, ImmutableField, Outputs, Resource
 
 from gcp_provider.resources.marker import (
-    MARKER_MISMATCH_REASONS,
     MarkerMatch,
+    build_conflict_message,
     build_resource_marker,
     match_resource_marker,
+    verify_resource_marker,
 )
 
 
@@ -66,7 +67,8 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
           resource's marker, and an initial version. A secret carrying that label
           is this resource's earlier create and is brought up to date as on_update
           does; any other existing secret is refused instead of adopted.
-        - on_observe: Reads the secret and its latest enabled version.
+        - on_observe: Reads the secret and its latest enabled version. A secret
+          without this resource's label is refused, as on_create refuses it.
         - on_update: Adds a new secret version when ``data`` differs from the
           latest enabled version. Previous versions are retained.
         - on_delete: Deletes the secret and all its versions. Idempotent --
@@ -118,6 +120,14 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             Full GCP resource path for this secret.
         """
         return f"projects/{self.config.project_id}/secrets/{self.config.secret_id}"
+
+    def describe_object(self) -> str:
+        """Name the secret as a refusal shows it.
+
+        Returns:
+            The secret ID and its project.
+        """
+        return f"Secret {self.config.secret_id} in project {self.config.project_id}"
 
     def encode_payload(self) -> bytes:
         """Encode ``data`` as the payload bytes Secret Manager stores.
@@ -252,11 +262,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
                 self._secret_path(),
                 match,
             )
-            message = (
-                f"Secret {self.config.secret_id} in project {self.config.project_id} already exists and this "
-                f"resource did not create it: {MARKER_MISMATCH_REASONS[match]}"
-            )
-            raise AlreadyExistsError(message) from error
+            raise AlreadyExistsError(build_conflict_message(self.describe_object(), match)) from error
 
         version = await self.add_version(client, secret.name)
 
@@ -267,6 +273,9 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
         Returns:
             SecretOutputs for the secret, or None if it does not exist.
+
+        Raises:
+            AlreadyExistsError: If the secret carries no ``pragma_resource`` label naming this resource.
         """
         client = self._get_client()
 
@@ -275,6 +284,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         except NotFound:
             return None
 
+        verify_resource_marker(secret.labels, self.id, self.describe_object())
         version = await self.fetch_latest_enabled_version(client)
 
         return self.build_outputs(secret.name, version)

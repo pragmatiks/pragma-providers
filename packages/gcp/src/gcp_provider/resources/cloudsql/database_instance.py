@@ -33,10 +33,11 @@ from gcp_provider.resources.cloudsql.helpers import (
     run_instance_operation,
 )
 from gcp_provider.resources.marker import (
-    MARKER_MISMATCH_REASONS,
     MarkerMatch,
+    build_conflict_message,
     build_resource_marker,
     match_resource_marker,
+    verify_resource_marker,
 )
 from gcp_provider.resources.polling import compute_operation_deadline, poll_until
 
@@ -164,7 +165,8 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
           RUNNABLE (up to 19 minutes). An instance carrying that label is this
           resource's earlier create and is brought up to date as on_update does;
           any other existing instance is refused instead of adopted.
-        - on_observe: Reads the instance by ``project_id`` and ``instance_name``.
+        - on_observe: Reads the instance by ``project_id`` and ``instance_name``. An
+          instance without this resource's label is refused, as on_create refuses it.
         - on_update: Patches mutable settings (tier, availability_type, backups,
           network config, deletion_protection) and waits for RUNNABLE.
         - on_delete: Deletes the instance. Respects ``deletion_protection`` --
@@ -196,6 +198,26 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
                 field: outputs.credentials_json
     """
 
+    def describe_object(self) -> str:
+        """Name the instance as a refusal shows it.
+
+        Returns:
+            The instance name and its project.
+        """
+        return f"Cloud SQL instance {self.config.instance_name} in project {self.config.project_id}"
+
+    @staticmethod
+    def extract_labels(instance: dict) -> dict[str, str] | None:
+        """Extract the user labels an instance carries.
+
+        Args:
+            instance: Instance as Cloud SQL returns it.
+
+        Returns:
+            The instance's ``settings.userLabels``, or None when it has none.
+        """
+        return instance.get("settings", {}).get("userLabels")
+
     async def read_marker_match(self, service: Any) -> MarkerMatch:
         """Read the existing instance and compare its resource marker with this resource.
 
@@ -217,7 +239,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         if instance is None:
             return MarkerMatch.ABSENT
 
-        return match_resource_marker(instance.get("settings", {}).get("userLabels"), self.id)
+        return match_resource_marker(self.extract_labels(instance), self.id)
 
     async def on_create(self) -> DatabaseInstanceOutputs:
         """Create Cloud SQL instance and wait for RUNNABLE state.
@@ -254,11 +276,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
                 instance_path,
                 match,
             )
-            message = (
-                f"Cloud SQL instance {self.config.instance_name} in project {self.config.project_id} already exists "
-                f"and this resource did not create it: {MARKER_MISMATCH_REASONS[match]}"
-            )
-            raise AlreadyExistsError(message) from error
+            raise AlreadyExistsError(build_conflict_message(self.describe_object(), match)) from error
 
         instance = await self._wait_for_runnable(service, compute_operation_deadline())
 
@@ -269,6 +287,10 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
 
         Returns:
             DatabaseInstanceOutputs for the instance, or None if it does not exist.
+
+        Raises:
+            AlreadyExistsError: If the instance carries no ``pragma_resource`` user label naming this
+                resource.
         """
         service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
 
@@ -279,6 +301,8 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
 
         if instance is None:
             return None
+
+        verify_resource_marker(self.extract_labels(instance), self.id, self.describe_object())
 
         return self._build_outputs(instance)
 
