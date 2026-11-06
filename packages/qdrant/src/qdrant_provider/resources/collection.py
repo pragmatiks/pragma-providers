@@ -95,7 +95,8 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
 
     Lifecycle:
         - on_create: Create the marked collection; update its own earlier create, refuse any other
-        - on_observe: Look up the collection by name
+        - on_observe: Look up the collection by name; refuse one without this resource's
+          metadata, as on_create refuses it
         - on_update: Apply on_disk in place
         - on_delete: Delete collection
     """
@@ -184,6 +185,20 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             )
             raise RuntimeError(message)
 
+    def build_conflict_message(self, match: MarkerMatch) -> str:
+        """Build the reason the collection at this resource's name is refused as not this resource's.
+
+        Args:
+            match: How the collection's resource marker compares with this resource; any value but ``OWN``.
+
+        Returns:
+            The message both the create's conflict and ``on_observe`` raise ``AlreadyExistsError`` with.
+        """
+        return (
+            f"Collection {self.config.name!r} already exists and this resource did not create it: "
+            f"{MARKER_MISMATCH_REASONS[match]}"
+        )
+
     async def read_marker_match(self, client: AsyncQdrantClient) -> MarkerMatch:
         """Read the existing collection and compare its resource marker with this resource.
 
@@ -244,31 +259,37 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             logger.warning(
                 "qdrant_create_conflict_refused resource=%s collection=%s reason=%s", self.id, self.config.name, match
             )
-            message = (
-                f"Collection {self.config.name!r} already exists and this resource did not create it: "
-                f"{MARKER_MISMATCH_REASONS[match]}"
-            )
-            raise AlreadyExistsError(message) from error
+            raise AlreadyExistsError(self.build_conflict_message(match)) from error
         finally:
             await client.close()
 
         return self.build_outputs()
 
     async def on_observe(self) -> CollectionOutputs | None:
-        """Look up the configured collection.
+        """Look up the configured collection and refuse one this resource did not create.
 
         Returns:
             CollectionOutputs naming the collection, or ``None`` if it does not exist.
+
+        Raises:
+            AlreadyExistsError: If the collection's metadata carries no ``pragma_resource`` key naming
+                this resource.
+            UnexpectedResponse: If the read fails for any reason other than the collection being absent.
         """
         client = self._get_client()
 
         try:
-            if not await client.collection_exists(cast(str, self.config.name)):
-                return None
-
-            return self.build_outputs()
+            match = await self.read_marker_match(client)
         finally:
             await client.close()
+
+        if match is MarkerMatch.ABSENT:
+            return None
+
+        if match is not MarkerMatch.OWN:
+            raise AlreadyExistsError(self.build_conflict_message(match))
+
+        return self.build_outputs()
 
     async def on_update(self, previous_config: CollectionConfig | None) -> CollectionOutputs:
         """Apply the configured on_disk setting to the live collection in place.
