@@ -33,10 +33,11 @@ from pydantic import Field as PydanticField
 from pydantic import field_validator, model_validator
 
 from gcp_provider.resources.marker import (
-    MARKER_MISMATCH_REASONS,
     MarkerMatch,
+    build_conflict_message,
     build_resource_marker,
     match_resource_marker,
+    verify_resource_marker,
 )
 from gcp_provider.resources.polling import compute_operation_deadline, poll_until
 
@@ -330,7 +331,8 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
           create and is brought up to date as on_update does; any other existing
           cluster is refused instead of adopted. GKE copies resource labels onto
           the cluster's Compute Engine resources, so they carry the label too.
-        - on_observe: Reads the cluster by project, location and name.
+        - on_observe: Reads the cluster by project, location and name. A cluster
+          without this resource's label is refused, as on_create refuses it.
         - on_update: Applies ``release_channel`` when it differs and waits for
           the cluster to serve. ``credentials`` is mutable too; every other field
           is immutable and requires delete and recreate.
@@ -389,6 +391,14 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
             Parent path (project/location).
         """
         return f"projects/{self.config.project_id}/locations/{self.config.location}"
+
+    def describe_object(self) -> str:
+        """Name the cluster as a refusal shows it.
+
+        Returns:
+            The cluster name and its project and location.
+        """
+        return f"GKE cluster {self.config.name} in {self._parent_path()}"
 
     def _build_outputs(self, cluster: Cluster) -> GKEOutputs:
         """Build outputs from cluster object.
@@ -561,11 +571,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
                 self._cluster_path(),
                 match,
             )
-            message = (
-                f"GKE cluster {self.config.name} in {self._parent_path()} already exists and this resource "
-                f"did not create it: {MARKER_MISMATCH_REASONS[match]}"
-            )
-            raise AlreadyExistsError(message) from error
+            raise AlreadyExistsError(build_conflict_message(self.describe_object(), match)) from error
 
         cluster = await self.wait_for_serving(client, compute_operation_deadline())
 
@@ -576,6 +582,10 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
 
         Returns:
             GKEOutputs for the cluster, or None if it does not exist.
+
+        Raises:
+            AlreadyExistsError: If the cluster carries no ``pragma_resource`` resource label naming this
+                resource.
         """
         client = self._get_client()
 
@@ -583,6 +593,8 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
             cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
         except NotFound:
             return None
+
+        verify_resource_marker(cluster.resource_labels, self.id, self.describe_object())
 
         return self._build_outputs(cluster)
 
