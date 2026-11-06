@@ -53,7 +53,7 @@ pragma providers install pragmatiks/agno
 |----------|-----------|-------------|
 | Agent | `agent` | AI agent definition with model, tools, knowledge, and memory |
 | Team | `team` | Coordinated group of agents with shared resources |
-| Runner | `runner` | Deploys one or more agents/teams to Kubernetes as a Deployment + Service |
+| Runner | `runner` | Deploys one or more agents/teams to Kubernetes as a Deployment + Service the runner owns, deleted with it. Ready once both are ready: the Deployment once rolled out; with `public: true` the Service is a LoadBalancer, ready only once the cluster assigns it an external address, so on a cluster that assigns none (kind, bare metal without a load-balancer controller) the Service fails when its operation deadline passes and the runner does not become ready. `url` is the in-cluster address |
 | Prompt | `prompt` | Reusable instruction template with variable interpolation |
 | OpenAI Model | `models/openai` | OpenAI model configuration (GPT-4o, etc.) |
 | Anthropic Model | `models/anthropic` | Anthropic model configuration (Claude, etc.) |
