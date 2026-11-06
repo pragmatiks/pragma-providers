@@ -1,3 +1,9 @@
+## agno-v2.2.17 (2026-11-06)
+
+### Refactor
+
+- **agno**: compose the runner through owned children
+
 ## agno-v2.2.16 (2026-11-06)
 
 ## agno-v2.2.15 (2026-11-06)
