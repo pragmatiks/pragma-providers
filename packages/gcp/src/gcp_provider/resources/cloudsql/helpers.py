@@ -83,6 +83,18 @@ def extract_ips(instance: dict) -> tuple[str | None, str | None]:
     return public_ip, private_ip
 
 
+def extract_user_labels(instance: dict) -> dict[str, str] | None:
+    """Extract the user labels a Cloud SQL instance carries.
+
+    Args:
+        instance: Instance as Cloud SQL returns it.
+
+    Returns:
+        The instance's ``settings.userLabels``, or None when it has none.
+    """
+    return instance.get("settings", {}).get("userLabels")
+
+
 def connection_info(database_version: str) -> tuple[str, str]:
     """Get connection type and port from database version string.
 

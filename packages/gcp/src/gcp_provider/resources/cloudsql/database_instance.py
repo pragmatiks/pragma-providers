@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import secrets
 import string
 from collections.abc import AsyncIterator
@@ -27,6 +26,7 @@ from gcp_provider.resources.cloudsql.helpers import (
     execute,
     execute_insert,
     extract_ips,
+    extract_user_labels,
     get_credentials,
     get_sqladmin_service,
     run_in_executor,
@@ -34,15 +34,14 @@ from gcp_provider.resources.cloudsql.helpers import (
 )
 from gcp_provider.resources.marker import (
     MarkerMatch,
-    build_conflict_message,
+    MarkerRefusal,
+    MarkerTarget,
     build_resource_marker,
-    match_resource_marker,
-    verify_resource_marker,
+    check_resource_marker,
+    log_conflict_recognized,
+    refuse_object,
 )
 from gcp_provider.resources.polling import compute_operation_deadline, poll_until
-
-
-logger = logging.getLogger(__name__)
 
 
 class DatabaseInstanceConfig(Config):
@@ -165,8 +164,8 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
           RUNNABLE (up to 19 minutes). An instance carrying that label is this
           resource's earlier create and is brought up to date as on_update does;
           any other existing instance is refused instead of adopted.
-        - on_observe: Reads the instance by ``project_id`` and ``instance_name``. An
-          instance without this resource's label is refused, as on_create refuses it.
+        - on_observe: Reads the instance by ``project_id`` and ``instance_name``;
+          raises AlreadyExistsError for an instance without this resource's label.
         - on_update: Patches mutable settings (tier, availability_type, backups,
           network config, deletion_protection) and waits for RUNNABLE.
         - on_delete: Deletes the instance. Respects ``deletion_protection`` --
@@ -198,48 +197,35 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
                 field: outputs.credentials_json
     """
 
-    def describe_object(self) -> str:
-        """Name the instance as a refusal shows it.
+    def build_marker_target(self) -> MarkerTarget:
+        """Build the instance's identity as marker checks name it.
 
         Returns:
-            The instance name and its project.
+            The marker target of the instance at this resource's identity.
         """
-        return f"Cloud SQL instance {self.config.instance_name} in project {self.config.project_id}"
+        return MarkerTarget(
+            resource_id=self.id,
+            type_name="cloudsql_database_instance",
+            object_path=f"projects/{self.config.project_id}/instances/{self.config.instance_name}",
+            subject=f"Cloud SQL instance {self.config.instance_name} in project {self.config.project_id}",
+        )
 
-    @staticmethod
-    def extract_labels(instance: dict) -> dict[str, str] | None:
-        """Extract the user labels an instance carries.
-
-        Args:
-            instance: Instance as Cloud SQL returns it.
-
-        Returns:
-            The instance's ``settings.userLabels``, or None when it has none.
-        """
-        return instance.get("settings", {}).get("userLabels")
-
-    async def read_marker_match(self, service: Any) -> MarkerMatch:
-        """Read the existing instance and compare its resource marker with this resource.
+    async def fetch_instance(self, service: Any) -> dict | None:
+        """Fetch the instance at this resource's identity.
 
         Args:
             service: Cloud SQL Admin API service.
 
         Returns:
-            How the instance's ``pragma_resource`` user label compares with this resource;
-            ``ABSENT`` when the instance is gone.
+            The instance as Cloud SQL returns it, or None if it does not exist.
 
         Raises:
             HttpError: If the read fails for any reason other than the instance being absent.
         """
-        instance = await execute(
+        return await execute(
             service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
             ignore_404=True,
         )
-
-        if instance is None:
-            return MarkerMatch.ABSENT
-
-        return match_resource_marker(self.extract_labels(instance), self.id)
 
     async def on_create(self) -> DatabaseInstanceOutputs:
         """Create Cloud SQL instance and wait for RUNNABLE state.
@@ -252,31 +238,22 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
                 create already exists in the project.
         """
         service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
+        target = self.build_marker_target()
 
         try:
             await execute_insert(
                 service.instances().insert(project=self.config.project_id, body=self._build_instance_body()),
-                f"Cloud SQL instance {self.config.instance_name} in project {self.config.project_id}",
+                target.subject,
             )
-        except AlreadyExistsError as error:
-            match = await self.read_marker_match(service)
-            instance_path = f"{self.config.project_id}/{self.config.instance_name}"
+        except AlreadyExistsError:
+            existing = await self.fetch_instance(service)
 
-            if match is MarkerMatch.OWN:
-                logger.warning(
-                    "gcp_create_conflict_recognized type=cloudsql_database_instance resource=%s instance=%s",
-                    self.id,
-                    instance_path,
-                )
-                return await self.on_update(None)
+            if existing is None:
+                refuse_object(target, MarkerRefusal.CREATE_CONFLICT, MarkerMatch.ABSENT, None)
 
-            logger.warning(
-                "gcp_create_conflict_refused type=cloudsql_database_instance resource=%s instance=%s reason=%s",
-                self.id,
-                instance_path,
-                match,
-            )
-            raise AlreadyExistsError(build_conflict_message(self.describe_object(), match)) from error
+            check_resource_marker(extract_user_labels(existing), target, MarkerRefusal.CREATE_CONFLICT)
+            log_conflict_recognized(target)
+            return await self.on_update(None)
 
         instance = await self._wait_for_runnable(service, compute_operation_deadline())
 
@@ -293,16 +270,12 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
                 resource.
         """
         service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
-
-        instance = await execute(
-            service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
-            ignore_404=True,
-        )
+        instance = await self.fetch_instance(service)
 
         if instance is None:
             return None
 
-        verify_resource_marker(self.extract_labels(instance), self.id, self.describe_object())
+        check_resource_marker(extract_user_labels(instance), self.build_marker_target(), MarkerRefusal.OBSERVE)
 
         return self._build_outputs(instance)
 
@@ -595,6 +568,10 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
     def _build_patch_body(self) -> dict:
         """Build patch body for update request (mutable settings only).
 
+        The body carries the resource marker in ``settings.userLabels``. Cloud SQL merges a patch
+        with the instance's configuration and changes only the labels it names, so the marker
+        stays and labels added outside Pragmatiks are kept.
+
         Returns:
             Patch body dict for Cloud SQL API.
         """
@@ -613,6 +590,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             "ipConfiguration": ip_configuration,
             "deletionProtectionEnabled": self.config.deletion_protection,
             "backupConfiguration": {"enabled": self.config.backup_enabled, "startTime": "03:00"},
+            "userLabels": build_resource_marker(self.id),
         }
 
         return {"settings": settings}
