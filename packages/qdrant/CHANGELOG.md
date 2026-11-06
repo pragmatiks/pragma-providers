@@ -1,3 +1,9 @@
+## qdrant-v8.3.2 (2026-11-06)
+
+### Refactor
+
+- **qdrant**: compose the database through owned children
+
 ## qdrant-v8.3.1 (2026-11-06)
 
 ## qdrant-v8.3.0 (2026-11-06)
