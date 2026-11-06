@@ -37,6 +37,7 @@ from pragma_sdk import (
 )
 from pydantic import BaseModel
 
+from kubernetes_provider.marker import MarkerRefusal
 from kubernetes_provider.objects import (
     FIELD_MANAGER,
     build_object_metadata,
@@ -210,8 +211,8 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
     Lifecycle:
         - on_create: Create deployment (apply over this resource's earlier create,
           refuse any other existing deployment), wait for all replicas ready
-        - on_observe: Look up the deployment by name and namespace; refuse a deployment without this
-          resource's annotation, as on_create refuses it
+        - on_observe: Look up the deployment by name and namespace; raise AlreadyExistsError for one
+          without this resource's annotation
         - on_update: Apply updated deployment, wait for all replicas ready
         - on_delete: Delete the deployment and wait until it is gone (idempotent)
     """
@@ -433,7 +434,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         """
         async with self._get_client() as client:
             deployment = await fetch_own_object(
-                client, K8sDeployment, self.id, self.name, cast(str, self.config.namespace)
+                client, K8sDeployment, self.id, self.name, cast(str, self.config.namespace), MarkerRefusal.OBSERVE
             )
 
         if deployment is None:

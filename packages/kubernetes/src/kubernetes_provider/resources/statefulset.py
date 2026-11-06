@@ -40,6 +40,7 @@ from pragma_sdk import (
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
+from kubernetes_provider.marker import MarkerRefusal
 from kubernetes_provider.objects import (
     FIELD_MANAGER,
     build_object_metadata,
@@ -247,8 +248,8 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
     Lifecycle:
         - on_create: Create statefulset (apply over this resource's earlier create,
           refuse any other existing statefulset), wait for ready
-        - on_observe: Look up the statefulset by name and namespace; refuse a statefulset without this
-          resource's annotation, as on_create refuses it
+        - on_observe: Look up the statefulset by name and namespace; raise AlreadyExistsError for one
+          without this resource's annotation
         - on_update: Apply updated statefulset, wait for ready
         - on_delete: Delete statefulset with background cascade and wait until it is gone
     """
@@ -448,7 +449,7 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
         """
         async with self._get_client() as client:
             statefulset = await fetch_own_object(
-                client, K8sStatefulSet, self.id, self.name, cast(str, self.config.namespace)
+                client, K8sStatefulSet, self.id, self.name, cast(str, self.config.namespace), MarkerRefusal.OBSERVE
             )
 
         if statefulset is None:
