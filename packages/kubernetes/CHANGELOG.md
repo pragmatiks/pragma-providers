@@ -1,3 +1,16 @@
+## kubernetes-v2.3.0 (2026-11-06)
+
+### Feat
+
+- **kubernetes**: refuse at observe an object this resource did not create (PRA-598)
+
+### Fix
+
+- **kubernetes**: state the objects module's lookup contract only (PRA-598)
+- **kubernetes**: recognize create conflicts and observes through fetch_own_object (PRA-598)
+- **deps**: update pragmatiks-sdk to v25.1.0 (#158)
+- **deps**: update pragmatiks-sdk to v25.0.0 (#156)
+
 ## kubernetes-v2.2.14 (2026-11-05)
 
 ### Fix
