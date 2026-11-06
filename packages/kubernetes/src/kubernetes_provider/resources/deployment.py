@@ -44,6 +44,7 @@ from kubernetes_provider.objects import (
     create_object,
     delete_object,
     fetch_object,
+    fetch_own_object,
     wait_for_absence,
 )
 from kubernetes_provider.resources.config import KubernetesConfig
@@ -209,7 +210,8 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
     Lifecycle:
         - on_create: Create deployment (apply over this resource's earlier create,
           refuse any other existing deployment), wait for all replicas ready
-        - on_observe: Look up the deployment by name and namespace
+        - on_observe: Look up the deployment by name and namespace; refuse a deployment without this
+          resource's annotation, as on_create refuses it
         - on_update: Apply updated deployment, wait for all replicas ready
         - on_delete: Delete the deployment and wait until it is gone (idempotent)
     """
@@ -424,9 +426,15 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
         Returns:
             DeploymentOutputs, or ``None`` if the deployment does not exist.
+
+        Raises:
+            AlreadyExistsError: If the deployment carries no ``pragma.io/resource`` annotation naming this
+                resource.
         """
         async with self._get_client() as client:
-            deployment = await fetch_object(client, K8sDeployment, self.name, cast(str, self.config.namespace))
+            deployment = await fetch_own_object(
+                client, K8sDeployment, self.id, self.name, cast(str, self.config.namespace)
+            )
 
         if deployment is None:
             return None

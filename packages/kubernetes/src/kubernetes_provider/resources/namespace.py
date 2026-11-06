@@ -17,6 +17,7 @@ from kubernetes_provider.objects import (
     create_object,
     delete_object,
     fetch_object,
+    fetch_own_object,
     wait_for_absence,
 )
 from kubernetes_provider.resources.config import KubernetesConfig
@@ -64,7 +65,8 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
     Lifecycle:
         - on_create: Create the namespace; apply over this resource's earlier
           create, refuse any other existing namespace
-        - on_observe: Look up the namespace by name
+        - on_observe: Look up the namespace by name; refuse a namespace without this
+          resource's annotation, as on_create refuses it
         - on_update: Apply updated namespace configuration (labels)
         - on_delete: Delete the namespace and wait until it is gone (idempotent)
     """
@@ -133,9 +135,13 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
 
         Returns:
             NamespaceOutputs, or ``None`` if the namespace does not exist.
+
+        Raises:
+            AlreadyExistsError: If the namespace carries no ``pragma.io/resource`` annotation naming this
+                resource.
         """
         async with self._get_client() as client:
-            namespace = await fetch_object(client, K8sNamespace, self.name)
+            namespace = await fetch_own_object(client, K8sNamespace, self.id, self.name)
 
         if namespace is None:
             return None

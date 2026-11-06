@@ -27,6 +27,7 @@ from kubernetes_provider.objects import (
     create_object,
     delete_object,
     fetch_object,
+    fetch_own_object,
     wait_for_absence,
 )
 from kubernetes_provider.resources.config import KubernetesConfig
@@ -75,7 +76,8 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
     Lifecycle:
         - on_create: Create the configmap; apply over this resource's earlier
           create, refuse any other existing configmap
-        - on_observe: Look up the configmap by name and namespace
+        - on_observe: Look up the configmap by name and namespace; refuse a configmap without this
+          resource's annotation, as on_create refuses it
         - on_update: Apply updated configmap configuration
         - on_delete: Delete the configmap and wait until it is gone (idempotent)
     """
@@ -146,9 +148,15 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
 
         Returns:
             ConfigMapOutputs, or ``None`` if the configmap does not exist.
+
+        Raises:
+            AlreadyExistsError: If the configmap carries no ``pragma.io/resource`` annotation naming this
+                resource.
         """
         async with self._get_client() as client:
-            configmap = await fetch_object(client, K8sConfigMap, self.name, cast(str, self.config.namespace))
+            configmap = await fetch_own_object(
+                client, K8sConfigMap, self.id, self.name, cast(str, self.config.namespace)
+            )
 
         if configmap is None:
             return None

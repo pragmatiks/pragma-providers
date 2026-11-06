@@ -30,6 +30,7 @@ from kubernetes_provider.objects import (
     create_object,
     delete_object,
     fetch_object,
+    fetch_own_object,
     wait_for_absence,
 )
 from kubernetes_provider.resources.config import KubernetesConfig
@@ -109,7 +110,8 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
     Lifecycle:
         - on_create: Create the service; apply over this resource's earlier
           create, refuse any other existing service
-        - on_observe: Look up the service by name and namespace
+        - on_observe: Look up the service by name and namespace; refuse a service without this
+          resource's annotation, as on_create refuses it
         - on_update: Apply updated service configuration
         - on_delete: Delete the service and wait until it is gone (idempotent)
     """
@@ -213,9 +215,13 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
 
         Returns:
             ServiceOutputs, or ``None`` if the service does not exist.
+
+        Raises:
+            AlreadyExistsError: If the service carries no ``pragma.io/resource`` annotation naming this
+                resource.
         """
         async with self._get_client() as client:
-            service = await fetch_object(client, K8sService, self.name, cast(str, self.config.namespace))
+            service = await fetch_own_object(client, K8sService, self.id, self.name, cast(str, self.config.namespace))
 
         if service is None:
             return None
@@ -232,6 +238,8 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             ServiceOutputs with updated service details.
 
         Raises:
+            AlreadyExistsError: If the service in the cluster carries no ``pragma.io/resource``
+                annotation naming this resource (``on_observe``).
             ValueError: If the service in the cluster is headless and the desired one is not, or
                 the reverse; the cluster IP of an existing service cannot change.
         """
