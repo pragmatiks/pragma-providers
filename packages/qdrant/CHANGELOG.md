@@ -1,3 +1,16 @@
+## qdrant-v8.3.0 (2026-11-06)
+
+### Feat
+
+- **qdrant**: refuse at observe a collection this resource did not create (PRA-598)
+
+### Fix
+
+- **qdrant**: type the refused collection's owner as an optional string (PRA-598)
+- **qdrant**: recognize create conflicts and observes through one marker check (PRA-598)
+- **deps**: update pragmatiks-sdk to v25.1.0 (#158)
+- **deps**: update pragmatiks-sdk to v25.0.0 (#156)
+
 ## qdrant-v8.2.17 (2026-11-05)
 
 ### Fix
