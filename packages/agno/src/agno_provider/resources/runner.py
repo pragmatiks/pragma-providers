@@ -33,11 +33,13 @@ from kubernetes_provider.resources.deployment import (
 )
 from kubernetes_provider.resources.service import PortConfig
 from pragma_sdk import (
+    ChildrenPending,
     Config,
     Dependency,
     Field,
     HealthStatus,
     ImmutableDependency,
+    LifecycleState,
     LogEntry,
     Outputs,
     Resource,
@@ -246,9 +248,11 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
           security_key: "key-from-agentos-control-plane"
 
     Lifecycle:
-        - on_create: Create child Kubernetes Deployment + Service, wait for ready
-        - on_update: Update child Kubernetes resources, wait for ready
-        - on_delete: Child resources cascade deleted via owner_references
+        - on_create, on_update: ``converge``: apply the Deployment and the Service as
+          children this runner owns, read both, and return ``ChildrenPending()`` until both
+          are READY, then the outputs. With ``public``, the Service is a LoadBalancer, READY
+          only once the cluster assigns it an external address.
+        - on_delete: Do nothing; the owned Deployment and Service are deleted with this runner
     """
 
     computed = True
@@ -452,39 +456,6 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             config=config,
         )
 
-    def _build_kubernetes_deployment_for_delete(self, namespace_name: str) -> KubernetesDeployment:
-        """Build minimal kubernetes/deployment for deletion.
-
-        Creates a deployment resource with just enough config to call on_delete().
-        The actual container/selector config doesn't matter for deletion.
-
-        Args:
-            namespace_name: Resolved namespace name string.
-
-        Returns:
-            Kubernetes Deployment resource for deletion.
-        """
-        labels = self._labels()
-
-        container = ContainerConfig(
-            name="agno",
-            image=self.config.image,
-        )
-
-        config = KubernetesDeploymentConfig(
-            config=self.config.config,
-            namespace=namespace_name,
-            replicas=1,
-            selector=labels,
-            containers=[container],
-        )
-
-        return KubernetesDeployment(
-            project_id=self.project_id,
-            name=self._runner_name(),
-            config=config,
-        )
-
     def _build_service_url(self, namespace_name: str) -> str:
         """Build in-cluster service URL.
 
@@ -530,29 +501,6 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             url=self._build_service_url(namespace_name),
         )
 
-    async def _apply_kubernetes_resources(
-        self,
-        namespace_name: str,
-        agent_specs: list[AgentSpec],
-        team_specs: list[TeamSpec],
-    ) -> None:
-        """Apply kubernetes deployment and service as child resources.
-
-        The deployment is awaited until READY so the runner only reports
-        ready when pods have actually started. The service is applied
-        fire-and-forget because it does not gate pod readiness.
-
-        Args:
-            namespace_name: Resolved namespace name string.
-            agent_specs: Agent specs to deploy on this runner.
-            team_specs: Team specs to deploy on this runner.
-        """
-        kubernetes_deployment = self._build_kubernetes_deployment(namespace_name, agent_specs, team_specs)
-        await kubernetes_deployment.apply(wait=True, timeout=300.0)
-
-        kubernetes_service = self._build_kubernetes_service(namespace_name)
-        await kubernetes_service.apply()
-
     async def _kubernetes_deployment(self) -> KubernetesDeployment:
         """Get kubernetes deployment resource for current spec.
 
@@ -564,48 +512,79 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
 
         return self._build_kubernetes_deployment(namespace_name, agent_specs, team_specs)
 
-    async def on_create(self) -> RunnerOutputs:
-        """Create Kubernetes Deployment + Service.
+    def log_pending_children(self, recorded_children: dict[str, KubernetesDeployment | Service | None]) -> None:
+        """Log each child that is absent or not READY, the reason this pass returns ``ChildrenPending()``.
 
-        Returns:
-            RunnerOutputs with runner details.
-        """
-        namespace_name = await self._resolve_namespace_name()
-        agent_specs, team_specs = await self._resolve_entity_specs()
-
-        await self._apply_kubernetes_resources(namespace_name, agent_specs, team_specs)
-
-        return self._build_outputs(namespace_name, agent_specs, team_specs)
-
-    async def on_update(self, previous_config: RunnerConfig | None) -> RunnerOutputs:  # noqa: ARG002
-        """Update Kubernetes Deployment + Service.
+        A child absent right after its apply is logged at warning, one not READY at info.
 
         Args:
-            previous_config: The previous configuration, if any.
+            recorded_children: Each child as read, keyed by its resource ID.
+        """
+        for child_id, recorded_child in recorded_children.items():
+            if recorded_child is None:
+                logger.warning("agno_runner_children_pending resource=%s child=%s reason=absent", self.id, child_id)
+            elif recorded_child.lifecycle_state != LifecycleState.READY:
+                logger.info(
+                    "agno_runner_children_pending resource=%s child=%s reason=not_ready lifecycle_state=%s",
+                    self.id,
+                    child_id,
+                    recorded_child.lifecycle_state,
+                )
+
+    async def converge(self) -> RunnerOutputs | ChildrenPending:
+        """Apply the Deployment and the Service, then report the outputs once both are READY.
 
         Returns:
-            RunnerOutputs with updated runner details.
+            RunnerOutputs when both children read READY, else ``ChildrenPending()``.
+
+        Raises:
+            CallbackRefusedError: If the platform refuses an apply or a read of a child.
+            RuntimeError: If the namespace, an agent or a team dependency has no outputs, or the
+                runner resolves no agent or team spec.
         """
         namespace_name = await self._resolve_namespace_name()
         agent_specs, team_specs = await self._resolve_entity_specs()
 
-        await self._apply_kubernetes_resources(namespace_name, agent_specs, team_specs)
+        kubernetes_deployment = self._build_kubernetes_deployment(namespace_name, agent_specs, team_specs)
+        kubernetes_service = self._build_kubernetes_service(namespace_name)
+
+        for child in (kubernetes_deployment, kubernetes_service):
+            await child.apply()
+
+        recorded_children = {
+            kubernetes_deployment.id: await kubernetes_deployment.read(),
+            kubernetes_service.id: await kubernetes_service.read(),
+        }
+
+        if any(child is None or child.lifecycle_state != LifecycleState.READY for child in recorded_children.values()):
+            self.log_pending_children(recorded_children)
+
+            return ChildrenPending()
 
         return self._build_outputs(namespace_name, agent_specs, team_specs)
 
-    async def on_delete(self) -> None:
-        """Delete Kubernetes Deployment + Service.
+    async def on_create(self) -> RunnerOutputs | ChildrenPending:
+        """Create the Kubernetes Deployment and Service as owned children.
 
-        Explicitly deletes child Kubernetes resources. Once cascade delete
-        via owner_references is implemented, this can be simplified.
+        Returns:
+            RunnerOutputs once both children are READY, else ``ChildrenPending()``.
         """
-        namespace_name = await self._resolve_namespace_name()
+        return await self.converge()
 
-        kubernetes_service = self._build_kubernetes_service(namespace_name)
-        await kubernetes_service.on_delete()
+    async def on_update(self, previous_config: RunnerConfig | None) -> RunnerOutputs | ChildrenPending:
+        """Reapply the Kubernetes Deployment and Service with the desired configuration.
 
-        kubernetes_deployment = self._build_kubernetes_deployment_for_delete(namespace_name)
-        await kubernetes_deployment.on_delete()
+        Args:
+            previous_config: The previous configuration, if any; every pass reapplies both
+                children, so it is not read.
+
+        Returns:
+            RunnerOutputs once both children are READY, else ``ChildrenPending()``.
+        """
+        return await self.converge()
+
+    async def on_delete(self) -> None:
+        """Do nothing; the owned Deployment and Service are deleted with this runner."""
 
     async def health(self) -> HealthStatus:
         """Check Runner health by delegating to child kubernetes/deployment.
