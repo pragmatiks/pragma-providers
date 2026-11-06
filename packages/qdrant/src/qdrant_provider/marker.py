@@ -89,7 +89,7 @@ def build_conflict_message(subject: str, match: MarkerMatch) -> str:
 
 
 def refuse_collection(
-    resource_id: str, collection_name: str, refusal: MarkerRefusal, match: MarkerMatch, owner: Any
+    resource_id: str, collection_name: str, refusal: MarkerRefusal, match: MarkerMatch, owner: str | None
 ) -> NoReturn:
     """Log the refusal of a collection at a resource's name and raise it.
 
