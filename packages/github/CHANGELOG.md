@@ -1,3 +1,9 @@
+## github-v6.2.16 (2026-11-07)
+
+### Fix
+
+- **github**: refuse a repository at a redirecting name instead of creating it
+
 ## github-v6.2.15 (2026-11-06)
 
 ### Fix
