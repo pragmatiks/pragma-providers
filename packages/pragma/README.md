@@ -81,7 +81,7 @@ resources:
 
 ### File
 
-Platform-managed file storage. The actual file content is uploaded through the Pragmatiks API (`POST /files/{name}/upload`); this resource reads the uploaded metadata and exposes URLs, size, and checksum as outputs.
+Platform-managed file storage. The actual file content is uploaded through the Pragmatiks API into the resource's project (`POST /projects/{project_id}/files/{name}/upload`); this resource reads the uploaded metadata and exposes URLs, size, and checksum as outputs.
 
 **Config:** none -- the resource tracks a file already uploaded through the Pragmatiks API under the resource's name.
 
