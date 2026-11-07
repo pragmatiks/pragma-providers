@@ -6,7 +6,7 @@ by dependent resources at runtime.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from agno.knowledge.embedder.openai import OpenAIEmbedder
 from pragma_sdk import Config, Field, Outputs
@@ -115,12 +115,12 @@ class EmbedderOpenAI(AgnoResource[EmbedderOpenAIConfig, EmbedderOpenAIOutputs, E
             EmbedderOpenAISpec with all configuration fields.
         """
         return EmbedderOpenAISpec(
-            id=self.config.id,
+            id=cast(str, self.config.id),
             api_key=str(self.config.api_key),
-            dimensions=self.config.dimensions,
-            encoding_format=self.config.encoding_format,
-            organization=self.config.organization,
-            base_url=self.config.base_url,
+            dimensions=cast(int | None, self.config.dimensions),
+            encoding_format=cast(Literal["float", "base64"], self.config.encoding_format),
+            organization=cast(str | None, self.config.organization),
+            base_url=cast(str | None, self.config.base_url),
         )
 
     def _build_outputs(self) -> EmbedderOpenAIOutputs:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import anthropic
 from agno.models.anthropic import Claude
@@ -101,9 +101,9 @@ def _build_output_config_param(
 
 
 def _validate_thinking_fields(
-    thinking_mode: ThinkingMode,
-    thinking_budget_tokens: int | None,
-    effort: EffortLevel | None,
+    thinking_mode: Field[ThinkingMode],
+    thinking_budget_tokens: Field[int] | None,
+    effort: Field[EffortLevel] | None,
 ) -> None:
     """Enforce per-mode constraints on thinking-related fields.
 
@@ -374,16 +374,16 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
             AnthropicModelSpec with all configuration fields.
         """
         return AnthropicModelSpec(
-            id=self.config.id,
+            id=cast(str, self.config.id),
             api_key=str(self.config.api_key),
-            max_tokens=self.config.max_tokens,
-            temperature=self.config.temperature,
-            top_p=self.config.top_p,
-            top_k=self.config.top_k,
-            stop_sequences=self.config.stop_sequences,
-            thinking_mode=self.config.thinking_mode,
-            thinking_budget_tokens=self.config.thinking_budget_tokens,
-            effort=self.config.effort,
+            max_tokens=cast(int, self.config.max_tokens),
+            temperature=cast(int | float | None, self.config.temperature),
+            top_p=cast(int | float | None, self.config.top_p),
+            top_k=cast(int | None, self.config.top_k),
+            stop_sequences=cast(list[str] | None, self.config.stop_sequences),
+            thinking_mode=cast(ThinkingMode, self.config.thinking_mode),
+            thinking_budget_tokens=cast(int | None, self.config.thinking_budget_tokens),
+            effort=cast(EffortLevel | None, self.config.effort),
         )
 
     def _build_outputs(self) -> AnthropicModelOutputs:
@@ -468,7 +468,7 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         the resource FAILED.
         """
         client = anthropic.AsyncAnthropic(api_key=str(self.config.api_key))
-        await client.models.retrieve(self.config.id)
+        await client.models.retrieve(cast(str, self.config.id))
 
     async def on_update(self, previous_config: AnthropicModelConfig | None) -> AnthropicModelOutputs:  # noqa: ARG002
         """Validate model/mode compatibility and return serializable outputs with spec.

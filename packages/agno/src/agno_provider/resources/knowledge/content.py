@@ -14,6 +14,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
+from typing import cast
 from urllib.parse import urlparse
 from uuid import UUID, uuid5
 
@@ -22,7 +23,7 @@ from agno.knowledge.document import Document
 from agno.knowledge.reader.base import Reader
 from agno.knowledge.reader.reader_factory import ReaderFactory
 from agno.utils import log as agno_log
-from pragma_sdk import Config, Field, ImmutableDependency, Outputs
+from pragma_sdk import Config, Field, FieldReference, ImmutableDependency, Outputs
 from pydantic import model_validator
 from qdrant_client import AsyncQdrantClient, models
 
@@ -92,13 +93,15 @@ class ContentConfig(Config):
     def validate_content_source(self) -> ContentConfig:
         """Validate that exactly one of url or text_content is provided.
 
+        An unresolved reference counts as a provided url.
+
         Returns:
             Self if validation passes.
 
         Raises:
             ValueError: If neither or both url and text_content are provided.
         """
-        has_url = self.url is not None and len(self.url) > 0
+        has_url = self.url is not None and (isinstance(self.url, FieldReference) or len(self.url) > 0)
         has_text = self.text_content is not None
 
         if has_url and has_text:
@@ -619,13 +622,13 @@ class Content(AgnoResource[ContentConfig, ContentOutputs, ContentSpec]):
             ContentSpec with all configuration fields.
         """
         return ContentSpec(
-            name=self.config.name if self.config.name else self.name,
+            name=cast(str, self.config.name) if self.config.name else self.name,
             knowledge_spec=knowledge_spec,
-            url=self.config.url,
-            text_content=self.config.text_content,
-            description=self.config.description,
-            metadata=self.config.metadata,
-            topics=self.config.topics,
+            url=cast(str | None, self.config.url),
+            text_content=cast(str | None, self.config.text_content),
+            description=cast(str | None, self.config.description),
+            metadata=cast(dict[str, str] | None, self.config.metadata),
+            topics=cast(list[str] | None, self.config.topics),
         )
 
     def build_outputs(self, spec: ContentSpec, content_hash: str | None) -> ContentOutputs:

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
+from typing import cast
 
-from pragma_sdk import Config, Field, Outputs
+from pragma_sdk import Config, Field, FieldReference, Outputs
 from pydantic import model_validator
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
@@ -41,6 +42,9 @@ class PromptConfig(Config):
     def validate_content(self) -> PromptConfig:
         """Validate that content is provided and variables are complete.
 
+        The placeholder check runs only on resolved values: it is skipped
+        while the template or the variables are an unresolved reference.
+
         Returns:
             The validated config instance.
 
@@ -51,6 +55,9 @@ class PromptConfig(Config):
         if not self.instructions and not self.template:
             msg = "At least one of 'instructions' or 'template' must be provided"
             raise ValueError(msg)
+
+        if isinstance(self.template, FieldReference) or isinstance(self.variables, FieldReference):
+            return self
 
         if self.template:
             placeholders = set(re.findall(r"\{\{(\w+)\}\}", self.template))
@@ -118,12 +125,16 @@ class Prompt(AgnoResource[PromptConfig, PromptOutputs, PromptSpec]):
         """
         parts: list[str] = []
 
-        if self.config.instructions:
-            parts.append("\n".join(self.config.instructions))
+        instructions = cast(list[str], self.config.instructions)
+        template = cast(str | None, self.config.template)
+        variables = cast(dict[str, str], self.config.variables)
 
-        if self.config.template:
-            rendered = self.config.template
-            for key, value in self.config.variables.items():
+        if instructions:
+            parts.append("\n".join(instructions))
+
+        if template:
+            rendered = template
+            for key, value in variables.items():
                 rendered = rendered.replace(f"{{{{{key}}}}}", value)
             parts.append(rendered)
 
@@ -136,10 +147,10 @@ class Prompt(AgnoResource[PromptConfig, PromptOutputs, PromptSpec]):
             PromptSpec with instructions, variables, and rendered text.
         """
         rendered = self._render()
-        variables = self.config.variables if self.config.variables else None
+        variables = cast(dict[str, str], self.config.variables) or None
 
         return PromptSpec(
-            instructions=self.config.instructions,
+            instructions=cast(list[str], self.config.instructions),
             variables=variables,
             rendered=rendered,
         )

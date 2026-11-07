@@ -5,6 +5,8 @@ Provides vector storage configuration for semantic search capabilities.
 
 from __future__ import annotations
 
+from typing import cast
+
 from agno.knowledge.knowledge import Knowledge as AgnoKnowledge
 from pragma_sdk import Config, Dependency, Field, ImmutableDependency, Outputs
 
@@ -139,7 +141,7 @@ class Knowledge(AgnoResource[KnowledgeConfig, KnowledgeOutputs, KnowledgeSpec]):
 
         return KnowledgeSpec(
             name=self.name,
-            max_results=self.config.max_results,
+            max_results=cast(int, self.config.max_results),
             vector_db_spec=vector_db_spec,
             embedder_spec=embedder_spec,
         )

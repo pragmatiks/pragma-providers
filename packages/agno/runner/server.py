@@ -18,6 +18,9 @@ import os
 import sys
 from typing import Any, NoReturn
 
+from agno.agent import Agent as AgnoAgent
+from agno.team import Team as AgnoTeam
+
 from agno_provider.resources.agent import Agent, AgentSpec
 from agno_provider.resources.team import Team, TeamSpec
 
@@ -137,7 +140,7 @@ def _build_agent_os_name(agent_specs: list[AgentSpec], team_specs: list[TeamSpec
     return team_specs[0].name
 
 
-def _build_agent(spec: AgentSpec) -> Agent:
+def _build_agent(spec: AgentSpec) -> AgnoAgent:
     """Reconstruct a single Agent from its spec with a clear error surface.
 
     Args:
@@ -152,7 +155,7 @@ def _build_agent(spec: AgentSpec) -> Agent:
         _exit_with_error(f"failed to reconstruct agent name={spec.name!r}: {type(exc).__name__}: {exc}")
 
 
-def _build_team(spec: TeamSpec) -> Team:
+def _build_team(spec: TeamSpec) -> AgnoTeam:
     """Reconstruct a single Team from its spec with a clear error surface.
 
     Args:
@@ -187,13 +190,10 @@ def build_app():  # noqa: ANN201
 
     agent_specs, team_specs = _parse_specs_payload(specs_json)
 
-    agents = [_build_agent(spec) for spec in agent_specs]
-    teams = [_build_team(spec) for spec in team_specs]
-
     agent_os = AgentOS(
         name=_build_agent_os_name(agent_specs, team_specs),
-        agents=agents,
-        teams=teams,
+        agents=[_build_agent(spec) for spec in agent_specs],
+        teams=[_build_team(spec) for spec in team_specs],
         workflows=[],
         authorization=authorization,
         telemetry=False,

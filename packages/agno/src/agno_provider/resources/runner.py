@@ -9,7 +9,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from kubernetes_provider import (
     Deployment as KubernetesDeployment,
@@ -369,26 +369,26 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             "workflows": [],
         }
 
-        env = {
+        env: dict[str, str] = {
             "AGNO_SPECS_JSON": json.dumps(specs_payload),
         }
 
         if self.config.security_key:
-            env["OS_SECURITY_KEY"] = self.config.security_key
+            env["OS_SECURITY_KEY"] = cast(str, self.config.security_key)
 
         if self.config.jwt_verification_key:
-            env["JWT_VERIFICATION_KEY"] = self.config.jwt_verification_key
+            env["JWT_VERIFICATION_KEY"] = cast(str, self.config.jwt_verification_key)
 
         container = ContainerConfig(
             name="agno",
-            image=self.config.image,
+            image=cast(str, self.config.image),
             ports=[ContainerPortConfig(container_port=8000, name="http")],
             env=env,
             resources=ResourceRequirementsConfig(
-                cpu=self.config.cpu,
-                memory=self.config.memory,
+                cpu=cast(str, self.config.cpu),
+                memory=cast(str, self.config.memory),
                 cpu_limit="1",
-                memory_limit=self.config.memory,
+                memory_limit=cast(str, self.config.memory),
             ),
             startup_probe=ProbeConfig(
                 http_get=HttpGetConfig(path="/health", port=8000),
@@ -489,10 +489,10 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             agent_specs=agent_specs,
             team_specs=team_specs,
             workflow_specs=[],
-            replicas=self.config.replicas,
-            image=self.config.image,
-            cpu=self.config.cpu,
-            memory=self.config.memory,
+            replicas=cast(int, self.config.replicas),
+            image=cast(str, self.config.image),
+            cpu=cast(str, self.config.cpu),
+            memory=cast(str, self.config.memory),
             security_key=self.config.security_key is not None,
         )
 
