@@ -6,7 +6,7 @@ keywords = ["supabase", "database", "authentication", "backend-as-a-service"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk>=25.2.0",
+    "pragmatiks-sdk>=26.0.1",
     "httpx>=0.28.0",
 ]
 
