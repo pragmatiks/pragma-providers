@@ -51,8 +51,9 @@ class File(Resource[FileConfig, FileOutputs]):
     """Platform-managed file storage.
 
     Reads metadata from object storage for files uploaded via the Pragmatiks
-    API. Files are stored under ``files/{organization_id}/{name}`` and their
-    metadata alongside them as ``files/{organization_id}/{name}.meta``.
+    API. Files are project-owned, stored under
+    ``files/{organization_id}/{project_id}/{name}`` and their metadata alongside
+    them as ``files/{organization_id}/{project_id}/{name}.meta``.
     """
 
     def load_store(self) -> GCSStore:
@@ -67,9 +68,9 @@ class File(Resource[FileConfig, FileOutputs]):
         """Return the storage path of the file content.
 
         Returns:
-            ``files/{organization_id}/{name}``.
+            ``files/{organization_id}/{project_id}/{name}``.
         """
-        return f"files/{settings.organization_id()}/{self.name}"
+        return f"files/{settings.organization_id()}/{self.project_id}/{self.name}"
 
     def metadata_path(self) -> str:
         """Return the storage path of the file's metadata sidecar.
@@ -91,9 +92,9 @@ class File(Resource[FileConfig, FileOutputs]):
         """Return the file's public download URL.
 
         Returns:
-            ``{PRAGMA_FILE_PUBLIC_URL}/files/{name}/download``.
+            ``{PRAGMA_FILE_PUBLIC_URL}/projects/{project_id}/files/{name}/download``.
         """
-        return f"{settings.file_public_base_url()}/files/{self.name}/download"
+        return f"{settings.file_public_base_url()}/projects/{self.project_id}/files/{self.name}/download"
 
     async def fetch_content_metadata(self, store: GCSStore) -> dict[str, Any]:
         """Derive the file's metadata from its stored content.
@@ -159,7 +160,9 @@ class File(Resource[FileConfig, FileOutputs]):
         outputs = await self.on_observe()
 
         if outputs is None:
-            raise FileNotFoundError(f"File content not uploaded. Use POST /files/{self.name}/upload first.")
+            raise FileNotFoundError(
+                f"File content not uploaded. Use POST /projects/{self.project_id}/files/{self.name}/upload first."
+            )
 
         return outputs
 
