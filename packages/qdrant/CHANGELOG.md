@@ -1,3 +1,9 @@
+## qdrant-v8.3.4 (2026-11-07)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v25.2.0 (#167)
+
 ## qdrant-v8.3.3 (2026-11-07)
 
 ## qdrant-v8.3.2 (2026-11-06)
