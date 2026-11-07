@@ -6,7 +6,7 @@ keywords = ["cloud", "gcp", "infrastructure", "database", "kubernetes"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk>=26.0.1",
+    "pragmatiks-sdk>=27.0.1",
     "google-cloud-container>=2.50.0",
     "google-cloud-logging>=3.10.0",
     "google-cloud-secret-manager>=2.20.0",
