@@ -16,6 +16,7 @@ jobs:
     env:
       SDK_VERSION: ${{ inputs.sdk_version }}
     permissions:
+      actions: write
       contents: write
       pull-requests: write
 
@@ -41,6 +42,19 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Compare the SDK major with the locked one
+        id: major
+        run: |
+          LOCKED_SDK_VERSION=$(python3 -c 'import tomllib; lock = tomllib.load(open("uv.lock", "rb")); print(next(package["version"] for package in lock["package"] if package["name"] == "pragmatiks-sdk"))')
+          echo "locked=${LOCKED_SDK_VERSION}" >> "$GITHUB_OUTPUT"
+
+          if [ "${SDK_VERSION%%.*}" = "${LOCKED_SDK_VERSION%%.*}" ]; then
+            echo "crosses=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Update SDK::pragmatiks-sdk ${LOCKED_SDK_VERSION} to ${SDK_VERSION} crosses a major version; the pull request waits for review"
+            echo "crosses=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Update SDK version in all providers
         run: |
@@ -88,12 +102,28 @@ jobs:
               git push -u origin "$BRANCH"
           fi
 
-      - name: Create and merge PR
+      - name: Create PR
         if: env.skip_pr != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LOCKED_SDK_VERSION: ${{ steps.major.outputs.locked }}
+          CROSSES_MAJOR: ${{ steps.major.outputs.crosses }}
         run: |
+          BODY="Automated SDK version bump to \`v${SDK_VERSION}\`."
+          if [ "$CROSSES_MAJOR" = "true" ]; then
+            BODY="${BODY}
+
+          SDK major bump from \`${LOCKED_SDK_VERSION}\`: this pull request waits for review. Adapt each provider on this branch, one commit per provider, run \`mise run check\`, then merge it; the merge starts \`publish.yaml\`."
+          fi
+
           gh pr create \
             --title "fix(deps): update pragmatiks-sdk to v${SDK_VERSION}" \
-            --body "Automated SDK version bump to \`v${SDK_VERSION}\`."
-          gh pr merge --squash
+            --body "$BODY"
+
+      - name: Merge PR and start the release
+        if: env.skip_pr != 'true' && steps.major.outputs.crosses == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "fix/update-sdk-${SDK_VERSION}" --squash
+          gh workflow run publish.yaml --ref main
