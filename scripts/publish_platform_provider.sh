@@ -18,8 +18,8 @@
 #                           uv tools are neither used nor changed.
 #
 # Requires: python3 >= 3.11, jq, uv at the version the workspace pyproject.toml pins, and a Python
-# >= 3.13 that uv can find or download for the pinned pragma CLI (pragmatiks-cli 13.1 or a later 13.x
-# on pragmatiks-sdk 18.x).
+# >= 3.13 that uv can find or download for the pinned pragma CLI (pragmatiks-cli 17.1 or a later 17.x,
+# whose own pragmatiks-sdk bound decides the SDK).
 #
 # Example:
 #   publish_platform_provider.sh packages/qdrant 7.0.1
@@ -61,8 +61,7 @@
 set -euo pipefail
 
 PROVIDER_NAMESPACE="pragmatiks"
-PRAGMA_CLI_REQUIREMENT="pragmatiks-cli>=13.1,<14"
-PRAGMA_SDK_REQUIREMENT="pragmatiks-sdk>=18,<19"
+PRAGMA_CLI_REQUIREMENT="pragmatiks-cli>=17.1,<18"
 PUBLISH_DEADLINE_SECONDS=1200
 POLL_INTERVAL_SECONDS=15
 
@@ -169,7 +168,7 @@ VERSION_LABEL="${PROVIDER_NAME} ${VERSION}"
 CHECK_HINT="Check it with: pragma providers versions ${PROVIDER_NAME}"
 
 UV_TOOL_DIR="${WORK_DIRECTORY}/tools" UV_TOOL_BIN_DIR="${WORK_DIRECTORY}/bin" \
-  uv tool install --quiet --with "${PRAGMA_SDK_REQUIREMENT}" "${PRAGMA_CLI_REQUIREMENT}"
+  uv tool install --quiet "${PRAGMA_CLI_REQUIREMENT}"
 
 if ! PREVIOUS_CATALOG_VERSION="$(read_catalog_version "${PROVIDER_NAME}" "${VERSION}")"; then
   echo "publish_platform_provider: ${VERSION_LABEL}:" \
