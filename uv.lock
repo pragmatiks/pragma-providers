@@ -1946,7 +1946,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-github"
-version = "6.2.15"
+version = "6.2.16"
 source = { editable = "packages/github" }
 dependencies = [
     { name = "httpx" },
