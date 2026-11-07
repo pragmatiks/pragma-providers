@@ -28,7 +28,12 @@
 # fix, refactor or perf commit or a breaking change; git-cliff computes the next version from them and
 # prepends their changelog entry to packages/<provider>/CHANGELOG.md. A provider that depends on one
 # bumped in this run is bumped as well: by its own commits when it has releasable ones, otherwise as a
-# PATCH whose changelog entry has only its heading. commitizen then writes the version into the
+# PATCH whose changelog entry has only its heading. A provider that ships a container image (agno) and
+# has neither releasable commits nor a bumped dependency is bumped the same way when the third-party
+# runtime dependencies uv.lock resolves for it differ from those at its release tag, whatever commit
+# type changed the lock, so its image is rebuilt under a new version; a lock change that leaves them
+# unchanged releases nothing. The release tag's uv.lock is read against the current manifests, so a
+# tag whose workspace pinned another uv version still reads. commitizen then writes the version into the
 # provider's version files, commits and creates the release tag. Eligibility is read from main, not
 # from the triggering push, so a run that was cancelled or stopped leaves nothing that the next run
 # does not see. A provider with nothing to bump whose current release tag has no GitHub Release,
@@ -96,6 +101,42 @@ compute_dependencies() {
     qdrant) echo "kubernetes" ;;
     agno) echo "gcp kubernetes" ;;
   esac
+}
+
+ships_image() {
+  case "$1" in
+    agno) return 0 ;;
+  esac
+
+  return 1
+}
+
+export_runtime_dependencies() {
+  uv export --directory "$2" --package "pragmatiks-$1" --frozen --no-dev --no-emit-workspace \
+    --no-hashes --no-annotate --no-header
+}
+
+has_changed_runtime_dependencies() {
+  local provider="$1"
+  local tag="$2"
+  local lock_tree
+  local current_export
+  local tag_export
+  local export_failed=""
+
+  ships_image "${provider}" || return 1
+
+  lock_tree="$(mktemp -d)"
+  git archive HEAD pyproject.toml ':(glob)packages/*/pyproject.toml' | tar -x -C "${lock_tree}"
+  git show "${tag}:uv.lock" > "${lock_tree}/uv.lock"
+
+  current_export="$(export_runtime_dependencies "${provider}" .)" || export_failed=1
+  tag_export="$(export_runtime_dependencies "${provider}" "${lock_tree}")" || export_failed=1
+
+  rm -rf "${lock_tree}"
+  [ -z "${export_failed}" ] || exit "${FAILURE_EXIT_CODE}"
+
+  [ "${current_export}" != "${tag_export}" ]
 }
 
 has_bumped_dependency() {
@@ -213,6 +254,9 @@ bump_provider() {
     next_version="$(compute_next_version "${provider}" "${current_version}")"
   elif has_bumped_dependency "${provider}"; then
     echo "bump_providers: ${provider}: a dependency was bumped; bumping as a PATCH"
+    next_version="$(compute_next_patch_version "${current_version}")"
+  elif has_changed_runtime_dependencies "${provider}" "${current_tag}"; then
+    echo "bump_providers: ${provider}: its resolved runtime dependencies changed; bumping as a PATCH"
     next_version="$(compute_next_patch_version "${current_version}")"
   else
     resume_unreleased_provider "${provider}" "${current_version}"
