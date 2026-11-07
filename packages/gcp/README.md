@@ -131,9 +131,9 @@ resources:
 ```
 
 **Behavior:**
-- Create: Creates the cluster, labelled `pragma_resource` with a digest of this resource's ID (GKE copies the label onto the cluster's Compute Engine resources), and polls until it serves, in RUNNING or DEGRADED state (up to 19 minutes). A cluster carrying this resource's label is its own earlier create and is brought up to date as Update does; any other existing cluster fails the resource and is left as is.
+- Create: Creates the cluster, labelled `pragma_resource` with a digest of this resource's ID (GKE copies the label onto the cluster's Compute Engine resources), and polls until it serves, in RUNNING, RECONCILING or DEGRADED state (up to 19 minutes). A cluster carrying this resource's label is its own earlier create and is brought up to date as Update does; any other existing cluster fails the resource and is left as is.
 - Observe: Reads the cluster by project, location and name.
-- Update: Waits for the cluster's pending operations; when the live channel differs, moves the cluster to the configured `release_channel` and waits for the update. Either way, waits for the cluster to serve, in RUNNING or DEGRADED state. `credentials` is mutable too; every other field is immutable and requires delete and recreate.
+- Update: When the live channel differs, waits for the cluster's pending operations, moves the cluster to the configured `release_channel` and waits for the update; when it matches and no cluster update is pending, sends no write and waits on no operation, so a node upgrade does not hold it. Either way, waits for the cluster to serve, in RUNNING, RECONCILING or DEGRADED state. A write GKE refuses because another operation runs on the cluster fails with GKE's message. `credentials` is mutable too; every other field is immutable and requires delete and recreate.
 - Delete: Deletes the cluster and polls until fully removed.
 - Health: Reports `healthy` (RUNNING), `degraded` (DEGRADED/PROVISIONING/RECONCILING), or `unhealthy` (ERROR/not found).
 - Logs: Streams cluster logs from Cloud Logging.
