@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from agno.tools.mcp import MCPTools
 from pragma_sdk import Config, Field, Outputs
@@ -118,6 +118,21 @@ class ToolsMCPOutputs(Outputs):
     spec: ToolsMCPSpec
 
 
+def stringify_values(values: dict[str, str] | None) -> dict[str, str] | None:
+    """Convert every value of a resolved mapping to a string.
+
+    Args:
+        values: Resolved mapping, or None.
+
+    Returns:
+        The mapping with string values, or None when it is empty or None.
+    """
+    if not values:
+        return None
+
+    return {key: str(value) for key, value in values.items()}
+
+
 class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
     """MCP server integration resource wrapping Agno's MCPTools.
 
@@ -159,13 +174,10 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
         Returns:
             ToolsMCPSpec with configuration.
         """
-        env: dict[str, str] | None = None
-
-        if self.config.env:
-            env = {key: str(value) for key, value in self.config.env.items()}
+        env = self._resolve_env()
 
         args: list[str] | None = None
-        command = self.config.command
+        command = cast(str | None, self.config.command)
 
         if command:
             parts = command.split()
@@ -174,13 +186,13 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
                 args = parts[1:]
 
         return ToolsMCPSpec(
-            url=self.config.url,
+            url=cast(str | None, self.config.url),
             command=command,
             args=args,
             env=env,
             transport=self._infer_transport(),
-            requires_confirmation_tools=self.config.requires_confirmation_tools,
-            external_execution_tools=self.config.external_execution_tools,
+            requires_confirmation_tools=cast(list[str] | None, self.config.requires_confirmation_tools),
+            external_execution_tools=cast(list[str] | None, self.config.external_execution_tools),
         )
 
     def _build_outputs(self) -> ToolsMCPOutputs:
@@ -200,10 +212,7 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
         Returns:
             Resolved environment dict or None.
         """
-        if not self.config.env:
-            return None
-
-        return {key: str(value) for key, value in self.config.env.items()}
+        return stringify_values(cast(dict[str, str] | None, self.config.env))
 
     def _resolve_headers(self) -> dict[str, str] | None:
         """Resolve static headers to strings.
@@ -211,10 +220,7 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
         Returns:
             Resolved headers dict or None.
         """
-        if not self.config.headers:
-            return None
-
-        return {key: str(value) for key, value in self.config.headers.items()}
+        return stringify_values(cast(dict[str, str] | None, self.config.headers))
 
     def _build_header_provider(self) -> Any:
         """Build a header_provider function for MCPTools.
@@ -311,7 +317,7 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
             The transport type, either explicit or inferred from config.
         """
         if self.config.transport:
-            return self.config.transport
+            return cast(TransportType, self.config.transport)
 
         if self.config.command:
             return "stdio"

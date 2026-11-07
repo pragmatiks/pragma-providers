@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from agno.vectordb.qdrant import Qdrant, SearchType
 from pragma_sdk import Config, Dependency, Field, ImmutableField, Outputs
@@ -161,7 +161,7 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
             url=str(self.config.url),
             collection=str(self.config.collection),
             api_key=api_key,
-            search_type=self.config.search_type,
+            search_type=cast(Literal["vector"], self.config.search_type),
             embedder_spec=embedder_spec,
         )
 

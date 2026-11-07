@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from agno.tools.websearch import WebSearchTools
 from pragma_sdk import Config, Field, Outputs
@@ -113,14 +113,14 @@ class ToolsWebSearch(AgnoResource[ToolsWebSearchConfig, ToolsWebSearchOutputs, T
             ToolsWebSearchSpec with all configuration fields.
         """
         return ToolsWebSearchSpec(
-            enable_search=self.config.enable_search,
-            enable_news=self.config.enable_news,
-            backend=self.config.backend,
-            modifier=self.config.modifier,
-            fixed_max_results=self.config.fixed_max_results,
-            proxy=self.config.proxy,
-            timeout=self.config.timeout,
-            verify_ssl=self.config.verify_ssl,
+            enable_search=cast(bool, self.config.enable_search),
+            enable_news=cast(bool, self.config.enable_news),
+            backend=cast(BackendType, self.config.backend),
+            modifier=cast(str | None, self.config.modifier),
+            fixed_max_results=cast(int | None, self.config.fixed_max_results),
+            proxy=cast(str | None, self.config.proxy),
+            timeout=cast(int, self.config.timeout),
+            verify_ssl=cast(bool, self.config.verify_ssl),
         )
 
     def _build_outputs(self) -> ToolsWebSearchOutputs:
@@ -140,16 +140,7 @@ class ToolsWebSearch(AgnoResource[ToolsWebSearchConfig, ToolsWebSearchOutputs, T
         Called by dependent resources (e.g., agno/agent) that need
         the actual toolkit object for their tools list.
         """
-        return WebSearchTools(
-            enable_search=self.config.enable_search,
-            enable_news=self.config.enable_news,
-            backend=self.config.backend,
-            modifier=self.config.modifier,
-            fixed_max_results=self.config.fixed_max_results,
-            proxy=self.config.proxy,
-            timeout=self.config.timeout,
-            verify_ssl=self.config.verify_ssl,
-        )
+        return self.from_spec(self._build_spec())
 
     async def on_create(self) -> ToolsWebSearchOutputs:
         """Create resource and return metadata.

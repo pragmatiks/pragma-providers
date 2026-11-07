@@ -6,7 +6,7 @@ by dependent resources at runtime.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from agno.models.openai import OpenAIChat
 from pragma_sdk import Field, SensitiveField
@@ -138,19 +138,19 @@ class OpenAIModel(Model[OpenAIModelConfig, OpenAIModelOutputs, OpenAIModelSpec, 
             OpenAIModelSpec with all configuration fields.
         """
         return OpenAIModelSpec(
-            id=self.config.id,
+            id=cast(str, self.config.id),
             api_key=str(self.config.api_key),
-            max_tokens=self.config.max_tokens,
-            temperature=self.config.temperature,
-            top_p=self.config.top_p,
-            frequency_penalty=self.config.frequency_penalty,
-            presence_penalty=self.config.presence_penalty,
-            seed=self.config.seed,
-            stop=self.config.stop,
-            timeout=self.config.timeout,
-            max_retries=self.config.max_retries,
-            organization=self.config.organization,
-            base_url=self.config.base_url,
+            max_tokens=cast(int | None, self.config.max_tokens),
+            temperature=cast(int | float | None, self.config.temperature),
+            top_p=cast(int | float | None, self.config.top_p),
+            frequency_penalty=cast(int | float | None, self.config.frequency_penalty),
+            presence_penalty=cast(int | float | None, self.config.presence_penalty),
+            seed=cast(int | None, self.config.seed),
+            stop=cast(str | list[str] | None, self.config.stop),
+            timeout=cast(int | float | None, self.config.timeout),
+            max_retries=cast(int | None, self.config.max_retries),
+            organization=cast(str | None, self.config.organization),
+            base_url=cast(str | None, self.config.base_url),
         )
 
     def _build_outputs(self) -> OpenAIModelOutputs:

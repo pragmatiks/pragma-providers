@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import cast
 from urllib.parse import quote, urlparse, urlunparse
 
 from agno.db.postgres import AsyncPostgresDb
@@ -228,20 +229,20 @@ class DbPostgres(AgnoResource[DbPostgresConfig, DbPostgresOutputs, DbPostgresSpe
         user = None
 
         if self.config.connection_url is not None:
-            connection_url = str(self.config.connection_url)
+            connection_url = cast(str, self.config.connection_url)
 
             if self.config.username is not None:
-                user = str(self.config.username)
+                user = cast(str, self.config.username)
 
             if self.config.password is not None:
-                password = str(self.config.password)
+                password = cast(str, self.config.password)
 
         else:
-            host = str(self.config.host)
-            port = self.config.port
-            database = str(self.config.database)
-            user = str(self.config.username)
-            password = str(self.config.password)
+            host = cast(str | None, self.config.host)
+            port = cast(int, self.config.port)
+            database = cast(str | None, self.config.database)
+            user = cast(str | None, self.config.username)
+            password = cast(str | None, self.config.password)
 
         return DbPostgresSpec(
             connection_url=connection_url,
@@ -250,10 +251,10 @@ class DbPostgres(AgnoResource[DbPostgresConfig, DbPostgresOutputs, DbPostgresSpe
             database=database,
             user=user,
             password=password,
-            db_schema=self.config.db_schema,
-            session_table=self.config.session_table,
-            memory_table=self.config.memory_table,
-            approvals_table=self.config.approvals_table,
+            db_schema=cast(str, self.config.db_schema),
+            session_table=cast(str | None, self.config.session_table),
+            memory_table=cast(str | None, self.config.memory_table),
+            approvals_table=cast(str | None, self.config.approvals_table),
         )
 
     def _build_outputs(self) -> DbPostgresOutputs:
