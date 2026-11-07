@@ -281,6 +281,10 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
 
         Returns:
             RepositoryOutputs, or ``None`` when the repository does not exist.
+
+        Raises:
+            AlreadyExistsError: If ``owner/name`` redirects because the repository
+                was renamed or transferred.
         """
         async with create_github_client(cast(str, self.config.access_token)) as client:
             repository = await fetch_optional_json(client, self.repository_path())

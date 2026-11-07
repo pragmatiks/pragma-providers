@@ -233,6 +233,10 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
 
         Returns:
             EnvironmentOutputs, or ``None`` when the environment does not exist.
+
+        Raises:
+            AlreadyExistsError: If GitHub redirects because the repository was
+                renamed or transferred.
         """
         async with create_github_client(cast(str, self.config.access_token)) as client:
             environment = await fetch_optional_json(client, self.environment_path())

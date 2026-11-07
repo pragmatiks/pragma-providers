@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
@@ -9,6 +10,8 @@ from pragma_sdk import AlreadyExistsError
 
 
 _BASE_URL = "https://api.github.com"
+
+logger = logging.getLogger(__name__)
 
 
 def create_github_client(access_token: str) -> httpx.AsyncClient:
@@ -40,21 +43,33 @@ def parse_error_message(response: httpx.Response) -> str:
         response: Unsuccessful HTTP response.
 
     Returns:
-        For a redirect, a message saying the repository in the request path moved
-        and that ``owner`` and the repository name must point at its new location.
-        Otherwise the API error message, falling back to the body or status code.
+        For a redirect, the message of ``build_moved_message``. Otherwise the
+        API error message, falling back to the body or status code.
     """
     if response.is_redirect:
-        return (
-            f"{response.request.url.path} moved because the repository was renamed or transferred; "
-            "set owner and the repository name to its new location"
-        )
+        return build_moved_message(response.request.url.path)
 
     try:
         body: dict[str, Any] = response.json()
         return body.get("message") or str(body)
     except Exception:
         return response.text or f"HTTP {response.status_code}"
+
+
+def build_moved_message(path: str) -> str:
+    """Build the failure message for a request GitHub redirected.
+
+    Args:
+        path: REST path GitHub redirected.
+
+    Returns:
+        A message saying the repository in ``path`` was renamed or transferred
+        and that Pragmatiks does not follow it to its new location.
+    """
+    return (
+        f"{path} redirects because its repository was renamed or transferred; "
+        "Pragmatiks does not follow it to its new location"
+    )
 
 
 async def raise_for_status(response: httpx.Response) -> None:
@@ -85,16 +100,22 @@ async def fetch_optional_json(client: httpx.AsyncClient, path: str) -> dict[str,
         path: REST path of the object to read.
 
     Returns:
-        The response body, or ``None`` when GitHub answers 404 or redirects
-        because the repository was renamed or transferred away from ``path``.
+        The response body, or ``None`` when GitHub answers 404.
 
     Raises:
+        AlreadyExistsError: If GitHub redirects because the repository was
+            renamed or transferred away from ``path``, so a create there never
+            makes a new repository at the old name.
         httpx.HTTPStatusError: If GitHub answers with any other error status.
     """
     response = await client.get(path)
 
-    if response.status_code == 404 or response.is_redirect:
+    if response.status_code == 404:
         return None
+
+    if response.is_redirect:
+        logger.warning("github_repository_moved path=%s operation=read", path)
+        raise AlreadyExistsError(build_moved_message(path))
 
     await raise_for_status(response)
 
@@ -113,7 +134,8 @@ async def ensure_absent(client: httpx.AsyncClient, path: str, description: str) 
         description: What the object is, named in the error message.
 
     Raises:
-        AlreadyExistsError: If GitHub already holds an object at ``path``.
+        AlreadyExistsError: If GitHub already holds an object at ``path``, or
+            redirects because its repository moved.
         httpx.HTTPStatusError: If GitHub answers the read with an error status other than 404.
     """
     if await fetch_optional_json(client, path) is not None:
@@ -124,8 +146,8 @@ async def ensure_absent(client: httpx.AsyncClient, path: str, description: str) 
 async def delete_if_present(client: httpx.AsyncClient, path: str) -> None:
     """Delete the object at ``path``, succeeding when nothing exists there.
 
-    A repository renamed or transferred away from ``path`` counts as absent and
-    is left untouched at its new location.
+    A repository renamed or transferred away from ``path`` counts as absent: it
+    is left untouched at its new location and the old path is logged.
 
     Args:
         client: Authenticated GitHub API client.
@@ -136,7 +158,11 @@ async def delete_if_present(client: httpx.AsyncClient, path: str) -> None:
     """
     response = await client.delete(path)
 
-    if response.status_code == 404 or response.is_redirect:
+    if response.status_code == 404:
+        return
+
+    if response.is_redirect:
+        logger.warning("github_repository_moved path=%s operation=delete", path)
         return
 
     await raise_for_status(response)
