@@ -4,32 +4,42 @@
 # it as published.
 #
 # Usage:
-#   publish_platform_provider.sh <provider_dir> <version>
+#   publish_platform_provider.sh <provider_dir> <version> <wheel_dir>
 #
 # Arguments:
-#   provider_dir  Provider package directory, such as packages/qdrant. Its pyproject.toml declares
-#                 [project].version and exactly one [project.entry-points."pragma.provider"] entry,
-#                 whose name is the provider's name in the catalog.
+#   provider_dir  Provider package directory, such as release-tag/packages/qdrant. Its directory name
+#                 is the provider, such as qdrant, and its pyproject.toml declares [project].version
+#                 and exactly one [project.entry-points."pragma.provider"] entry, whose name is the
+#                 provider's name in the catalog.
 #   version       Version to publish; must equal the pyproject version.
+#   wheel_dir     Directory holding exactly one wheel, built by scripts/build_provider_wheel.sh, whose
+#                 filename names the distribution pragmatiks-<provider> at <version>.
 #
 # Environment:
-#   PRAGMA_PUBLISH_API_KEY  Required. API key of the publishing organization; only the pinned pragma
-#                           CLI receives it. The caller's own pragma contexts, stored credentials and
-#                           uv tools are neither used nor changed.
+#   PRAGMA_PUBLISH_API_KEY_FILE  Required. A file holding only the API key of the publishing
+#                                organization, on one line. The script copies the key into the pinned
+#                                pragma CLI's isolated credentials file, deletes this file at once, and
+#                                deletes the credentials file on exit; the key is never put in any
+#                                environment or argument. The caller's own pragma contexts and stored
+#                                credentials are neither used nor changed.
+#   PRAGMA_PUBLISH_API_URL       API to publish to; empty or unset means https://api.pragmatiks.io. It
+#                                receives the key; set it only from a trusted source.
+#   PRAGMA_PUBLISH_NAMESPACE     Catalog namespace of the provider; empty or unset means pragmatiks.
 #
-# Requires: python3 >= 3.11, jq, uv at the version the workspace pyproject.toml pins, and a Python
-# >= 3.13 that uv can find or download for the pinned pragma CLI (pragmatiks-cli 17.7.1 or a later 17.x,
-# whose own pragmatiks-sdk bound decides the SDK).
+# Requires: python3 >= 3.11, jq, and uv at the version mise.toml pins with UV_PYTHON from mise.toml,
+# and scripts/publish_tooling next to this script; the working directory does not matter. The pragma
+# CLI is installed from scripts/publish_tooling/uv.lock, hash-checked and from wheels only. Bumping the
+# CLI pin: edit scripts/publish_tooling/pyproject.toml, then mise run lock.
 #
 # Example:
-#   publish_platform_provider.sh packages/qdrant 7.0.1
+#   PRAGMA_PUBLISH_API_KEY_FILE=./key publish_platform_provider.sh packages/qdrant 7.0.1 ./wheels
 #
-# Exits 0 without building or uploading when the catalog already records the version as published.
-# Otherwise builds the wheel and publishes it with pragma providers publish. A wheel other than the one
-# the catalog records for the version replaces a record that is still being published or failed, and
-# is refused while the record is promoting (pragma exit 1). The same wheel, which a rerun on the same
-# commit builds, is watched while the record is still being published, and starts a new attempt when
-# the record failed. pragma providers publish runs with --output json: its stderr flows to the log, and
+# Exits 0 without uploading when the catalog already records the version as published. Otherwise
+# publishes the wheel with pragma providers publish. A wheel other than the one the catalog records for
+# the version replaces a record that is still being published or failed, and is refused while the
+# record is promoting (pragma exit 1). The same wheel, which a rerun on the same release commit
+# supplies, is watched while the record is still being published, and starts a new attempt when the
+# record failed. pragma providers publish runs with --output json: its stderr flows to the log, and
 # once its watch ends its stdout carries one document, {"operation_id": <this publish's operation>,
 # "version": <the catalog record as last read>}, on exits 0, 1 and 3; earlier exits leave it empty. A
 # record whose operation_id differs from the document's operation_id was replaced by another publish of
@@ -45,23 +55,28 @@
 # 20 minutes after the publish started have passed (exit 1). Any other status (staged, queued, admitting
 # or promoting) and a catalog that cannot be read are polled again until the deadline.
 #
-# Also exits 1 when an argument is missing, PRAGMA_PUBLISH_API_KEY is empty or unset, the pyproject is
-# missing or malformed or its version differs from <version>, the catalog cannot be read to check
-# whether the version is already published, or the build does not yield exactly one wheel. A failing
-# uv tool install (the pinned pragma CLI cannot be installed) or uv build exits with uv's own non-zero
-# exit code instead of 1; uv's error is printed above.
+# Also exits 1 when an argument is missing, the key file is missing, empty or longer than one line, the
+# pyproject is missing or malformed, its pragma.provider entry-point name differs from the
+# directory name of <provider_dir>, <wheel_dir> does not hold
+# exactly one wheel or its filename names another distribution or version, or the catalog cannot be
+# read to check whether the version is already published. A failing uv sync of the pinned pragma CLI
+# (a hash mismatch or a stale lock) exits with uv's own non-zero exit code instead of 1; uv's error is
+# printed above.
 #
 # Catalog reads go through read_catalog_version <provider_name> <version>, which maps the exit code of
 # pragma providers versions --output json: 0 prints the version's catalog record as JSON, or null when
 # the provider has no such version; 4 (the provider is not found or not visible) prints null; anything
 # else, including 1 for a status the pragma CLI does not recognize and 2, returns 1 after printing the
 # pragma CLI error, and the catalog counts as unreadable. run_pragma runs the pinned pragma CLI in an
-# isolated context.
+# isolated context: it points XDG_CONFIG_HOME at the script's own config and removes the inherited
+# PRAGMA_AUTH_TOKEN, PRAGMA_AUTH_TOKEN_DEFAULT, PRAGMA_CONTEXT, PRAGMA_API_URL and
+# PRAGMA_PUBLISH_API_KEY_FILE from the CLI's environment.
 
 set -euo pipefail
 
-PROVIDER_NAMESPACE="pragmatiks"
-PRAGMA_CLI_REQUIREMENT="pragmatiks-cli>=17.7.1,<18"
+PUBLISH_NAMESPACE="${PRAGMA_PUBLISH_NAMESPACE:-pragmatiks}"
+PUBLISH_API_URL="${PRAGMA_PUBLISH_API_URL:-https://api.pragmatiks.io}"
+TOOLING_PROJECT="$(cd "$(dirname "$0")/publish_tooling" && pwd)"
 PUBLISH_DEADLINE_SECONDS=1200
 POLL_INTERVAL_SECONDS=15
 
@@ -75,31 +90,63 @@ MISSING_RECORD_STATUS="missing"
 REPLACED_RECORD_STATUS="replaced"
 UNREADABLE_CATALOG_STATUS="unreadable"
 
-if [ -z "${1:-}" ] || [ -z "${2:-}" ]; then
+if [ -z "${1:-}" ] || [ -z "${2:-}" ] || [ -z "${3:-}" ]; then
   echo "publish_platform_provider:" \
-    "usage: publish_platform_provider.sh <provider_dir> <version>" >&2
+    "usage: publish_platform_provider.sh <provider_dir> <version> <wheel_dir>" >&2
   exit "${FAILURE_EXIT_CODE}"
 fi
 
-if [ -z "${PRAGMA_PUBLISH_API_KEY:-}" ]; then
-  echo "publish_platform_provider: PRAGMA_PUBLISH_API_KEY is empty or unset" >&2
+if [ -z "${PRAGMA_PUBLISH_API_KEY_FILE:-}" ] || [ ! -s "${PRAGMA_PUBLISH_API_KEY_FILE}" ]; then
+  echo "publish_platform_provider: PRAGMA_PUBLISH_API_KEY_FILE does not name a non-empty file" >&2
   exit "${FAILURE_EXIT_CODE}"
 fi
 
-export -n PRAGMA_PUBLISH_API_KEY
+if [ "$(wc -l < "${PRAGMA_PUBLISH_API_KEY_FILE}")" -gt 1 ]; then
+  echo "publish_platform_provider: PRAGMA_PUBLISH_API_KEY_FILE holds more than one line" >&2
+  exit "${FAILURE_EXIT_CODE}"
+fi
 
 PROVIDER_DIRECTORY="$1"
 VERSION="$2"
+WHEEL_DIRECTORY="$3"
+
+PYPROJECT_PATH="${PROVIDER_DIRECTORY}/pyproject.toml"
+if [ ! -f "${PYPROJECT_PATH}" ]; then
+  echo "publish_platform_provider: pyproject not found at ${PYPROJECT_PATH}" >&2
+  exit "${FAILURE_EXIT_CODE}"
+fi
+
+shopt -s nullglob
+WHEELS=("${WHEEL_DIRECTORY}"/*.whl)
+shopt -u nullglob
+if [ "${#WHEELS[@]}" -ne 1 ]; then
+  echo "publish_platform_provider: expected exactly one wheel in ${WHEEL_DIRECTORY}," \
+    "found ${#WHEELS[@]}" >&2
+  exit "${FAILURE_EXIT_CODE}"
+fi
+
+EXPECTED_WHEEL_PREFIX="pragmatiks_$(basename "${PROVIDER_DIRECTORY}")-${VERSION}-"
+WHEEL_FILENAME="$(basename "${WHEELS[0]}")"
+if [ "${WHEEL_FILENAME#"${EXPECTED_WHEEL_PREFIX}"}" = "${WHEEL_FILENAME}" ]; then
+  echo "publish_platform_provider: wheel ${WHEEL_FILENAME} does not start with ${EXPECTED_WHEEL_PREFIX}" >&2
+  exit "${FAILURE_EXIT_CODE}"
+fi
 
 WORK_DIRECTORY="$(mktemp -d)"
 trap 'rm -rf "${WORK_DIRECTORY}"' EXIT
-PRAGMA_EXECUTABLE="${WORK_DIRECTORY}/bin/pragma"
+CLI_ENVIRONMENT_DIRECTORY="${WORK_DIRECTORY}/cli"
+PRAGMA_EXECUTABLE="${CLI_ENVIRONMENT_DIRECTORY}/bin/pragma"
 CLI_CONFIG_DIRECTORY="${WORK_DIRECTORY}/config"
-WHEEL_DIRECTORY="${WORK_DIRECTORY}/wheels"
 VERSIONS_STDERR_PATH="${WORK_DIRECTORY}/versions.stderr"
 
 run_pragma() {
-  XDG_CONFIG_HOME="${CLI_CONFIG_DIRECTORY}" PRAGMA_AUTH_TOKEN_DEFAULT="${PRAGMA_PUBLISH_API_KEY}" \
+  env \
+    -u PRAGMA_AUTH_TOKEN \
+    -u PRAGMA_AUTH_TOKEN_DEFAULT \
+    -u PRAGMA_CONTEXT \
+    -u PRAGMA_API_URL \
+    -u PRAGMA_PUBLISH_API_KEY_FILE \
+    XDG_CONFIG_HOME="${CLI_CONFIG_DIRECTORY}" \
     "${PRAGMA_EXECUTABLE}" --context default "$@"
 }
 
@@ -134,41 +181,47 @@ compute_operation_id() {
   jq --raw-output '.operation_id // ""' <<< "$1"
 }
 
-PYPROJECT_PATH="${PROVIDER_DIRECTORY}/pyproject.toml"
-if [ ! -f "${PYPROJECT_PATH}" ]; then
-  echo "publish_platform_provider: pyproject not found at ${PYPROJECT_PATH}" >&2
-  exit "${FAILURE_EXIT_CODE}"
-fi
-
-PYPROJECT_FIELDS="$(python3 - "${PYPROJECT_PATH}" <<'PYTHON'
+PROVIDER_SHORT_NAME="$(python3 - "${PYPROJECT_PATH}" <<'PYTHON'
 import sys
 import tomllib
 
 with open(sys.argv[1], "rb") as handle:
     project = tomllib.load(handle).get("project", {})
 
-version = project.get("version")
 providers = list(project.get("entry-points", {}).get("pragma.provider", {}))
-if not version or len(providers) != 1:
-    sys.exit('pyproject needs [project].version and exactly one [project.entry-points."pragma.provider"] entry')
+if len(providers) != 1:
+    sys.exit('pyproject needs exactly one [project.entry-points."pragma.provider"] entry')
 
-print(version, providers[0])
+print(providers[0])
 PYTHON
 )"
-read -r PYPROJECT_VERSION PROVIDER_SHORT_NAME <<< "${PYPROJECT_FIELDS}"
 
-if [ "${VERSION}" != "${PYPROJECT_VERSION}" ]; then
+PROVIDER_DIRECTORY_NAME="$(basename "${PROVIDER_DIRECTORY}")"
+if [ "${PROVIDER_SHORT_NAME}" != "${PROVIDER_DIRECTORY_NAME}" ]; then
   echo "publish_platform_provider:" \
-    "version '${VERSION}' differs from ${PYPROJECT_PATH}: '${PYPROJECT_VERSION}'" >&2
+    "pragma.provider entry point '${PROVIDER_SHORT_NAME}' differs from directory '${PROVIDER_DIRECTORY_NAME}'" >&2
   exit "${FAILURE_EXIT_CODE}"
 fi
 
-PROVIDER_NAME="${PROVIDER_NAMESPACE}/${PROVIDER_SHORT_NAME}"
+PROVIDER_NAME="${PUBLISH_NAMESPACE}/${PROVIDER_SHORT_NAME}"
 VERSION_LABEL="${PROVIDER_NAME} ${VERSION}"
 CHECK_HINT="Check it with: pragma providers versions ${PROVIDER_NAME}"
 
-UV_TOOL_DIR="${WORK_DIRECTORY}/tools" UV_TOOL_BIN_DIR="${WORK_DIRECTORY}/bin" \
-  uv tool install --quiet "${PRAGMA_CLI_REQUIREMENT}"
+UV_PROJECT_ENVIRONMENT="${CLI_ENVIRONMENT_DIRECTORY}" \
+  uv sync --project "${TOOLING_PROJECT}" --locked --no-install-project --no-build --quiet
+
+mkdir -p "${CLI_CONFIG_DIRECTORY}/pragma"
+
+jq --null-input --arg api_url "${PUBLISH_API_URL}" \
+  '{current_context: "default", contexts: {default: {api_url: $api_url}}}' \
+  > "${CLI_CONFIG_DIRECTORY}/pragma/config"
+
+(
+  umask 077
+  { printf 'default='; tr -d '\n' < "${PRAGMA_PUBLISH_API_KEY_FILE}"; } \
+    > "${CLI_CONFIG_DIRECTORY}/pragma/credentials"
+)
+rm -f "${PRAGMA_PUBLISH_API_KEY_FILE}"
 
 if ! PREVIOUS_CATALOG_VERSION="$(read_catalog_version "${PROVIDER_NAME}" "${VERSION}")"; then
   echo "publish_platform_provider: ${VERSION_LABEL}:" \
@@ -180,16 +233,6 @@ PREVIOUS_STATUS="$(compute_record_status "${PREVIOUS_CATALOG_VERSION}")"
 if [ "${PREVIOUS_STATUS}" = "${PUBLISHED_STATUS}" ]; then
   echo "publish_platform_provider: ${VERSION_LABEL}: already published"
   exit 0
-fi
-
-uv build "${PROVIDER_DIRECTORY}" --wheel --no-sources --out-dir "${WHEEL_DIRECTORY}"
-
-shopt -s nullglob
-WHEELS=("${WHEEL_DIRECTORY}"/*.whl)
-shopt -u nullglob
-if [ "${#WHEELS[@]}" -ne 1 ]; then
-  echo "publish_platform_provider: expected exactly one wheel, found ${#WHEELS[@]}" >&2
-  exit "${FAILURE_EXIT_CODE}"
 fi
 
 PUBLISH_STARTED_SECONDS="${SECONDS}"

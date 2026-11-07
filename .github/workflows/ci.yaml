@@ -36,13 +36,15 @@ jobs:
             exit 1
           }
 
-      - name: Assert pyproject.toml requires the mise uv pin
+      - name: Assert every uv project requires the mise uv pin
         run: |
-          required=$(sed -n 's/^required-version = "==\(.*\)"$/\1/p' pyproject.toml)
-          test "$required" = "$(mise current uv)" || {
-            echo "pyproject.toml requires uv $required, but mise.toml pins $(mise current uv)." >&2
-            exit 1
-          }
+          for pyproject in pyproject.toml scripts/publish_tooling/pyproject.toml; do
+            required=$(sed -n 's/^required-version = "==\(.*\)"$/\1/p' "$pyproject")
+            test "$required" = "$(mise current uv)" || {
+              echo "$pyproject requires uv $required, but mise.toml pins $(mise current uv)." >&2
+              exit 1
+            }
+          done
 
       - name: Assert the toolchain lock is current
         env:
@@ -50,7 +52,9 @@ jobs:
         run: mise run lock:toolchain && test -z "$(git status --porcelain -- 'mise*.lock' .mise/locks)"
 
       - name: Check lockfile
-        run: uv lock --check
+        run: |
+          uv lock --check
+          mise run check:tooling-lock
 
       - name: Restore the pre-commit hook environments
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
