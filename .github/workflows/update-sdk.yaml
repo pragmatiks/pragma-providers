@@ -81,6 +81,9 @@ jobs:
       - name: Update lockfile
         run: uv lock --upgrade-package pragmatiks-sdk
 
+      - name: Run the CI gate against the new SDK
+        run: mise run check:ci
+
       - name: Commit and push branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
