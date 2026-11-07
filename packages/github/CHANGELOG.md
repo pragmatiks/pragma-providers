@@ -1,3 +1,9 @@
+## github-v6.2.18 (2026-11-07)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v26.0.1 (#168)
+
 ## github-v6.2.17 (2026-11-07)
 
 ### Fix
