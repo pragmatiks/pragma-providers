@@ -1,3 +1,9 @@
+## agno-v2.2.23 (2026-11-07)
+
+### Fix
+
+- **agno**: keep URLs and vendor log text out of content failure reasons
+
 ## agno-v2.2.22 (2026-11-07)
 
 ### Perf
