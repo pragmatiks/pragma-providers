@@ -17,9 +17,9 @@ description = "Install the git hooks, which run pre-commit through mise, into th
 file = "scripts/tasks/install_hooks.sh"
 
 [lock]
-description = "Re-resolve the workspace lockfile"
+description = "Re-resolve the workspace lockfile and the publish tooling lockfile"
 extends = "bash"
-run = "uv lock"
+run = ["uv lock", "uv lock --project scripts/publish_tooling"]
 
 ["lock:toolchain"]
 description = "Re-resolve mise.lock for macOS arm64 and Linux x64 without bumping any tool; needs mise at the min_version in mise.toml"
@@ -30,11 +30,16 @@ description = "Format every provider with ruff"
 depends = ["*:format"]
 
 [check]
-description = "Run every provider's check, each in its own environment of only its declared and transitive dependencies: ruff fixes, then ruff and ty must pass"
-depends = ["*:check"]
+description = "Run every provider's check, each in its own environment of only its declared and transitive dependencies: ruff fixes, then ruff and ty must pass; and check the publish tooling lockfile"
+depends = ["*:check", "check:tooling-lock"]
+
+["check:tooling-lock"]
+description = "Fail when scripts/publish_tooling/uv.lock does not match its pyproject.toml"
+extends = "bash"
+run = "uv lock --check --project scripts/publish_tooling"
 
 ["check:wheels"]
-description = "Build every provider's wheel once with --no-sources, then check each introspects and declares its embeds against that release set"
+description = "Build every provider's wheel once as publishing builds it, then check each introspects and declares its embeds against that release set"
 file = "scripts/tasks/check_wheels.sh"
 
 ["check:ci"]
