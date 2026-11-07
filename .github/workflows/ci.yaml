@@ -68,14 +68,20 @@ jobs:
       - name: Check lockfile
         run: uv lock --check
 
-      - name: Install dependencies
-        run: uv sync --all-packages --all-groups --locked
+      - name: Check every provider in its own environment
+        run: mise run check
 
-      - name: Lint
-        run: uv run ruff check .
+      - name: Format every provider
+        run: mise run format
 
-      - name: Format check
-        run: uv run ruff format --check .
+      - name: Assert the tree is unchanged after check and format
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --porcelain
+            git --no-pager diff
+            echo "mise run check or mise run format changed files; run both locally and commit the result." >&2
+            exit 1
+          fi
 
   wheels:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'bump:')

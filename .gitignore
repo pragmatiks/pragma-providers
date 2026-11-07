@@ -34,3 +34,6 @@ e2e/
 
 # mise lock sidecars (committed)
 !/.mise/locks/
+
+# Per-provider type-check environments (mise run check)
+/.venvs/
