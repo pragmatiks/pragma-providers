@@ -30,7 +30,7 @@ description = "Format every provider with ruff"
 depends = ["*:format"]
 
 [check]
-description = "Run every provider's check: ruff fixes, then ruff and ty must pass"
+description = "Run every provider's check, each in its own environment of only its declared and transitive dependencies: ruff fixes, then ruff and ty must pass"
 depends = ["*:check"]
 
 ["check:wheels"]

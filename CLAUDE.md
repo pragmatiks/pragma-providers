@@ -34,9 +34,13 @@ Always use mise tasks (`mise tasks` lists them all):
 |---------|---------|
 | `mise run install` | Install the toolchain from `mise.lock`, every provider from `uv.lock`, and the git hooks |
 | `mise run format` | Format with ruff |
-| `mise run check` | Lint + type check |
+| `mise run check` | Lint + type check, each provider in its own environment |
 | `mise run check:wheels` | Build every provider's wheel once with `--no-sources` (as publishing does), install each with only the sibling wheels its `Requires-Dist` reaches, and fail on a failed `pragma_sdk.introspection` report or `pragma.embeds` keys that differ from the providers among them; CI runs it on every pull request and push |
 | `mise run lock:toolchain` | Regenerate `mise.lock` and `.mise/locks/` (macOS arm64 or Linux x64 only; never bumps) |
+
+### Provider environments
+
+`mise run check` and `mise run format` run each provider in its own environment, `.venvs/<distribution>/` at the repository root (gitignored), built by `uv run --package <distribution> --exact --locked --group dev` from `uv.lock`. It holds only the provider, its declared and transitive dependencies (workspace siblings it declares, editable) and its `dev` group, matching what the provider sees when installed alone, so ty fails an import of a sibling the provider does not declare. The distribution name is read from `project.name` in the provider's `pyproject.toml`. The root `.venv` from `mise run install` still holds every provider and serves editors and the git hooks.
 
 ### Toolchain
 
