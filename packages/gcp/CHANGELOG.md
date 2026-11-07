@@ -1,3 +1,9 @@
+## gcp-v7.3.1 (2026-11-07)
+
+### Fix
+
+- **gcp**: skip GKE update waits when the release channel already matches
+
 ## gcp-v7.3.0 (2026-11-06)
 
 ### Feat
