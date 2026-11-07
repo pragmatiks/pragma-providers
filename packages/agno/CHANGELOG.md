@@ -1,3 +1,9 @@
+## agno-v2.2.21 (2026-11-07)
+
+### Fix
+
+- **agno**: narrow resolved config types so ty reports no diagnostics (PRA-648)
+
 ## agno-v2.2.20 (2026-11-07)
 
 ### Fix
