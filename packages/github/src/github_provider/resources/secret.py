@@ -280,6 +280,10 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
         Returns:
             SecretOutputs, or ``None`` when the secret does not exist.
+
+        Raises:
+            AlreadyExistsError: If GitHub redirects because the repository was
+                renamed or transferred.
         """
         async with create_github_client(cast(str, self.config.access_token)) as client:
             metadata = await fetch_optional_json(client, self.secret_path())

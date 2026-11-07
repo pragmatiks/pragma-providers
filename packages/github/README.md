@@ -16,7 +16,13 @@ pragma providers install pragmatiks/github
 
 ## Renamed or transferred repositories
 
-A resource is bound to the repository at its declared owner and repository name. When that repository is renamed or transferred, the provider treats it as absent there: it never reads, changes, or deletes the repository at its new location. Deleting the resource succeeds without touching the moved repository, and a create or update fails with a message asking you to set the owner and repository name to the new location.
+A resource is bound to the repository at its declared owner and repository name. When that repository is renamed or transferred, GitHub redirects its old path, and the provider never follows the redirect: it never reads, changes, or deletes the repository at its new location.
+
+- **Create** fails with a reason saying the repository moved, and no repository is created at the old name.
+- **Update** fails with the same reason.
+- **Delete** succeeds, leaves the moved repository untouched, and logs the old path.
+
+To manage the moved repository, delete the resource and declare a new one at the new owner and name.
 
 ## Authentication
 
