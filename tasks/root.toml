@@ -32,3 +32,7 @@ depends = ["*:format"]
 [check]
 description = "Run every provider's check: ruff fixes, then ruff and ty must pass"
 depends = ["*:check"]
+
+["check:wheels"]
+description = "Build every provider's wheel once with --no-sources, then check each introspects and declares its embeds against that release set"
+file = "scripts/tasks/check_wheels.sh"
