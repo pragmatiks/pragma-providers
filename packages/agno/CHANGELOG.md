@@ -1,3 +1,9 @@
+## agno-v2.2.22 (2026-11-07)
+
+### Perf
+
+- **agno**: cache the runner dependency layer and read uv from the workspace pin
+
 ## agno-v2.2.21 (2026-11-07)
 
 ### Fix
