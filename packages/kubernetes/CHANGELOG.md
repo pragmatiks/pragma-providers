@@ -1,3 +1,5 @@
+## kubernetes-v2.4.1 (2026-11-07)
+
 ## kubernetes-v2.4.0 (2026-11-06)
 
 ### Feat
