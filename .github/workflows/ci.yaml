@@ -91,3 +91,6 @@ jobs:
 
       - name: Check every provider's publishable wheel
         run: mise run check:wheels
+
+      - name: Check inter-provider floors without workspace sources
+        run: mise run check:floors
