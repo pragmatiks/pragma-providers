@@ -712,7 +712,8 @@ class Content(AgnoResource[ContentConfig, ContentOutputs, ContentSpec]):
             ContentOutputs with the written content hash.
 
         Raises:
-            RuntimeError: If downloading the content URL returns a non-success status,
+            RuntimeError: If the knowledge dependency has no outputs,
+                downloading the content URL returns a non-success status,
                 the collection does not exist or stores named vectors,
                 the content cannot be read into documents,
                 or a chunk's embedding does not fit the collection.
