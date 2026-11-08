@@ -5,6 +5,7 @@ Usage:
     python provider_wheel.py release-set <wheel_dir> <distribution>
     python provider_wheel.py report <distribution> <report_path>
     python provider_wheel.py embeds <wheel_dir> <distribution>
+    python provider_wheel.py floor-tags <workspace_dir> <distribution>
 
 Commands:
     name: prints the distribution name a provider's pyproject.toml declares.
@@ -13,6 +14,12 @@ Commands:
     report: exits 1, printing the report, unless the pragma_sdk.introspection report at report_path succeeded.
     embeds: exits 1 unless the distribution's pragma.embeds keys equal the distributions in its release set,
         itself excluded, whose wheel declares a pragma.provider entry point; it never embeds itself.
+    floor-tags: prints, one per line, the release tag (`<provider>-v<version>`) of every workspace sibling the
+        distribution reaches at its lowest allowed version: each sibling requirement resolves to the lowest
+        tag whose version satisfies it, read again at that tag for the sibling's own sibling requirements,
+        and a sibling reached twice keeps the higher tag. A requirement no tag satisfies is a floor not
+        released yet: it prints a GitHub Actions warning to stderr and the bare sibling name, whose in-tree
+        package stands in.
 
 A requirement is followed when it has no marker or its marker holds for this interpreter with no extra.
 Needs packaging installed.
@@ -22,6 +29,7 @@ Exit codes:
 """
 
 import json
+import subprocess
 import sys
 import tomllib
 import zipfile
@@ -32,9 +40,11 @@ from pathlib import Path
 
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
+from packaging.version import Version
 
 
 PREFIX = "check_provider_wheel"
+DISTRIBUTION_PREFIX = "pragmatiks-"
 
 
 @dataclass(frozen=True)
@@ -186,11 +196,151 @@ def require_matching_embeds(wheel_directory: str, served_name: str) -> None:
     print(f"{PREFIX}: {served}: introspection and embeds pass")
 
 
+def read_git_output(workspace_directory: str, arguments: list[str]) -> str:
+    """Run a git command in the workspace and return its standard output.
+
+    Args:
+        workspace_directory: Repository root.
+        arguments: git arguments.
+
+    Returns:
+        The command's standard output.
+    """
+    return subprocess.run(
+        ["git", "-C", workspace_directory, *arguments], check=True, capture_output=True, text=True
+    ).stdout
+
+
+def read_release_project(workspace_directory: str, provider: str, revision: str | None) -> dict:
+    """Read a provider's `[project]` table.
+
+    Args:
+        workspace_directory: Repository root.
+        provider: Provider package directory name, such as `kubernetes`.
+        revision: Git revision to read the pyproject.toml at, or None for the working tree.
+
+    Returns:
+        The `[project]` table.
+    """
+    pyproject_path = f"packages/{provider}/pyproject.toml"
+    if revision is None:
+        text = (Path(workspace_directory) / pyproject_path).read_text()
+    else:
+        text = read_git_output(workspace_directory, ["show", f"{revision}:{pyproject_path}"])
+    return tomllib.loads(text)["project"]
+
+
+def load_release_versions(workspace_directory: str, provider: str) -> list[Version]:
+    """Read the versions a provider released under its current distribution name, lowest first.
+
+    Args:
+        workspace_directory: Repository root.
+        provider: Provider package directory name, such as `kubernetes`.
+
+    Returns:
+        The version of every `<provider>-v<version>` tag whose package carries the distribution name
+        `pragmatiks-<provider>`, sorted ascending; tags from before a rename are left out.
+    """
+    distribution = f"{DISTRIBUTION_PREFIX}{provider}"
+    tags = read_git_output(workspace_directory, ["tag", "--list", f"{provider}-v*"]).split()
+    return sorted(
+        Version(tag.removeprefix(f"{provider}-v"))
+        for tag in tags
+        if canonicalize_name(read_release_project(workspace_directory, provider, tag)["name"]) == distribution
+    )
+
+
+def is_workspace_sibling(workspace_directory: str, requirement_name: str) -> bool:
+    """Tell whether a requirement names a provider under packages/.
+
+    Args:
+        workspace_directory: Repository root.
+        requirement_name: The requirement's distribution name.
+
+    Returns:
+        True when the name is `pragmatiks-<provider>` and packages/<provider> exists.
+    """
+    name = canonicalize_name(requirement_name)
+    provider_directory = Path(workspace_directory) / "packages" / name.removeprefix(DISTRIBUTION_PREFIX)
+    return name.startswith(DISTRIBUTION_PREFIX) and provider_directory.is_dir()
+
+
+def read_sibling_requirements(workspace_directory: str, provider: str, revision: str | None) -> list[Requirement]:
+    """Read a provider's requirements on workspace siblings.
+
+    Args:
+        workspace_directory: Repository root.
+        provider: Provider package directory name.
+        revision: Git revision to read the pyproject.toml at, or None for the working tree.
+
+    Returns:
+        The `[project] dependencies` naming a provider under packages/, marker rule applied.
+    """
+    project = read_release_project(workspace_directory, provider, revision)
+    requirements = [Requirement(item) for item in project.get("dependencies", [])]
+    return [
+        requirement
+        for requirement in requirements
+        if is_workspace_sibling(workspace_directory, requirement.name)
+        and (requirement.marker is None or requirement.marker.evaluate({"extra": ""}))
+    ]
+
+
+def load_floor_versions(workspace_directory: str, provider: str) -> dict[str, Version | None]:
+    """Resolve every sibling a provider reaches to its lowest released version allowed.
+
+    Args:
+        workspace_directory: Repository root.
+        provider: Provider package directory name to start from, read in the working tree.
+
+    Returns:
+        Sibling package directory name to the version of its lowest satisfying release tag, or None
+        when no release satisfies the requirement and the in-tree package stands in.
+    """
+    floors: dict[str, Version | None] = {}
+    pending: list[tuple[str, str | None]] = [(provider, None)]
+    while pending:
+        dependent, revision = pending.pop()
+        for requirement in read_sibling_requirements(workspace_directory, dependent, revision):
+            sibling = canonicalize_name(requirement.name).removeprefix(DISTRIBUTION_PREFIX)
+            allowed = [
+                version
+                for version in load_release_versions(workspace_directory, sibling)
+                if requirement.specifier.contains(version, prereleases=True)
+            ]
+            if not allowed:
+                print(
+                    f"::warning::{DISTRIBUTION_PREFIX}{dependent} requires {requirement}; no {sibling} release "
+                    "satisfies it yet, so the in-tree wheel stands in",
+                    file=sys.stderr,
+                )
+                floors.setdefault(sibling, None)
+                continue
+            current = floors.get(sibling)
+            if sibling not in floors or (current is not None and allowed[0] > current) or allowed[0] > floors[sibling]:
+                floors[sibling] = allowed[0]
+                pending.append((sibling, f"{sibling}-v{allowed[0]}"))
+    return floors
+
+
+def print_floor_tags(workspace_directory: str, served_name: str) -> None:
+    """Print the release tag of every sibling the distribution reaches at its lowest allowed version.
+
+    Args:
+        workspace_directory: Repository root.
+        served_name: Distribution name of the provider.
+    """
+    provider = canonicalize_name(served_name).removeprefix(DISTRIBUTION_PREFIX)
+    for sibling, version in sorted(load_floor_versions(workspace_directory, provider).items()):
+        print(sibling if version is None else f"{sibling}-v{version}")
+
+
 COMMANDS = {
     "name": (print_distribution_name, 1),
     "release-set": (print_release_set, 2),
     "report": (require_successful_report, 2),
     "embeds": (require_matching_embeds, 2),
+    "floor-tags": (print_floor_tags, 2),
 }
 
 

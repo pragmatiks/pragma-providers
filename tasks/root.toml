@@ -81,5 +81,8 @@ extends = "bash"
 run = "pre-commit run --all-files --show-diff-on-failure --hook-stage pre-commit"
 
 ["check:floors"]
-description = "Resolve the workspace without workspace sources; warn for a provider floor above a sibling's in-tree version, fail on any other resolve failure"
-file = "scripts/tasks/check_floors.sh"
+description = "Resolve the workspace without workspace sources, then introspect each provider installed with the lowest released sibling tags its floors allow"
+run = [
+  "scripts/tasks/check_floors.sh",
+  "scripts/tasks/check_floor_wheels.sh",
+]

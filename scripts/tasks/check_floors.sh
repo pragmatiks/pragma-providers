@@ -11,8 +11,8 @@
 # A failure whose resolver message names only requirements of one provider on another
 # (pragmatiks-<dependent> depends on pragmatiks-<sibling>) with a floor above the sibling's in-tree
 # version is printed as a GitHub Actions warning: the sibling releases first in the same publish run,
-# so the dependent publishes after it. The check does not read the Pragmatiks registry, so a floor
-# below the sibling version that introduced the names a provider imports is not caught.
+# so the dependent publishes after it. A floor below the sibling version that introduced the names a
+# provider imports is caught by scripts/tasks/check_floor_wheels.sh, which check:floors runs next.
 #
 # Exit codes: 0 when the workspace resolves or every failure is an unpublished sibling floor; 1 for any
 # other resolve failure, such as a third-party conflict or a network error.

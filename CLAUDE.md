@@ -36,7 +36,7 @@ Always use mise tasks (`mise tasks` lists them all):
 | `mise run format` | Format with ruff |
 | `mise run check` | Lint + type check, each provider in its own environment |
 | `mise run check:wheels` | Build every provider's wheel once with `--no-sources` (as publishing does), install each with only the sibling wheels its `Requires-Dist` reaches, and fail on a failed `pragma_sdk.introspection` report or `pragma.embeds` keys that differ from the providers among them; CI runs it on every pull request and push |
-| `mise run check:floors` | Resolve the workspace with `--no-sources`: a provider floor above a sibling's in-tree (last released) version warns, any other resolve failure fails; CI runs it on every pull request and push |
+| `mise run check:floors` | Resolve the workspace with `--no-sources` (a provider floor above a sibling's in-tree, last released, version warns; any other resolve failure fails), then install each provider's wheel with every sibling it reaches at the lowest `<provider>-v<version>` tag released under the required distribution name that its floor allows (recursively at that tag, built from the tag with `uv build --wheel --no-sources`) and fail on a failed `pragma_sdk.introspection` report or embeds mismatch; needs the release tags fetched; CI runs it on every pull request and push |
 | `mise run lock:toolchain` | Regenerate `mise.lock` and `.mise/locks/` (macOS arm64 or Linux x64 only; never bumps) |
 
 ### Provider environments
