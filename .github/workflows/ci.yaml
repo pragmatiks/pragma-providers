@@ -82,6 +82,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde # v5.2.1
         with:
@@ -92,5 +95,5 @@ jobs:
       - name: Check every provider's publishable wheel
         run: mise run check:wheels
 
-      - name: Check inter-provider floors without workspace sources
+      - name: Check inter-provider floors against the lowest released siblings
         run: mise run check:floors
