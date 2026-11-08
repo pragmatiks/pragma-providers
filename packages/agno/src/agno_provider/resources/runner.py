@@ -9,7 +9,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from datetime import datetime
-from importlib.metadata import entry_points
+from importlib.metadata import version
 from typing import Any, cast
 
 from kubernetes_provider import (
@@ -60,21 +60,15 @@ RUNNER_IMAGE_REPOSITORY = "ghcr.io/pragmatiks/agno-runner"
 
 
 def build_default_runner_image() -> str:
-    """Build the runner image reference built for the installed agno provider version.
-
-    The release workflow pushes the runner image as ``<repository>:<agno
-    version>`` and never moves that tag, so a Runner always starts the image
-    built from the same agno release that applied it.
+    """Build the runner image reference for the installed agno provider version.
 
     Returns:
-        The image reference, such as ``ghcr.io/pragmatiks/agno-runner:2.2.23``.
+        ``<RUNNER_IMAGE_REPOSITORY>:<agno version>``, such as ``ghcr.io/pragmatiks/agno-runner:2.2.23``.
+
+    Raises:
+        PackageNotFoundError: If the ``pragmatiks-agno`` distribution is not installed.
     """
-    (distribution,) = (
-        entry_point.dist
-        for entry_point in entry_points(group="pragma.provider")
-        if entry_point.value == "agno_provider" and entry_point.dist is not None
-    )
-    return f"{RUNNER_IMAGE_REPOSITORY}:{distribution.version}"
+    return f"{RUNNER_IMAGE_REPOSITORY}:{version('pragmatiks-agno')}"
 
 
 def _find_duplicates(names: list[str]) -> list[str]:
