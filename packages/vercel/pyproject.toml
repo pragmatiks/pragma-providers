@@ -6,7 +6,7 @@ keywords = ["vercel", "hosting", "deployments", "domains", "frontend"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pragmatiks-sdk>=26.0.1",
+    "pragmatiks-sdk>=27.5.0",
     "httpx>=0.28.0",
 ]
 
