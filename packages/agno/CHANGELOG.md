@@ -1,3 +1,10 @@
+## agno-v2.2.24 (2026-11-08)
+
+### Fix
+
+- **agno**: read the Runner's default image version from the pragmatiks-agno distribution (PRA-922)
+- **agno**: default the Runner image to the tag built for its agno version (PRA-922)
+
 ## agno-v2.2.23 (2026-11-07)
 
 ### Fix
