@@ -37,7 +37,7 @@ namespace (kubernetes) ─────┘
 - A `kubernetes/config` resource providing cluster access (in-cluster, a GKE cluster, or an external kubeconfig)
 - A Kubernetes namespace managed by the `kubernetes` provider
 - API keys for your chosen model provider (OpenAI, Anthropic)
-- An Agno runner container image (default: `ghcr.io/pragmatiks/agno-runner:v2`)
+- An Agno runner container image (default: `ghcr.io/pragmatiks/agno-runner:<agno version>`, the image built for the installed agno provider release)
 - For knowledge/RAG: a Qdrant vector database instance and an applied `qdrant/collection` sized for the embedder; `knowledge/content` writes into that collection and never creates it
 - For memory/sessions: a PostgreSQL database instance
 

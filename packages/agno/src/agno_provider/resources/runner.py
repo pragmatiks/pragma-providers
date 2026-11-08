@@ -9,6 +9,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from datetime import datetime
+from importlib.metadata import entry_points
 from typing import Any, cast
 
 from kubernetes_provider import (
@@ -52,6 +53,28 @@ from agno_provider.resources.team import Team, TeamOutputs, TeamSpec
 
 
 logger = logging.getLogger(__name__)
+
+
+RUNNER_IMAGE_REPOSITORY = "ghcr.io/pragmatiks/agno-runner"
+"""Container repository the agno provider's runner image is pushed to, one tag per agno version."""
+
+
+def build_default_runner_image() -> str:
+    """Build the runner image reference built for the installed agno provider version.
+
+    The release workflow pushes the runner image as ``<repository>:<agno
+    version>`` and never moves that tag, so a Runner always starts the image
+    built from the same agno release that applied it.
+
+    Returns:
+        The image reference, such as ``ghcr.io/pragmatiks/agno-runner:2.2.23``.
+    """
+    (distribution,) = (
+        entry_point.dist
+        for entry_point in entry_points(group="pragma.provider")
+        if entry_point.value == "agno_provider" and entry_point.dist is not None
+    )
+    return f"{RUNNER_IMAGE_REPOSITORY}:{distribution.version}"
 
 
 def _find_duplicates(names: list[str]) -> list[str]:
@@ -120,7 +143,8 @@ class RunnerConfig(Config):
         config: Kubernetes config dependency providing cluster access.
         namespace: Kubernetes namespace dependency for the runner pods.
         replicas: Number of pod replicas. Defaults to 1.
-        image: Container image for running the agents and teams.
+        image: Container image for running the agents and teams. Defaults to
+            the runner image built for the installed agno provider version.
         security_key: Bearer token for AgentOS basic auth (dev environments).
         jwt_verification_key: Public key for JWT/RBAC auth (production environments).
         public: Expose the service via LoadBalancer instead of ClusterIP. Defaults to False.
@@ -134,7 +158,7 @@ class RunnerConfig(Config):
     config: ImmutableDependency[KubernetesConfig]
     namespace: ImmutableDependency[Namespace]
     replicas: Field[int] = 1
-    image: Field[str] = "ghcr.io/pragmatiks/agno-runner:v2"
+    image: Field[str] = build_default_runner_image()
     security_key: Field[str] | None = None
     jwt_verification_key: Field[str] | None = None
     public: Field[bool] = False
