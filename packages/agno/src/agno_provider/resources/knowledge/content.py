@@ -12,6 +12,7 @@ import json
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlparse
@@ -151,8 +152,12 @@ class ContentOutputs(Outputs):
     content_hash: str | None
 
 
+active_warning_collector: ContextVar[LogMessageCollector | None] = ContextVar("active_warning_collector", default=None)
+"""Collector of the :func:`collect_agno_warnings` block the current context runs in, or ``None``."""
+
+
 class LogMessageCollector(logging.Handler):
-    """Logging handler that keeps the messages of the warnings and errors it receives.
+    """Logging handler that keeps the warnings and errors logged from the context of its own block.
 
     Attributes:
         messages: The collected messages, in emission order.
@@ -164,12 +169,13 @@ class LogMessageCollector(logging.Handler):
         self.messages: list[str] = []
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Keep the record's message.
+        """Keep the record's message when it was logged from this collector's block.
 
         Args:
             record: The log record Agno emitted.
         """
-        self.messages.append(record.getMessage())
+        if active_warning_collector.get() is self:
+            self.messages.append(record.getMessage())
 
 
 @contextmanager
@@ -178,19 +184,29 @@ def collect_agno_warnings() -> Iterator[list[str]]:
 
     Agno readers log a read error and return no documents, and Agno embedders log an
     embedding error and return an empty embedding, instead of raising.
-    Messages from other work running concurrently in the process are collected too.
+    Only records logged from the block's own context are collected, so concurrent
+    work of other resources in the process is left out.
+
+    Note:
+        Agno embedders and the YouTube reader log from ``loop.run_in_executor(None, ...)``
+        threads; their records are attributed to the block because the worker's default
+        executor (``pragma_sdk.worker.executor.RequestScopedExecutor``) runs each piece of
+        work in a copy of the submitting context. Under an executor that does not copy the
+        context, those records are not collected.
 
     Yields:
         The list the messages are appended to while the block runs.
     """
     agno_logger = agno_log.logger
     collector = LogMessageCollector()
+    token = active_warning_collector.set(collector)
     agno_logger.addHandler(collector)
 
     try:
         yield collector.messages
     finally:
         agno_logger.removeHandler(collector)
+        active_warning_collector.reset(token)
 
 
 def format_agno_warnings(messages: list[str]) -> str:
