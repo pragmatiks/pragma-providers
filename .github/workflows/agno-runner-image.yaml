@@ -15,7 +15,7 @@ on:
   workflow_call:
     inputs:
       version:
-        description: "Released agno provider version; the image is pushed as agno-runner:<version>, then the transport tag and latest are pointed at it"
+        description: "Agno provider version being released; the image is pushed as agno-runner:<version> before the provider publishes, then the transport tag and latest are pointed at it"
         type: string
         required: true
       commit:
@@ -64,6 +64,19 @@ jobs:
         with:
           ref: ${{ inputs.commit }}
           persist-credentials: false
+
+      - name: Verify the release tag
+        env:
+          TAG: agno-v${{ inputs.version }}
+          COMMIT: ${{ inputs.commit }}
+          REPOSITORY_URL: https://github.com/${{ github.repository }}.git
+        run: |
+          TAGGED_COMMIT="$(git ls-remote --tags "${REPOSITORY_URL}" "refs/tags/${TAG}" "refs/tags/${TAG}^{}" \
+            | awk -v tag="refs/tags/${TAG}" '$2 == tag { commit = $1 } $2 == tag "^{}" { peeled = $1 } END { print (peeled != "" ? peeled : commit) }')"
+          if [ "${TAGGED_COMMIT}" != "${COMMIT}" ]; then
+            echo "::error title=Release tag::${TAG} resolves to '${TAGGED_COMMIT}' on GitHub, not to ${COMMIT}"
+            exit 1
+          fi
 
       - name: Read runner transport version
         id: runner-transport
