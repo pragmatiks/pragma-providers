@@ -14,15 +14,15 @@ Commands:
     report: exits 1, printing the report, unless the pragma_sdk.introspection report at report_path succeeded.
     embeds: exits 1 unless the distribution's pragma.embeds keys equal the distributions in its release set,
         itself excluded, whose wheel declares a pragma.provider entry point; it never embeds itself.
-    floor-tags: prints, one per line, the release tag (`<provider>-v<version>`) of every workspace sibling the
-        distribution reaches at its lowest allowed version: each sibling requirement resolves to the lowest
-        tag whose version satisfies it, read again at that tag for the sibling's own sibling requirements,
-        and a sibling reached twice keeps the higher tag. A requirement no tag satisfies is a floor not
-        released yet: it prints a GitHub Actions warning to stderr and the bare sibling name, whose in-tree
-        package stands in.
+    floor-tags: prints one record per line for every workspace sibling the
+        distribution reaches at its lowest allowed version, as `release <sibling> <tag>` lines: each sibling
+        requirement resolves to the lowest tag whose version satisfies it, read again at that tag for the
+        sibling's own sibling requirements, and a sibling reached twice keeps the higher tag. A requirement
+        no tag satisfies is a floor not released yet: it prints a GitHub Actions warning to stderr and a
+        `tree <sibling>` line, whose in-tree package stands in.
 
 A requirement is followed when it has no marker or its marker holds for this interpreter with no extra.
-Needs packaging installed.
+Needs packaging installed; floor-tags also needs git and every `<provider>-v<version>` tag fetched.
 
 Exit codes:
     0 when the check passes, 1 when it fails, 2 on a usage error.
@@ -211,7 +211,7 @@ def read_git_output(workspace_directory: str, arguments: list[str]) -> str:
     ).stdout
 
 
-def read_release_project(workspace_directory: str, provider: str, revision: str | None) -> dict:
+def read_project_table(workspace_directory: str, provider: str, revision: str | None) -> dict:
     """Read a provider's `[project]` table.
 
     Args:
@@ -246,7 +246,7 @@ def load_release_versions(workspace_directory: str, provider: str) -> list[Versi
     return sorted(
         Version(tag.removeprefix(f"{provider}-v"))
         for tag in tags
-        if canonicalize_name(read_release_project(workspace_directory, provider, tag)["name"]) == distribution
+        if canonicalize_name(read_project_table(workspace_directory, provider, tag)["name"]) == distribution
     )
 
 
@@ -261,8 +261,9 @@ def is_workspace_sibling(workspace_directory: str, requirement_name: str) -> boo
         True when the name is `pragmatiks-<provider>` and packages/<provider> exists.
     """
     name = canonicalize_name(requirement_name)
-    provider_directory = Path(workspace_directory) / "packages" / name.removeprefix(DISTRIBUTION_PREFIX)
-    return name.startswith(DISTRIBUTION_PREFIX) and provider_directory.is_dir()
+    if not name.startswith(DISTRIBUTION_PREFIX):
+        return False
+    return (Path(workspace_directory) / "packages" / name.removeprefix(DISTRIBUTION_PREFIX)).is_dir()
 
 
 def read_sibling_requirements(workspace_directory: str, provider: str, revision: str | None) -> list[Requirement]:
@@ -276,7 +277,7 @@ def read_sibling_requirements(workspace_directory: str, provider: str, revision:
     Returns:
         The `[project] dependencies` naming a provider under packages/, marker rule applied.
     """
-    project = read_release_project(workspace_directory, provider, revision)
+    project = read_project_table(workspace_directory, provider, revision)
     requirements = [Requirement(item) for item in project.get("dependencies", [])]
     return [
         requirement
@@ -284,6 +285,23 @@ def read_sibling_requirements(workspace_directory: str, provider: str, revision:
         if is_workspace_sibling(workspace_directory, requirement.name)
         and (requirement.marker is None or requirement.marker.evaluate({"extra": ""}))
     ]
+
+
+def load_lowest_release(workspace_directory: str, sibling: str, requirement: Requirement) -> Version | None:
+    """Read the lowest release of a sibling that satisfies a requirement.
+
+    Args:
+        workspace_directory: Repository root.
+        sibling: Sibling package directory name.
+        requirement: The requirement on that sibling.
+
+    Returns:
+        The lowest satisfying release version, or None when no release satisfies it.
+    """
+    for version in load_release_versions(workspace_directory, sibling):
+        if requirement.specifier.contains(version, prereleases=True):
+            return version
+    return None
 
 
 def load_floor_versions(workspace_directory: str, provider: str) -> dict[str, Version | None]:
@@ -294,8 +312,9 @@ def load_floor_versions(workspace_directory: str, provider: str) -> dict[str, Ve
         provider: Provider package directory name to start from, read in the working tree.
 
     Returns:
-        Sibling package directory name to the version of its lowest satisfying release tag, or None
-        when no release satisfies the requirement and the in-tree package stands in.
+        Sibling package directory name to the version of its lowest satisfying release tag, or None when
+        some requirement on it no release satisfies; None wins over any release, since only the in-tree
+        package satisfies that requirement.
     """
     floors: dict[str, Version | None] = {}
     pending: list[tuple[str, str | None]] = [(provider, None)]
@@ -303,28 +322,27 @@ def load_floor_versions(workspace_directory: str, provider: str) -> dict[str, Ve
         dependent, revision = pending.pop()
         for requirement in read_sibling_requirements(workspace_directory, dependent, revision):
             sibling = canonicalize_name(requirement.name).removeprefix(DISTRIBUTION_PREFIX)
-            allowed = [
-                version
-                for version in load_release_versions(workspace_directory, sibling)
-                if requirement.specifier.contains(version, prereleases=True)
-            ]
-            if not allowed:
+            lowest = load_lowest_release(workspace_directory, sibling, requirement)
+            if lowest is None:
                 print(
                     f"::warning::{DISTRIBUTION_PREFIX}{dependent} requires {requirement}; no {sibling} release "
                     "satisfies it yet, so the in-tree wheel stands in",
                     file=sys.stderr,
                 )
-                floors.setdefault(sibling, None)
+                floors[sibling] = None
                 continue
-            current = floors.get(sibling)
-            if sibling not in floors or (current is not None and allowed[0] > current) or allowed[0] > floors[sibling]:
-                floors[sibling] = allowed[0]
-                pending.append((sibling, f"{sibling}-v{allowed[0]}"))
+            if sibling in floors and (floors[sibling] is None or floors[sibling] >= lowest):
+                continue
+            floors[sibling] = lowest
+            pending.append((sibling, f"{sibling}-v{lowest}"))
     return floors
 
 
 def print_floor_tags(workspace_directory: str, served_name: str) -> None:
-    """Print the release tag of every sibling the distribution reaches at its lowest allowed version.
+    """Print one record per sibling the distribution reaches at its lowest allowed version.
+
+    Each line is `release <sibling> <tag>` for a release tag, or `tree <sibling>` when the in-tree
+    package stands in.
 
     Args:
         workspace_directory: Repository root.
@@ -332,7 +350,7 @@ def print_floor_tags(workspace_directory: str, served_name: str) -> None:
     """
     provider = canonicalize_name(served_name).removeprefix(DISTRIBUTION_PREFIX)
     for sibling, version in sorted(load_floor_versions(workspace_directory, provider).items()):
-        print(sibling if version is None else f"{sibling}-v{version}")
+        print(f"tree {sibling}" if version is None else f"release {sibling} {sibling}-v{version}")
 
 
 COMMANDS = {
