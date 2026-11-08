@@ -643,6 +643,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
                 does not finish by the operation deadline.
             RuntimeError: If GKE refuses the release-channel update because another operation runs on the cluster,
                 the update fails, or the cluster is in ERROR or STOPPING state.
+            FailedPrecondition: If GKE refuses the release-channel update for any other precondition.
         """
         client = self._get_client()
         deadline = compute_operation_deadline()
@@ -711,6 +712,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
         Raises:
             RuntimeError: If GKE refuses the delete because another operation runs on the cluster,
                 or the delete operation finished with an error.
+            FailedPrecondition: If GKE refuses the delete for any other precondition.
             TimeoutError: If a pending operation, the delete operation or the deletion does not finish by the
                 operation deadline.
         """
