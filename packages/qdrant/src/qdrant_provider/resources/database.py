@@ -456,6 +456,10 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
         Returns:
             DatabaseOutputs once every child is READY, else ``ChildrenPending()``.
+
+        Raises:
+            CallbackRefusedError: If the platform refuses an apply or a read of a child.
+            RuntimeError: If the READY client Service reports no load-balancer address.
         """
         return await self.converge()
 
@@ -468,6 +472,10 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
         Returns:
             DatabaseOutputs once every child is READY, else ``ChildrenPending()``.
+
+        Raises:
+            CallbackRefusedError: If the platform refuses an apply or a read of a child.
+            RuntimeError: If the READY client Service reports no load-balancer address.
         """
         return await self.converge()
 
