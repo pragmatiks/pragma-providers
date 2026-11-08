@@ -289,6 +289,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             DatabaseInstanceOutputs with updated instance state.
 
         Raises:
+            HttpError: If Cloud SQL refuses the write for a reason other than another running operation.
             RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
                 or the operation finished with errors.
             TimeoutError: If a pending operation, the write's operation, or the instance reaching RUNNABLE
