@@ -271,7 +271,7 @@ jobs:
     secrets:
       PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
 
-  publish-agno:
+  agno-runner-image:
     needs: [bump, push, publish-gcp, publish-kubernetes]
     if: >-
       !cancelled() &&
@@ -280,6 +280,17 @@ jobs:
       (needs.push.outputs.pushed == 'true' || needs.bump.outputs.bumped != 'true') &&
       (needs.publish-gcp.result == 'success' || needs.bump.outputs.gcp_version == '') &&
       (needs.publish-kubernetes.result == 'success' || needs.bump.outputs.kubernetes_version == '')
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/agno-runner-image.yaml
+    with:
+      version: ${{ needs.bump.outputs.agno_version }}
+      commit: ${{ needs.bump.outputs.agno_commit }}
+
+  publish-agno:
+    needs: [bump, agno-runner-image]
+    if: ${{ !cancelled() && needs.agno-runner-image.result == 'success' }}
     permissions:
       contents: write
     uses: ./.github/workflows/publish-provider.yaml
@@ -291,20 +302,9 @@ jobs:
     secrets:
       PRAGMA_PUBLISH_API_KEY: ${{ secrets.PRAGMA_PUBLISH_API_KEY }}
 
-  agno-runner-image:
+  release-agno:
     needs: [bump, publish-agno]
     if: ${{ !cancelled() && needs.publish-agno.result == 'success' }}
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/agno-runner-image.yaml
-    with:
-      version: ${{ needs.bump.outputs.agno_version }}
-      commit: ${{ needs.bump.outputs.agno_commit }}
-
-  release-agno:
-    needs: [bump, agno-runner-image]
-    if: ${{ !cancelled() && needs.agno-runner-image.result == 'success' }}
     permissions:
       contents: write
     uses: ./.github/workflows/release-provider.yaml
