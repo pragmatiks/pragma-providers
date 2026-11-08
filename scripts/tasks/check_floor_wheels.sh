@@ -30,16 +30,17 @@ run_helper() {
   uv run --isolated --no-project --quiet --with packaging python "${HELPER}" "$@"
 }
 
-build_tag_wheel() {
-  local tag="$1"
-  local out_directory="$2"
+stage_tag_wheel() {
+  local provider="$1"
+  local tag="$2"
+  local out_directory="$3"
   local tree_directory="${SCRATCH_DIRECTORY}/trees/${tag}"
   local wheel_cache="${SCRATCH_DIRECTORY}/tags/${tag}"
 
   if [ ! -d "${wheel_cache}" ]; then
     mkdir -p "${tree_directory}" "${wheel_cache}"
-    git -C "${WORKSPACE_DIRECTORY}" archive "${tag}" "packages/${tag%-v*}" | tar -x -C "${tree_directory}"
-    uv build "${tree_directory}/packages/${tag%-v*}" --wheel --no-sources --quiet --out-dir "${wheel_cache}"
+    git -C "${WORKSPACE_DIRECTORY}" archive "${tag}" "packages/${provider}" | tar -x -C "${tree_directory}"
+    uv build "${tree_directory}/packages/${provider}" --wheel --no-sources --quiet --out-dir "${wheel_cache}"
   fi
   cp "${wheel_cache}"/*.whl "${out_directory}/"
 }
@@ -47,21 +48,34 @@ build_tag_wheel() {
 for provider_directory in "${WORKSPACE_DIRECTORY}"/packages/*/; do
   provider_directory="${provider_directory%/}"
   distribution="$(run_helper name "${provider_directory}/pyproject.toml")"
-  mapfile -t floor_tags < <(run_helper floor-tags "${WORKSPACE_DIRECTORY}" "${distribution}")
-  if [ "${#floor_tags[@]}" -eq 0 ]; then
+  mapfile -t floor_records < <(run_helper floor-tags "${WORKSPACE_DIRECTORY}" "${distribution}")
+  if [ "${#floor_records[@]}" -eq 0 ]; then
     continue
   fi
 
   wheel_directory="${SCRATCH_DIRECTORY}/sets/${distribution}"
   mkdir -p "${wheel_directory}"
   uv build "${provider_directory}" --wheel --no-sources --quiet --out-dir "${wheel_directory}"
-  for tag in "${floor_tags[@]}"; do
-    if [ "${tag}" = "${tag%-v*}" ]; then
-      uv build "${WORKSPACE_DIRECTORY}/packages/${tag}" --wheel --no-sources --quiet --out-dir "${wheel_directory}"
-    else
-      build_tag_wheel "${tag}" "${wheel_directory}"
-    fi
+
+  floor_names=()
+  for record in "${floor_records[@]}"; do
+    read -r kind sibling tag <<< "${record}"
+    case "${kind}" in
+      release)
+        stage_tag_wheel "${sibling}" "${tag}" "${wheel_directory}"
+        floor_names+=("${tag}")
+        ;;
+      tree)
+        uv build "${WORKSPACE_DIRECTORY}/packages/${sibling}" --wheel --no-sources --quiet --out-dir "${wheel_directory}"
+        floor_names+=("${sibling}@tree")
+        ;;
+      *)
+        echo "check_floors: unknown floor record: ${record}" >&2
+        exit 1
+        ;;
+    esac
   done
-  echo "check_floors: ${distribution} against ${floor_tags[*]}"
+
+  echo "check_floors: ${distribution} against ${floor_names[*]}"
   "${WORKSPACE_DIRECTORY}/scripts/check_provider_wheel.sh" "${provider_directory}" "${wheel_directory}"
 done
