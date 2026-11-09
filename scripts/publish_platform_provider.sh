@@ -18,7 +18,7 @@
 #                           uv tools are neither used nor changed.
 #
 # Requires: python3 >= 3.11, jq, uv at the version the workspace pyproject.toml pins, and a Python
-# >= 3.13 that uv can find or download for the pinned pragma CLI (pragmatiks-cli 17.1 or a later 17.x,
+# >= 3.13 that uv can find or download for the pinned pragma CLI (pragmatiks-cli 17.7.1 or a later 17.x,
 # whose own pragmatiks-sdk bound decides the SDK).
 #
 # Example:
@@ -61,7 +61,7 @@
 set -euo pipefail
 
 PROVIDER_NAMESPACE="pragmatiks"
-PRAGMA_CLI_REQUIREMENT="pragmatiks-cli>=17.1,<18"
+PRAGMA_CLI_REQUIREMENT="pragmatiks-cli>=17.7.1,<18"
 PUBLISH_DEADLINE_SECONDS=1200
 POLL_INTERVAL_SECONDS=15
 
