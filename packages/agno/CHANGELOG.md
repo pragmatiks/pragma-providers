@@ -1,3 +1,9 @@
+## agno-v2.2.25 (2026-11-09)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v27.0.1
+
 ## agno-v2.2.24 (2026-11-08)
 
 ### Fix
