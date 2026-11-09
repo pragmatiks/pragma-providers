@@ -79,3 +79,10 @@ fi
 description = "Run every pre-commit stage hook on all files, as CI does"
 extends = "bash"
 run = "pre-commit run --all-files --show-diff-on-failure --hook-stage pre-commit"
+
+["check:floors"]
+description = "Resolve the workspace without workspace sources, then introspect each provider installed with the lowest released sibling tags its floors allow"
+run = [
+  "scripts/tasks/check_floors.sh",
+  "scripts/tasks/check_floor_wheels.sh",
+]

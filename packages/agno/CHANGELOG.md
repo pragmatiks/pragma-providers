@@ -1,3 +1,22 @@
+## agno-v2.2.24 (2026-11-08)
+
+### Fix
+
+- **agno**: read the Runner's default image version from the pragmatiks-agno distribution (PRA-922)
+- **agno**: default the Runner image to the tag built for its agno version (PRA-922)
+
+## agno-v2.2.23 (2026-11-07)
+
+### Fix
+
+- **agno**: keep URLs and vendor log text out of content failure reasons
+
+## agno-v2.2.22 (2026-11-07)
+
+### Perf
+
+- **agno**: cache the runner dependency layer and read uv from the workspace pin
+
 ## agno-v2.2.21 (2026-11-07)
 
 ### Fix

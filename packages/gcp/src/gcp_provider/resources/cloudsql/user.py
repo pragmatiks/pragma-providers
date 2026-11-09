@@ -90,6 +90,7 @@ class User(Resource[UserConfig, UserOutputs]):
             UserOutputs with user details.
 
         Raises:
+            HttpError: If Cloud SQL refuses the write for a reason other than another running operation.
             AlreadyExistsError: If the user already exists.
             RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
                 or the operation finished with errors.
@@ -148,6 +149,7 @@ class User(Resource[UserConfig, UserOutputs]):
             UserOutputs with updated user details.
 
         Raises:
+            HttpError: If Cloud SQL refuses the write for a reason other than another running operation.
             RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
                 or the operation finished with errors.
             TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.
@@ -181,6 +183,7 @@ class User(Resource[UserConfig, UserOutputs]):
         Idempotent: Succeeds if the user does not exist.
 
         Raises:
+            HttpError: If Cloud SQL refuses the write for a reason other than another running operation.
             RuntimeError: If users on several hosts share the username, Cloud SQL refuses the write because
                 another operation runs on the instance, or the operation finished with errors.
             TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.

@@ -92,6 +92,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             DatabaseOutputs with database details.
 
         Raises:
+            HttpError: If Cloud SQL refuses the write for a reason other than another running operation.
             AlreadyExistsError: If the database already exists.
             RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
                 or the operation finished with errors.
@@ -164,6 +165,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         Idempotent: Succeeds if the database does not exist.
 
         Raises:
+            HttpError: If Cloud SQL refuses the write for a reason other than another running operation.
             RuntimeError: If Cloud SQL refuses the write because another operation runs on the instance,
                 or the operation finished with errors.
             TimeoutError: If a pending operation, or the write's operation, is not done by the operation deadline.

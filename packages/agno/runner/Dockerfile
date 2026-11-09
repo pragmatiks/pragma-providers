@@ -5,38 +5,54 @@
 # AGNO_SPECS_JSON environment variable.
 #
 # This image is tagged with a major version (v2, v3, ...) that matches the
-# transport contract expected by the agno provider's Runner resource. The
-# wire format is otherwise unversioned -- bump the tag whenever the env-var
-# contract changes and update the Runner default image in lockstep.
+# transport contract expected by the agno provider's Runner resource, and with
+# the agno provider version it was released with. The wire format is otherwise
+# unversioned -- bump the transport tag whenever the env-var contract changes
+# and update the Runner default image in lockstep.
+#
+# uv is installed at the version the workspace pyproject.toml pins in
+# [tool.uv] required-version, so the image and the workspace cannot disagree.
+# Third-party dependencies are installed from the workspace manifests and lock
+# alone, so a change to provider source reuses that layer.
 #
 # Build from the repository root, against the workspace lock:
-#   docker build -f packages/agno/runner/Dockerfile \
-#     -t ghcr.io/pragmatiks/agno-runner:v2 \
-#     -t ghcr.io/pragmatiks/agno-runner:latest .
+#   docker build -f packages/agno/runner/Dockerfile -t agno-runner:dev .
 #
-# Optional: pass the current provider version so it is recorded as an image label:
+# Optional: pass the provider version so it is recorded as an image label:
 #   docker build -f packages/agno/runner/Dockerfile \
 #     --build-arg PROVIDER_VERSION="$(cd packages/agno && cz version --project)" \
-#     -t ghcr.io/pragmatiks/agno-runner:v2 \
-#     -t ghcr.io/pragmatiks/agno-runner:latest .
+#     -t agno-runner:dev .
 
-ARG PYTHON_BASE_IMAGE=python:3.13-slim@sha256:bf44cdfcb76cd3b41e879bc058fc37ec5872002ccfde7fcb765e218cde0cd79c
-
-FROM ${PYTHON_BASE_IMAGE} AS builder
-
-COPY --from=ghcr.io/astral-sh/uv:0.12.20@sha256:100047e74f30778ab704942321a09750d6158739573ff58bf3924085cc6cd2d8 /uv /usr/local/bin/uv
-
-ENV UV_COMPILE_BYTECODE=1
+FROM python:3.13-slim@sha256:bf44cdfcb76cd3b41e879bc058fc37ec5872002ccfde7fcb765e218cde0cd79c AS manifests
 
 WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./
 COPY packages ./packages
 
+RUN find packages -mindepth 2 -maxdepth 2 ! -name pyproject.toml -exec rm -rf {} +
+
+FROM python:3.13-slim@sha256:bf44cdfcb76cd3b41e879bc058fc37ec5872002ccfde7fcb765e218cde0cd79c AS builder
+
+ENV UV_COMPILE_BYTECODE=1
+
+WORKDIR /app
+
+RUN --mount=type=bind,source=pyproject.toml,target=/tmp/workspace-pyproject.toml \
+    UV_SPECIFIER="$(sed -n 's/^required-version = "\(.*\)"$/\1/p' /tmp/workspace-pyproject.toml)" && \
+    test -n "${UV_SPECIFIER}" && \
+    pip install --no-cache-dir --root-user-action=ignore "uv${UV_SPECIFIER}"
+
+COPY --from=manifests /app ./
+
+RUN uv sync --frozen --package pragmatiks-agno --no-dev --no-editable --no-install-workspace
+
+COPY packages ./packages
+
 RUN uv sync --frozen --package pragmatiks-agno --no-dev --no-editable
 
 # --- Final image ---
-FROM ${PYTHON_BASE_IMAGE}
+FROM python:3.13-slim@sha256:bf44cdfcb76cd3b41e879bc058fc37ec5872002ccfde7fcb765e218cde0cd79c
 
 ARG PROVIDER_VERSION=dev
 

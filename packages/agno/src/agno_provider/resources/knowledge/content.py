@@ -38,6 +38,9 @@ CHUNK_INDEX_KEY = "chunk_index"
 DOWNLOAD_BYTE_LIMIT = 100 * 1024 * 1024
 UPSERT_BATCH_SIZE = 64
 HTML_MEDIA_TYPES = frozenset({"application/xhtml+xml", "text/html"})
+LOGGED_MESSAGE_LIMIT = 500
+
+logger = logging.getLogger(__name__)
 
 
 class ContentSpec(AgnoSpec):
@@ -105,12 +108,12 @@ class ContentConfig(Config):
         has_text = self.text_content is not None
 
         if has_url and has_text:
-            msg = "Exactly one of url or text_content must be provided, not both"
-            raise ValueError(msg)
+            message = "Exactly one of url or text_content must be provided, not both"
+            raise ValueError(message)
 
         if not has_url and not has_text:
-            msg = "Either url or text_content must be provided"
-            raise ValueError(msg)
+            message = "Either url or text_content must be provided"
+            raise ValueError(message)
 
         return self
 
@@ -126,12 +129,12 @@ class ContentConfig(Config):
         """
         if isinstance(self.url, str) and self.url and parse_url_extension(self.url) not in SUPPORTED_URL_EXTENSIONS:
             supported = ", ".join(sorted(SUPPORTED_URL_EXTENSIONS))
-            msg = (
+            message = (
                 f"url {build_display_url(self.url)!r} is not a supported content source; content reads "
                 "inline text_content or a plain text, Markdown or JSON file whose url path ends in one of: "
                 f"{supported}"
             )
-            raise ValueError(msg)
+            raise ValueError(message)
 
         return self
 
@@ -189,6 +192,33 @@ def collect_agno_warnings() -> Iterator[list[str]]:
         yield collector.messages
     finally:
         agno_logger.removeHandler(collector)
+
+
+def format_agno_warnings(messages: list[str]) -> str:
+    """Format a bounded clause counting the warnings and errors Agno logged, quoting none of them.
+
+    Args:
+        messages: The collected messages.
+
+    Returns:
+        A short clause naming how many messages Agno logged.
+    """
+    count = len(messages)
+    plural = "" if count == 1 else "s"
+    return f"Agno logged {count} warning{plural} or error{plural}"
+
+
+def format_first_message(messages: list[str]) -> str:
+    """Format the first collected message cut to ``LOGGED_MESSAGE_LIMIT`` characters.
+
+    Args:
+        messages: The collected messages.
+
+    Returns:
+        The first message, truncated with an ellipsis when longer than the limit, or an empty string.
+    """
+    first = messages[0] if messages else ""
+    return first if len(first) <= LOGGED_MESSAGE_LIMIT else f"{first[:LOGGED_MESSAGE_LIMIT]}..."
 
 
 def parse_url_extension(url: str) -> str:
@@ -342,7 +372,9 @@ def build_points(documents: list[Document], content_hash: str) -> list[models.Po
     return points
 
 
-def require_documents(documents: list[Document], source: str, reader: Reader, read_errors: list[str]) -> None:
+def require_documents(
+    documents: list[Document], source: str, reader: Reader, read_errors: list[str], resource_id: str
+) -> None:
     """Fail when an Agno reader yielded no documents.
 
     Args:
@@ -350,17 +382,30 @@ def require_documents(documents: list[Document], source: str, reader: Reader, re
         source: URL or description of the content read.
         reader: The Agno reader that read the source.
         read_errors: Warnings and errors Agno logged during the read.
+        resource_id: ID of the content resource, named in the log event.
 
     Raises:
         RuntimeError: If the reader yielded no documents.
     """
     if not documents:
-        logged = "; ".join(read_errors) or "none"
-        msg = f"{type(reader).__name__} yielded no documents for {source}; errors Agno logged during the read: {logged}"
-        raise RuntimeError(msg)
+        logger.warning(
+            "agno_content_read_error resource=%s source=%s count=%d first_message=%s",
+            resource_id,
+            source,
+            len(read_errors),
+            format_first_message(read_errors),
+        )
+
+        message = (
+            f"{type(reader).__name__} yielded no documents for {source}; "
+            f"{format_agno_warnings(read_errors)} during the read"
+        )
+        raise RuntimeError(message)
 
 
-def require_embeddings(documents: list[Document], vector_size: int, collection: str, embed_errors: list[str]) -> None:
+def require_embeddings(
+    documents: list[Document], vector_size: int, collection: str, embed_errors: list[str], resource_id: str
+) -> None:
     """Fail when a chunk carries no embedding of the collection's vector size.
 
     Args:
@@ -368,6 +413,7 @@ def require_embeddings(documents: list[Document], vector_size: int, collection: 
         vector_size: Vector size the collection stores.
         collection: Name of the collection receiving the chunks.
         embed_errors: Warnings and errors Agno logged while embedding.
+        resource_id: ID of the content resource, named in the log event.
 
     Raises:
         RuntimeError: If a chunk's embedding is missing or has another size.
@@ -376,13 +422,20 @@ def require_embeddings(documents: list[Document], vector_size: int, collection: 
         embedding_size = len(document.embedding or [])
 
         if embedding_size != vector_size:
-            logged = "; ".join(embed_errors) or "none"
-            msg = (
+            logger.warning(
+                "agno_content_embed_error resource=%s collection=%s count=%d first_message=%s",
+                resource_id,
+                collection,
+                len(embed_errors),
+                format_first_message(embed_errors),
+            )
+
+            message = (
                 f"Chunk {document.meta_data[CHUNK_INDEX_KEY]} of {document.name!r} has an embedding of size "
                 f"{embedding_size}, but collection {collection!r} stores vectors of size {vector_size}; "
-                f"errors Agno logged while embedding: {logged}"
+                f"{format_agno_warnings(embed_errors)} while embedding"
             )
-            raise RuntimeError(msg)
+            raise RuntimeError(message)
 
 
 def require_json_container(content: bytes, source: str) -> None:
@@ -398,12 +451,12 @@ def require_json_container(content: bytes, source: str) -> None:
     try:
         parsed = json.loads(content)
     except ValueError as error:
-        msg = f"{source} is not valid JSON: {error}"
-        raise RuntimeError(msg) from error
+        message = f"{source} is not valid JSON: {error}"
+        raise RuntimeError(message) from error
 
     if not isinstance(parsed, dict | list):
-        msg = f"{source} holds a JSON scalar; content reads a JSON file whose top level is an object or array"
-        raise RuntimeError(msg)
+        message = f"{source} holds a JSON scalar; content reads a JSON file whose top level is an object or array"
+        raise RuntimeError(message)
 
 
 async def fetch_vector_size(client: AsyncQdrantClient, collection: str) -> int:
@@ -420,17 +473,17 @@ async def fetch_vector_size(client: AsyncQdrantClient, collection: str) -> int:
         RuntimeError: If the collection does not exist or stores named vectors.
     """
     if not await client.collection_exists(collection):
-        msg = (
+        message = (
             f"Qdrant collection {collection!r} does not exist; "
             "apply a qdrant/collection resource that creates it before this content"
         )
-        raise RuntimeError(msg)
+        raise RuntimeError(message)
 
     vectors = (await client.get_collection(collection)).config.params.vectors
 
     if not isinstance(vectors, models.VectorParams):
-        msg = f"Qdrant collection {collection!r} stores named vectors; content needs one unnamed dense vector"
-        raise RuntimeError(msg)
+        message = f"Qdrant collection {collection!r} stores named vectors; content needs one unnamed dense vector"
+        raise RuntimeError(message)
 
     return vectors.size
 
@@ -445,42 +498,46 @@ async def fetch_url_content(url: str) -> bytes:
         The response body.
 
     Raises:
-        httpx.HTTPStatusError: If the response has an error status.
-        RuntimeError: If the response is an HTML page or the body exceeds ``DOWNLOAD_BYTE_LIMIT``.
+        RuntimeError: If the response has a non-success status, is an HTML page
+            or the body exceeds ``DOWNLOAD_BYTE_LIMIT``.
     """
     body = bytearray()
 
     async with httpx.AsyncClient(follow_redirects=True) as client, client.stream("GET", url) as response:
-        response.raise_for_status()
+        if not response.is_success:
+            message = f"Downloading {build_display_url(url)} returned HTTP status {response.status_code}"
+            raise RuntimeError(message)
+
         media_type = response.headers.get("content-type", "").partition(";")[0].strip().lower()
 
         if media_type in HTML_MEDIA_TYPES:
-            msg = f"{build_display_url(url)} serves an HTML page; content reads a plain text, Markdown or JSON file"
-            raise RuntimeError(msg)
+            message = f"{build_display_url(url)} serves an HTML page; content reads a plain text, Markdown or JSON file"
+            raise RuntimeError(message)
 
         async for chunk in response.aiter_bytes():
             body.extend(chunk)
 
             if len(body) > DOWNLOAD_BYTE_LIMIT:
-                msg = f"{build_display_url(url)} is larger than the {DOWNLOAD_BYTE_LIMIT}-byte download limit"
-                raise RuntimeError(msg)
+                message = f"{build_display_url(url)} is larger than the {DOWNLOAD_BYTE_LIMIT}-byte download limit"
+                raise RuntimeError(message)
 
     return bytes(body)
 
 
-async def fetch_url_documents(url: str, name: str) -> list[Document]:
+async def fetch_url_documents(url: str, name: str, resource_id: str) -> list[Document]:
     """Download a URL and read it into chunked documents with the Agno reader of its extension.
 
     Args:
         url: URL of a plain text, Markdown or JSON file.
         name: Document name.
+        resource_id: ID of the content resource, named in log events.
 
     Returns:
         The chunked documents, never empty.
 
     Raises:
-        httpx.HTTPStatusError: If the download returns an error status.
-        RuntimeError: If the response is an HTML page, the download exceeds ``DOWNLOAD_BYTE_LIMIT``,
+        RuntimeError: If the download returns a non-success status, the response is an HTML page,
+            the download exceeds ``DOWNLOAD_BYTE_LIMIT``,
             a JSON file holds no JSON object or array, or the reader yields no documents.
     """
     content = await fetch_url_content(url)
@@ -495,33 +552,34 @@ async def fetch_url_documents(url: str, name: str) -> list[Document]:
     with collect_agno_warnings() as read_errors:
         documents = await reader.async_read(BytesIO(content), name=name)
 
-    require_documents(documents, source, reader, read_errors)
+    require_documents(documents, source, reader, read_errors, resource_id)
     return documents
 
 
-async def fetch_documents(spec: ContentSpec) -> list[Document]:
+async def fetch_documents(spec: ContentSpec, resource_id: str) -> list[Document]:
     """Read the spec's content into chunked documents.
 
     Args:
         spec: The content specification.
+        resource_id: ID of the content resource, named in log events.
 
     Returns:
         The chunked documents, never empty.
 
     Raises:
-        httpx.HTTPStatusError: If downloading the URL returns an error status.
-        RuntimeError: If the URL serves an HTML page, a download exceeds ``DOWNLOAD_BYTE_LIMIT``,
+        RuntimeError: If downloading the URL returns a non-success status, the URL serves an HTML page,
+            a download exceeds ``DOWNLOAD_BYTE_LIMIT``,
             a JSON file holds no JSON object or array, or the reader yields no documents.
     """
     if spec.url:
-        return await fetch_url_documents(spec.url, spec.name)
+        return await fetch_url_documents(spec.url, spec.name, resource_id)
 
     reader = ReaderFactory.create_reader("text")
 
     with collect_agno_warnings() as read_errors:
         documents = await reader.async_read(BytesIO((spec.text_content or "").encode()), name=spec.name)
 
-    require_documents(documents, "inline text", reader, read_errors)
+    require_documents(documents, "inline text", reader, read_errors, resource_id)
     return documents
 
 
@@ -592,8 +650,8 @@ class Content(AgnoResource[ContentConfig, ContentOutputs, ContentSpec]):
         knowledge = await self.config.knowledge.resolve()
 
         if knowledge.outputs is None:
-            msg = "knowledge dependency has no outputs"
-            raise RuntimeError(msg)
+            message = "knowledge dependency has no outputs"
+            raise RuntimeError(message)
 
         return knowledge.outputs.spec
 
@@ -654,9 +712,11 @@ class Content(AgnoResource[ContentConfig, ContentOutputs, ContentSpec]):
             ContentOutputs with the written content hash.
 
         Raises:
-            httpx.HTTPStatusError: If downloading the content URL returns an error status.
-            RuntimeError: If the collection does not exist or stores named vectors, the content
-                cannot be read into documents, or a chunk's embedding does not fit the collection.
+            RuntimeError: If the knowledge dependency has no outputs,
+                downloading the content URL returns a non-success status,
+                the collection does not exist or stores named vectors,
+                the content cannot be read into documents,
+                or a chunk's embedding does not fit the collection.
         """
         knowledge_spec = await self.resolve_knowledge_spec()
         spec = self.build_spec(knowledge_spec)
@@ -665,14 +725,14 @@ class Content(AgnoResource[ContentConfig, ContentOutputs, ContentSpec]):
 
         try:
             vector_size = await fetch_vector_size(vector_database.async_client, vector_database.collection)
-            documents = await fetch_documents(spec)
+            documents = await fetch_documents(spec, self.id)
             assign_chunk_payload(documents, spec, self.id)
 
             with collect_agno_warnings() as embed_errors:
                 for document in documents:
                     await document.async_embed(embedder=vector_database.embedder)
 
-            require_embeddings(documents, vector_size, vector_database.collection, embed_errors)
+            require_embeddings(documents, vector_size, vector_database.collection, embed_errors, self.id)
             await write_points(
                 vector_database.async_client, vector_database.collection, build_points(documents, content_hash)
             )
