@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import httpx
 from pragma_sdk import AlreadyExistsError, Config, Field, ImmutableField, Outputs, Resource, SensitiveField
@@ -251,7 +251,7 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
             AlreadyExistsError: If ``owner`` already has a repository with this name.
             ValueError: If ``owner`` is neither a usable organization nor the token's user.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             body = _build_create_body(self.config)
 
             response = await client.post(f"/orgs/{self.config.owner}/repos", json=body)
@@ -259,7 +259,7 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
             if response.status_code == 404:
                 login = await fetch_token_user_login(client)
 
-                if login.casefold() != cast(str, self.config.owner).casefold():
+                if login.casefold() != self.resolved(self.config.owner).casefold():
                     msg = (
                         f"owner {self.config.owner!r} is not an organization the token can create repositories in "
                         f"(GitHub answered {response.text}), and not the token's user {login!r}"
@@ -286,7 +286,7 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
             AlreadyExistsError: If ``owner/name`` redirects because the repository
                 was renamed or transferred.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             repository = await fetch_optional_json(client, self.repository_path())
 
         if repository is None:
@@ -307,7 +307,7 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
             httpx.HTTPStatusError: If GitHub rejects the update or reports the
                 repository moved to another owner or name.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             update_body = _build_update_body(self.config)
             response = await client.patch(self.repository_path(), json=update_body)
             await raise_for_status(response)
@@ -323,5 +323,5 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
         Raises:
             httpx.HTTPStatusError: If GitHub rejects the deletion.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             await delete_if_present(client, self.repository_path())

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from typing import Any, cast
+from typing import Any
 
 from nacl.encoding import Base64Encoder
 from nacl.public import PublicKey, SealedBox
@@ -240,7 +240,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         return SecretOutputs(
             secret_name=metadata["name"],
             scope=scope,
-            environment_name=cast(str | None, self.config.environment_name) or "",
+            environment_name=self.resolved(self.config.environment_name) or "",
             created_at=metadata.get("created_at", ""),
             updated_at=metadata.get("updated_at", ""),
         )
@@ -251,9 +251,9 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         Returns:
             SecretOutputs with secret metadata.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             key_b64, key_id = await self._fetch_public_key(client)
-            encrypted_value = _encrypt_secret(key_b64, cast(str, self.config.secret_value))
+            encrypted_value = _encrypt_secret(key_b64, self.resolved(self.config.secret_value))
             await self._put_secret(client, encrypted_value, key_id)
             metadata = await self._fetch_secret_metadata(client)
 
@@ -268,7 +268,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         Raises:
             AlreadyExistsError: If the secret already exists in its repository or environment.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             await ensure_absent(
                 client, self.secret_path(), f"Secret {self.config.secret_name!r} at {self.secret_path()}"
             )
@@ -285,7 +285,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             AlreadyExistsError: If GitHub redirects because the repository was
                 renamed or transferred.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             metadata = await fetch_optional_json(client, self.secret_path())
 
         if metadata is None:
@@ -312,5 +312,5 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
         Idempotent: Succeeds if the secret does not exist.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             await delete_if_present(client, self.secret_path())
