@@ -1,3 +1,9 @@
+## github-v6.2.21 (2026-11-12)
+
+### Refactor
+
+- **github**: read resolved config through Resource.resolved (PRA-917)
+
 ## github-v6.2.20 (2026-11-12)
 
 ### Fix
