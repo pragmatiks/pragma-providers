@@ -1,3 +1,9 @@
+## kubernetes-v2.4.6 (2026-11-12)
+
+### Refactor
+
+- **kubernetes**: read resolved config through Resource.resolved (PRA-917)
+
 ## kubernetes-v2.4.5 (2026-11-12)
 
 ### Fix
