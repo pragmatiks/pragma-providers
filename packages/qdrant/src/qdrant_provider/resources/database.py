@@ -175,7 +175,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             CallbackRefusedError: If the platform refuses the read of the StatefulSet child.
         """
         if self.config.api_key is not None:
-            return cast(str, self.config.api_key)
+            return self.resolved(self.config.api_key)
 
         if not self.config.generate_api_key:
             return None
@@ -298,7 +298,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
         resources_config = None
         if self.config.resources:
-            resources = cast(ResourceConfig, self.config.resources)
+            resources = self.resolved(self.config.resources)
             resources_config = ResourcesConfig(
                 requests={
                     "memory": resources.memory,
@@ -322,7 +322,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
         container = ContainerConfig(
             name="qdrant",
-            image=cast(str, self.config.image),
+            image=self.resolved(self.config.image),
             ports=[
                 ContainerPortConfig(name="rest", container_port=6333),
                 ContainerPortConfig(name="grpc", container_port=6334),
@@ -338,7 +338,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         storage_size = "10Gi"
 
         if self.config.storage:
-            storage = cast(StorageConfig, self.config.storage)
+            storage = self.resolved(self.config.storage)
             storage_class = storage.class_
             storage_size = storage.size
 
