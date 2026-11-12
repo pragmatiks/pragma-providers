@@ -1,3 +1,9 @@
+## qdrant-v8.3.8 (2026-11-12)
+
+### Refactor
+
+- **qdrant**: read resolved config through Resource.resolved (PRA-917)
+
 ## qdrant-v8.3.7 (2026-11-12)
 
 ### Fix
