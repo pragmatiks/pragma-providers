@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import anthropic
 from agno.models.anthropic import Claude
@@ -374,16 +374,16 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
             AnthropicModelSpec with all configuration fields.
         """
         return AnthropicModelSpec(
-            id=cast(str, self.config.id),
+            id=self.resolved(self.config.id),
             api_key=str(self.config.api_key),
-            max_tokens=cast(int, self.config.max_tokens),
-            temperature=cast(int | float | None, self.config.temperature),
-            top_p=cast(int | float | None, self.config.top_p),
-            top_k=cast(int | None, self.config.top_k),
-            stop_sequences=cast(list[str] | None, self.config.stop_sequences),
-            thinking_mode=cast(ThinkingMode, self.config.thinking_mode),
-            thinking_budget_tokens=cast(int | None, self.config.thinking_budget_tokens),
-            effort=cast(EffortLevel | None, self.config.effort),
+            max_tokens=self.resolved(self.config.max_tokens),
+            temperature=self.resolved(self.config.temperature),
+            top_p=self.resolved(self.config.top_p),
+            top_k=self.resolved(self.config.top_k),
+            stop_sequences=self.resolved(self.config.stop_sequences),
+            thinking_mode=self.resolved(self.config.thinking_mode),
+            thinking_budget_tokens=self.resolved(self.config.thinking_budget_tokens),
+            effort=self.resolved(self.config.effort),
         )
 
     def _build_outputs(self) -> AnthropicModelOutputs:
@@ -468,7 +468,7 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         the resource FAILED.
         """
         client = anthropic.AsyncAnthropic(api_key=str(self.config.api_key))
-        await client.models.retrieve(cast(str, self.config.id))
+        await client.models.retrieve(self.resolved(self.config.id))
 
     async def on_update(self, previous_config: AnthropicModelConfig | None) -> AnthropicModelOutputs:  # noqa: ARG002
         """Validate model/mode compatibility and return serializable outputs with spec.

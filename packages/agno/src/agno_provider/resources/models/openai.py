@@ -6,7 +6,7 @@ by dependent resources at runtime.
 
 from __future__ import annotations
 
-from typing import Literal, cast
+from typing import Literal
 
 from agno.models.openai import OpenAIChat
 from pragma_sdk import Field, SensitiveField
@@ -138,19 +138,19 @@ class OpenAIModel(Model[OpenAIModelConfig, OpenAIModelOutputs, OpenAIModelSpec, 
             OpenAIModelSpec with all configuration fields.
         """
         return OpenAIModelSpec(
-            id=cast(str, self.config.id),
+            id=self.resolved(self.config.id),
             api_key=str(self.config.api_key),
-            max_tokens=cast(int | None, self.config.max_tokens),
-            temperature=cast(int | float | None, self.config.temperature),
-            top_p=cast(int | float | None, self.config.top_p),
-            frequency_penalty=cast(int | float | None, self.config.frequency_penalty),
-            presence_penalty=cast(int | float | None, self.config.presence_penalty),
-            seed=cast(int | None, self.config.seed),
-            stop=cast(str | list[str] | None, self.config.stop),
-            timeout=cast(int | float | None, self.config.timeout),
-            max_retries=cast(int | None, self.config.max_retries),
-            organization=cast(str | None, self.config.organization),
-            base_url=cast(str | None, self.config.base_url),
+            max_tokens=self.resolved(self.config.max_tokens),
+            temperature=self.resolved(self.config.temperature),
+            top_p=self.resolved(self.config.top_p),
+            frequency_penalty=self.resolved(self.config.frequency_penalty),
+            presence_penalty=self.resolved(self.config.presence_penalty),
+            seed=self.resolved(self.config.seed),
+            stop=self.resolved(self.config.stop),
+            timeout=self.resolved(self.config.timeout),
+            max_retries=self.resolved(self.config.max_retries),
+            organization=self.resolved(self.config.organization),
+            base_url=self.resolved(self.config.base_url),
         )
 
     def _build_outputs(self) -> OpenAIModelOutputs:

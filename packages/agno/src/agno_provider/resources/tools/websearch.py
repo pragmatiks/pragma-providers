@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, cast
+from typing import Literal
 
 from agno.tools.websearch import WebSearchTools
 from pragma_sdk import Config, Field, Outputs
@@ -113,14 +113,14 @@ class ToolsWebSearch(AgnoResource[ToolsWebSearchConfig, ToolsWebSearchOutputs, T
             ToolsWebSearchSpec with all configuration fields.
         """
         return ToolsWebSearchSpec(
-            enable_search=cast(bool, self.config.enable_search),
-            enable_news=cast(bool, self.config.enable_news),
-            backend=cast(BackendType, self.config.backend),
-            modifier=cast(str | None, self.config.modifier),
-            fixed_max_results=cast(int | None, self.config.fixed_max_results),
-            proxy=cast(str | None, self.config.proxy),
-            timeout=cast(int, self.config.timeout),
-            verify_ssl=cast(bool, self.config.verify_ssl),
+            enable_search=self.resolved(self.config.enable_search),
+            enable_news=self.resolved(self.config.enable_news),
+            backend=self.resolved(self.config.backend),
+            modifier=self.resolved(self.config.modifier),
+            fixed_max_results=self.resolved(self.config.fixed_max_results),
+            proxy=self.resolved(self.config.proxy),
+            timeout=self.resolved(self.config.timeout),
+            verify_ssl=self.resolved(self.config.verify_ssl),
         )
 
     def _build_outputs(self) -> ToolsWebSearchOutputs:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 from agno.tools.mcp import MCPTools
 from pragma_sdk import Config, Field, Outputs
@@ -177,7 +177,7 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
         env = self._resolve_env()
 
         args: list[str] | None = None
-        command = cast(str | None, self.config.command)
+        command = self.resolved(self.config.command)
 
         if command:
             parts = command.split()
@@ -186,13 +186,13 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
                 args = parts[1:]
 
         return ToolsMCPSpec(
-            url=cast(str | None, self.config.url),
+            url=self.resolved(self.config.url),
             command=command,
             args=args,
             env=env,
             transport=self._infer_transport(),
-            requires_confirmation_tools=cast(list[str] | None, self.config.requires_confirmation_tools),
-            external_execution_tools=cast(list[str] | None, self.config.external_execution_tools),
+            requires_confirmation_tools=self.resolved(self.config.requires_confirmation_tools),
+            external_execution_tools=self.resolved(self.config.external_execution_tools),
         )
 
     def _build_outputs(self) -> ToolsMCPOutputs:
@@ -212,7 +212,7 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
         Returns:
             Resolved environment dict or None.
         """
-        return stringify_values(cast(dict[str, str] | None, self.config.env))
+        return stringify_values(self.resolved(self.config.env))
 
     def _resolve_headers(self) -> dict[str, str] | None:
         """Resolve static headers to strings.
@@ -220,7 +220,7 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
         Returns:
             Resolved headers dict or None.
         """
-        return stringify_values(cast(dict[str, str] | None, self.config.headers))
+        return stringify_values(self.resolved(self.config.headers))
 
     def _build_header_provider(self) -> Any:
         """Build a header_provider function for MCPTools.
@@ -317,7 +317,7 @@ class ToolsMCP(AgnoResource[ToolsMCPConfig, ToolsMCPOutputs, ToolsMCPSpec]):
             The transport type, either explicit or inferred from config.
         """
         if self.config.transport:
-            return cast(TransportType, self.config.transport)
+            return self.resolved(self.config.transport)
 
         if self.config.command:
             return "stdio"

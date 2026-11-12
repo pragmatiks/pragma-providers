@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
 
 from agno.agent import Agent as AgnoAgent
 from pragma_sdk import Config, Dependency, Field, Outputs
@@ -399,29 +399,29 @@ class Agent(AgnoResource[AgentConfig, AgentOutputs, AgentSpec]):
             if prompt.outputs is not None:
                 prompt_spec = prompt.outputs.spec
 
-        agent_name = cast(str, self.config.name) if self.config.name else self.name
+        agent_name = self.resolved(self.config.name) if self.config.name else self.name
 
         return AgentSpec(
             name=agent_name,
-            description=cast(str | None, self.config.description),
-            role=cast(str | None, self.config.role),
-            instructions=cast(list[str] | None, self.config.instructions),
+            description=self.resolved(self.config.description),
+            role=self.resolved(self.config.role),
+            instructions=self.resolved(self.config.instructions),
             model_spec=model_spec,
             tools_specs=tools_specs,
             knowledge_spec=knowledge_spec,
             memory_spec=memory_spec,
             db_spec=db_spec,
             prompt_spec=prompt_spec,
-            output_schema=cast(dict[str, Any] | None, self.config.output_schema),
-            markdown=cast(bool, self.config.markdown),
-            add_datetime_to_context=cast(bool, self.config.add_datetime_to_context),
-            read_chat_history=cast(bool | None, self.config.read_chat_history),
-            add_history_to_context=cast(bool | None, self.config.add_history_to_context),
-            num_history_runs=cast(int | None, self.config.num_history_runs),
-            enable_agentic_memory=cast(bool, self.config.enable_agentic_memory),
-            update_memory_on_run=cast(bool, self.config.update_memory_on_run),
-            add_memories_to_context=cast(bool | None, self.config.add_memories_to_context),
-            enable_session_summaries=cast(bool, self.config.enable_session_summaries),
+            output_schema=self.resolved(self.config.output_schema),
+            markdown=self.resolved(self.config.markdown),
+            add_datetime_to_context=self.resolved(self.config.add_datetime_to_context),
+            read_chat_history=self.resolved(self.config.read_chat_history),
+            add_history_to_context=self.resolved(self.config.add_history_to_context),
+            num_history_runs=self.resolved(self.config.num_history_runs),
+            enable_agentic_memory=self.resolved(self.config.enable_agentic_memory),
+            update_memory_on_run=self.resolved(self.config.update_memory_on_run),
+            add_memories_to_context=self.resolved(self.config.add_memories_to_context),
+            enable_session_summaries=self.resolved(self.config.enable_session_summaries),
         )
 
     def _get_pip_dependencies(self) -> list[str]:

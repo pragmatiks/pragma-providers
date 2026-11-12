@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, cast
+from typing import Annotated
 
 from agno.memory.manager import MemoryManager as AgnoMemoryManager
 from pragma_sdk import Config, Dependency, Field, Outputs
@@ -167,14 +167,14 @@ class MemoryManager(AgnoResource[MemoryManagerConfig, MemoryManagerOutputs, Memo
         return MemoryManagerSpec(
             db_spec=db_spec,
             model_spec=model_spec,
-            system_message=cast(str | None, self.config.system_message),
-            memory_capture_instructions=cast(str | None, self.config.memory_capture_instructions),
-            additional_instructions=cast(str | None, self.config.additional_instructions),
-            add_memories=cast(bool, self.config.add_memories),
-            update_memories=cast(bool, self.config.update_memories),
-            delete_memories=cast(bool, self.config.delete_memories),
-            clear_memories=cast(bool, self.config.clear_memories),
-            debug_mode=cast(bool, self.config.debug_mode),
+            system_message=self.resolved(self.config.system_message),
+            memory_capture_instructions=self.resolved(self.config.memory_capture_instructions),
+            additional_instructions=self.resolved(self.config.additional_instructions),
+            add_memories=self.resolved(self.config.add_memories),
+            update_memories=self.resolved(self.config.update_memories),
+            delete_memories=self.resolved(self.config.delete_memories),
+            clear_memories=self.resolved(self.config.clear_memories),
+            debug_mode=self.resolved(self.config.debug_mode),
         )
 
     async def _build_outputs(self) -> MemoryManagerOutputs:
