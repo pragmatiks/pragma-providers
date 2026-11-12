@@ -1,3 +1,9 @@
+## supabase-v6.2.20 (2026-11-12)
+
+### Refactor
+
+- **supabase**: read resolved config through Resource.resolved (PRA-917)
+
 ## supabase-v6.2.19 (2026-11-12)
 
 ### Fix
