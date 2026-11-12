@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, cast
+from typing import Literal
 
 from pragma_sdk import Config, Field, HealthStatus, ImmutableField, Outputs, Resource, SensitiveField
 
@@ -100,7 +100,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
         params: dict[str, str] = {}
 
         if self.config.team_id:
-            params["teamId"] = cast(str, self.config.team_id)
+            params["teamId"] = self.resolved(self.config.team_id)
 
         return params
 
@@ -115,7 +115,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
         """
         return DomainOutputs(
             domain=data.get("name", self.config.domain),
-            project_id=cast(str, self.config.project_id),
+            project_id=self.resolved(self.config.project_id),
             redirect=data.get("redirect") or "",
             git_branch=data.get("gitBranch") or "",
         )
@@ -151,7 +151,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
         Raises:
             AlreadyExistsError: If Vercel answers 409 because the domain is already assigned to a project.
         """
-        async with create_vercel_client(cast(str, self.config.access_token)) as client:
+        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
             response = await client.post(
                 f"/v10/projects/{self.config.project_id}/domains",
                 params=self._query_params(),
@@ -167,7 +167,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
         Returns:
             DomainOutputs, or ``None`` if the domain is not attached.
         """
-        async with create_vercel_client(cast(str, self.config.access_token)) as client:
+        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
             domain = await fetch_optional_json(client, self.domain_path(), self._query_params())
 
         if domain is None:
@@ -184,7 +184,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
         Returns:
             DomainOutputs with updated domain details.
         """
-        async with create_vercel_client(cast(str, self.config.access_token)) as client:
+        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
             response = await client.patch(
                 self.domain_path(),
                 params=self._query_params(),
@@ -199,7 +199,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
 
         Succeeds if the domain is not attached to the project.
         """
-        async with create_vercel_client(cast(str, self.config.access_token)) as client:
+        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
             response = await client.delete(self.domain_path(), params=self._query_params())
 
             if response.status_code == 404:
@@ -214,7 +214,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
             ``healthy`` when verified, ``degraded`` while verification is pending,
             ``unhealthy`` when the domain is not attached.
         """
-        async with create_vercel_client(cast(str, self.config.access_token)) as client:
+        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
             data = await fetch_optional_json(client, self.domain_path(), self._query_params())
 
         if data is None:

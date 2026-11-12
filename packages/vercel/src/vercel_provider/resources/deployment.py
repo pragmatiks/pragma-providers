@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, cast
+from typing import Any
 
 import httpx
 from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField
@@ -110,7 +110,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         params: dict[str, str] = {}
 
         if self.config.team_id:
-            params["teamId"] = cast(str, self.config.team_id)
+            params["teamId"] = self.resolved(self.config.team_id)
 
         return params
 
@@ -265,7 +265,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         """
         params = {
             **self._query_params(),
-            "projectId": cast(str, self.config.project_id),
+            "projectId": self.resolved(self.config.project_id),
             f"meta-{RESOURCE_ID_META_KEY}": self.id,
             "limit": "100",
         }
@@ -365,7 +365,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         Returns:
             DeploymentOutputs with deployment details.
         """
-        async with create_vercel_client(cast(str, self.config.access_token)) as client:
+        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
             return await self._trigger_deployment(client)
 
     async def on_observe(self) -> DeploymentOutputs | None:
@@ -374,7 +374,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         Returns:
             DeploymentOutputs of that deployment, or ``None`` when there is none.
         """
-        async with create_vercel_client(cast(str, self.config.access_token)) as client:
+        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
             deployment = await self.fetch_deployment(client)
 
         if deployment is None:
@@ -394,7 +394,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         Returns:
             DeploymentOutputs of the kept or new deployment.
         """
-        async with create_vercel_client(cast(str, self.config.access_token)) as client:
+        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
             deployment = await self.fetch_deployment(client)
 
             if deployment is None:
@@ -416,7 +416,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
         Succeeds if there is none.
         """
-        async with create_vercel_client(cast(str, self.config.access_token)) as client:
+        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
             deployment_id = await self.find_deployment_id(client)
 
             if deployment_id is None:
