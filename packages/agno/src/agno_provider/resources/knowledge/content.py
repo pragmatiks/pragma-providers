@@ -14,7 +14,6 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
-from typing import cast
 from urllib.parse import urlparse
 from uuid import UUID, uuid5
 
@@ -680,13 +679,13 @@ class Content(AgnoResource[ContentConfig, ContentOutputs, ContentSpec]):
             ContentSpec with all configuration fields.
         """
         return ContentSpec(
-            name=cast(str, self.config.name) if self.config.name else self.name,
+            name=self.resolved(self.config.name) if self.config.name else self.name,
             knowledge_spec=knowledge_spec,
-            url=cast(str | None, self.config.url),
-            text_content=cast(str | None, self.config.text_content),
-            description=cast(str | None, self.config.description),
-            metadata=cast(dict[str, str] | None, self.config.metadata),
-            topics=cast(list[str] | None, self.config.topics),
+            url=self.resolved(self.config.url),
+            text_content=self.resolved(self.config.text_content),
+            description=self.resolved(self.config.description),
+            metadata=self.resolved(self.config.metadata),
+            topics=self.resolved(self.config.topics),
         )
 
     def build_outputs(self, spec: ContentSpec, content_hash: str | None) -> ContentOutputs:

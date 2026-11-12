@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from typing import cast
 
 from pragma_sdk import Config, Field, FieldReference, Outputs
 from pydantic import model_validator
@@ -125,9 +124,9 @@ class Prompt(AgnoResource[PromptConfig, PromptOutputs, PromptSpec]):
         """
         parts: list[str] = []
 
-        instructions = cast(list[str], self.config.instructions)
-        template = cast(str | None, self.config.template)
-        variables = cast(dict[str, str], self.config.variables)
+        instructions = self.resolved(self.config.instructions)
+        template = self.resolved(self.config.template)
+        variables = self.resolved(self.config.variables)
 
         if instructions:
             parts.append("\n".join(instructions))
@@ -147,10 +146,10 @@ class Prompt(AgnoResource[PromptConfig, PromptOutputs, PromptSpec]):
             PromptSpec with instructions, variables, and rendered text.
         """
         rendered = self._render()
-        variables = cast(dict[str, str], self.config.variables) or None
+        variables = self.resolved(self.config.variables) or None
 
         return PromptSpec(
-            instructions=cast(list[str], self.config.instructions),
+            instructions=self.resolved(self.config.instructions),
             variables=variables,
             rendered=rendered,
         )

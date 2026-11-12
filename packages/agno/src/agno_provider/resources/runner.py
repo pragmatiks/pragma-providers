@@ -10,7 +10,7 @@ import logging
 from collections.abc import AsyncIterator
 from datetime import datetime
 from importlib.metadata import version
-from typing import Any, cast
+from typing import Any
 
 from kubernetes_provider import (
     Deployment as KubernetesDeployment,
@@ -392,21 +392,21 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
         }
 
         if self.config.security_key:
-            env["OS_SECURITY_KEY"] = cast(str, self.config.security_key)
+            env["OS_SECURITY_KEY"] = self.resolved(self.config.security_key)
 
         if self.config.jwt_verification_key:
-            env["JWT_VERIFICATION_KEY"] = cast(str, self.config.jwt_verification_key)
+            env["JWT_VERIFICATION_KEY"] = self.resolved(self.config.jwt_verification_key)
 
         container = ContainerConfig(
             name="agno",
-            image=cast(str, self.config.image),
+            image=self.resolved(self.config.image),
             ports=[ContainerPortConfig(container_port=8000, name="http")],
             env=env,
             resources=ResourceRequirementsConfig(
-                cpu=cast(str, self.config.cpu),
-                memory=cast(str, self.config.memory),
+                cpu=self.resolved(self.config.cpu),
+                memory=self.resolved(self.config.memory),
                 cpu_limit="1",
-                memory_limit=cast(str, self.config.memory),
+                memory_limit=self.resolved(self.config.memory),
             ),
             startup_probe=ProbeConfig(
                 http_get=HttpGetConfig(path="/health", port=8000),
@@ -507,10 +507,10 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             agent_specs=agent_specs,
             team_specs=team_specs,
             workflow_specs=[],
-            replicas=cast(int, self.config.replicas),
-            image=cast(str, self.config.image),
-            cpu=cast(str, self.config.cpu),
-            memory=cast(str, self.config.memory),
+            replicas=self.resolved(self.config.replicas),
+            image=self.resolved(self.config.image),
+            cpu=self.resolved(self.config.cpu),
+            memory=self.resolved(self.config.memory),
             security_key=self.config.security_key is not None,
         )
 
