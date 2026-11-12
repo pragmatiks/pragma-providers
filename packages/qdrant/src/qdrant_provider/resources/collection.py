@@ -6,7 +6,7 @@ import logging
 from http import HTTPStatus
 from typing import Literal, cast
 
-from pragma_sdk import Config, Field, HealthStatus, ImmutableField, Outputs, Resource
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, Vitals, VitalsStatus
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 from qdrant_client import AsyncQdrantClient
@@ -26,11 +26,11 @@ logger = logging.getLogger(__name__)
 
 MINIMUM_SERVER_VERSION = (1, 16)
 
-COLLECTION_STATUS_HEALTH: dict[models.CollectionStatus, Literal["healthy", "degraded", "unhealthy"]] = {
-    models.CollectionStatus.GREEN: "healthy",
-    models.CollectionStatus.YELLOW: "degraded",
-    models.CollectionStatus.GREY: "degraded",
-    models.CollectionStatus.RED: "unhealthy",
+COLLECTION_STATUS_VITALS: dict[models.CollectionStatus, VitalsStatus] = {
+    models.CollectionStatus.GREEN: "nominal",
+    models.CollectionStatus.YELLOW: "impaired",
+    models.CollectionStatus.GREY: "impaired",
+    models.CollectionStatus.RED: "down",
 }
 
 
@@ -331,14 +331,14 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         finally:
             await client.close()
 
-    async def health(self) -> HealthStatus:
+    async def vitals(self) -> Vitals:
         """Report the live collection's status from Qdrant.
 
-        Green is healthy, yellow and grey are degraded, red is unhealthy. The
+        Green is nominal, yellow and grey are impaired, red is down. The
         point, indexed vector and segment counts go in the details.
 
         Returns:
-            HealthStatus of the collection, unhealthy if it does not exist.
+            Vitals of the collection, down if it does not exist.
 
         Raises:
             UnexpectedResponse: If Qdrant fails the lookup for a reason other than a missing collection.
@@ -352,12 +352,12 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             if error.status_code != HTTPStatus.NOT_FOUND:
                 raise
 
-            return HealthStatus(status="unhealthy", message=f"Collection {name!r} not found")
+            return Vitals(status="down", message=f"Collection {name!r} not found")
         finally:
             await client.close()
 
-        return HealthStatus(
-            status=COLLECTION_STATUS_HEALTH[info.status],
+        return Vitals(
+            status=COLLECTION_STATUS_VITALS[info.status],
             message=f"Collection {name!r} is {info.status.value}",
             details={
                 "points_count": info.points_count,

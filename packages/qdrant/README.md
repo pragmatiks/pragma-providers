@@ -79,7 +79,7 @@ resources:
 - Create: Applies the headless Service, the StatefulSet and the LoadBalancer Service as resources the database owns. The database waits until all three are ready, the LoadBalancer Service once it has its external address, then reports its outputs.
 - Update: Reapplies all three owned resources with the full configuration and waits until all are ready; resources whose configuration did not change stay ready. The `config` dependency is immutable; changing it requires delete and recreate.
 - Delete: The owned resources (LoadBalancer Service, StatefulSet, headless Service) are deleted before the database. The stored vectors live on the StatefulSet's PersistentVolumeClaims; whether they are deleted with the StatefulSet follows the kubernetes provider's StatefulSet.
-- Health: Delegates to the underlying StatefulSet health check.
+- Vitals: Delegates to the underlying StatefulSet's vitals.
 - Logs: Streams pod logs from the underlying StatefulSet.
 
 ---
@@ -146,7 +146,7 @@ resources:
 - Observe: Reports the collection present when the server has a collection with the configured name.
 - Update: Applies `on_disk` to the live collection in place, keeping its vectors. Fails if the live vector size or distance differs from the config. Vector configuration, collection name and server URL changes are not allowed; changing them requires delete and recreate.
 - Delete: Deletes the collection and all its vectors. Idempotent -- succeeds if the collection does not exist.
-- Health: Reads the live collection status. Green is healthy, yellow and grey are degraded, red or a missing collection is unhealthy. Details carry the point, indexed vector and segment counts.
+- Vitals: Reads the live collection status. Green is nominal, yellow and grey are impaired, red or a missing collection is down. Details carry the point, indexed vector and segment counts.
 
 ---
 

@@ -2052,7 +2052,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "pragmatiks-kubernetes", editable = "packages/kubernetes" },
-    { name = "pragmatiks-sdk", specifier = ">=27.7.0" },
+    { name = "pragmatiks-sdk", specifier = ">=29.0.0" },
     { name = "qdrant-client", specifier = ">=1.16.0" },
 ]
 

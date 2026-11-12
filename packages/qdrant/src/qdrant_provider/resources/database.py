@@ -29,12 +29,12 @@ from pragma_sdk import (
     ChildrenPending,
     Config,
     Field,
-    HealthStatus,
     ImmutableDependency,
     LifecycleState,
     LogEntry,
     Outputs,
     Resource,
+    Vitals,
 )
 from pydantic import BaseModel, model_validator
 from pydantic import Field as PydanticField
@@ -487,15 +487,15 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             deleted with the StatefulSet follows the kubernetes provider's StatefulSet.
         """
 
-    async def health(self) -> HealthStatus:
-        """Check Qdrant database health via StatefulSet status.
+    async def vitals(self) -> Vitals:
+        """Report the Qdrant database's vitals from its StatefulSet.
 
         Returns:
-            HealthStatus indicating healthy/degraded/unhealthy.
+            Vitals of the underlying StatefulSet: nominal, impaired or down.
         """
         statefulset = self._build_statefulset(None)
 
-        return await statefulset.health()
+        return await statefulset.vitals()
 
     async def logs(
         self,
