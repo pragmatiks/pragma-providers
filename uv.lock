@@ -1996,7 +1996,7 @@ requires-dist = [
     { name = "google-auth", specifier = ">=2.30.0" },
     { name = "lightkube", specifier = ">=0.15.0" },
     { name = "pragmatiks-gcp", editable = "packages/gcp" },
-    { name = "pragmatiks-sdk", specifier = ">=27.7.0" },
+    { name = "pragmatiks-sdk", specifier = ">=29.0.0" },
     { name = "requests", specifier = ">=2.32.0" },
 ]
 

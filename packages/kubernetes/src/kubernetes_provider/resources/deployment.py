@@ -28,12 +28,12 @@ from pragma_sdk import (
     AlreadyExistsError,
     Config,
     Field,
-    HealthStatus,
     ImmutableDependency,
     ImmutableField,
     LogEntry,
     Outputs,
     Resource,
+    Vitals,
 )
 from pydantic import BaseModel
 
@@ -49,7 +49,7 @@ from kubernetes_provider.objects import (
     wait_for_absence,
 )
 from kubernetes_provider.resources.config import KubernetesConfig
-from kubernetes_provider.rollout import build_replica_health, wait_for_rollout
+from kubernetes_provider.rollout import build_replica_vitals, wait_for_rollout
 
 
 class HttpGetConfig(BaseModel):
@@ -206,7 +206,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
     refused. Updates use server-side apply under ``field_manager="pragma-kubernetes"``, forcing conflicts.
 
     Supports fetching aggregated logs from all pods matching the label
-    selector, and health checks that compare ready replicas to desired count.
+    selector, and vitals that compare ready replicas to desired count.
 
     Lifecycle:
         - on_create: Create deployment (apply over this resource's earlier create,
@@ -475,22 +475,23 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             await delete_object(client, K8sDeployment, self.name, self.resolved(self.config.namespace))
             await wait_for_absence(client, K8sDeployment, self.name, self.resolved(self.config.namespace))
 
-    async def health(self) -> HealthStatus:
-        """Check Deployment health by comparing ready replicas to desired.
+    async def vitals(self) -> Vitals:
+        """Report the Deployment's vitals by comparing ready replicas to desired.
 
         Returns:
-            HealthStatus indicating healthy/degraded/unhealthy.
+            Vitals: nominal, impaired or down by ready replicas, down when the
+            Deployment is absent.
         """
         async with self._get_client() as client:
             deployment = await fetch_object(client, K8sDeployment, self.name, self.resolved(self.config.namespace))
 
         if deployment is None:
-            return HealthStatus(
-                status="unhealthy",
+            return Vitals(
+                status="down",
                 message=f"Deployment {self.name} not found",
             )
 
-        return build_replica_health(deployment)
+        return build_replica_vitals(deployment)
 
     async def logs(
         self,

@@ -1,4 +1,4 @@
-"""Rollout progress and replica health of Kubernetes Deployments and StatefulSets."""
+"""Rollout progress and replica vitals of Kubernetes Deployments and StatefulSets."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from lightkube import AsyncClient
 from lightkube.resources.apps_v1 import Deployment, StatefulSet
-from pragma_sdk import HealthStatus
+from pragma_sdk import Vitals
 
 from kubernetes_provider.polling import poll_until
 
@@ -117,24 +117,24 @@ async def wait_for_rollout[WorkloadT: (Deployment, StatefulSet)](
     )
 
 
-def build_replica_health(workload: Deployment | StatefulSet) -> HealthStatus:
-    """Classify a workload's health by its ready replicas against the replicas in its spec.
+def build_replica_vitals(workload: Deployment | StatefulSet) -> Vitals:
+    """Classify a workload's vitals by its ready replicas against the replicas in its spec.
 
     Args:
         workload: Deployment or StatefulSet as read from the cluster.
 
     Returns:
-        Healthy when every desired replica is ready, degraded when only some are, and
-        unhealthy when none is or no replica is desired.
+        Nominal when every desired replica is ready, impaired when only some are, and
+        down when none is or no replica is desired.
     """
     ready = (workload.status.readyReplicas if workload.status else None) or 0
     desired = (workload.spec.replicas if workload.spec else None) or 0
     details = {"ready_replicas": ready, "desired_replicas": desired}
 
     if ready >= desired and desired > 0:
-        return HealthStatus(status="healthy", message=f"All {ready} replicas ready", details=details)
+        return Vitals(status="nominal", message=f"All {ready} replicas ready", details=details)
 
     if ready > 0:
-        return HealthStatus(status="degraded", message=f"{ready}/{desired} replicas ready", details=details)
+        return Vitals(status="impaired", message=f"{ready}/{desired} replicas ready", details=details)
 
-    return HealthStatus(status="unhealthy", message=f"No replicas ready (desired: {desired})", details=details)
+    return Vitals(status="down", message=f"No replicas ready (desired: {desired})", details=details)

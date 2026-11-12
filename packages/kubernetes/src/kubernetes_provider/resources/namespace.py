@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from lightkube.resources.core_v1 import Namespace as K8sNamespace
-from pragma_sdk import AlreadyExistsError, Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
+from pragma_sdk import AlreadyExistsError, Config, Field, ImmutableDependency, LogEntry, Outputs, Resource, Vitals
 
 from kubernetes_provider.marker import MarkerRefusal
 from kubernetes_provider.objects import (
@@ -59,8 +59,8 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
     Creates the namespace, marked with this resource's ``pragma.io/resource``
     annotation; an existing namespace carrying it is this resource's earlier
     create and is applied over, any other is refused. Updates use server-side
-    apply under ``field_manager="pragma-kubernetes"``, forcing conflicts. Health checks
-    verify the namespace exists and reports its phase (Active or Terminating).
+    apply under ``field_manager="pragma-kubernetes"``, forcing conflicts. Vitals
+    verify the namespace exists and report its phase (Active or Terminating).
 
     Lifecycle:
         - on_create: Create the namespace; apply over this resource's earlier
@@ -175,32 +175,33 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
             await delete_object(client, K8sNamespace, self.name)
             await wait_for_absence(client, K8sNamespace, self.name, timeout_seconds=NAMESPACE_DELETION_TIMEOUT_SECONDS)
 
-    async def health(self) -> HealthStatus:
-        """Check Namespace health by verifying it exists and is active.
+    async def vitals(self) -> Vitals:
+        """Report the Namespace's vitals from its existence and phase.
 
         Returns:
-            HealthStatus indicating healthy/degraded/unhealthy.
+            Vitals: nominal when Active, impaired in any other phase, down when
+            the Namespace is absent.
         """
         async with self._get_client() as client:
             namespace = await fetch_object(client, K8sNamespace, self.name)
 
         if namespace is None:
-            return HealthStatus(
-                status="unhealthy",
+            return Vitals(
+                status="down",
                 message=f"Namespace {self.name} not found",
             )
 
         phase = namespace.status.phase if namespace.status else None
 
         if phase == "Active":
-            return HealthStatus(
-                status="healthy",
+            return Vitals(
+                status="nominal",
                 message=f"Namespace {self.name} is active",
                 details={"phase": phase},
             )
 
-        return HealthStatus(
-            status="degraded",
+        return Vitals(
+            status="impaired",
             message=f"Namespace {self.name} phase: {phase}",
             details={"phase": phase},
         )

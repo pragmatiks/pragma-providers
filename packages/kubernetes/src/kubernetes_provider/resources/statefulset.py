@@ -30,12 +30,12 @@ from pragma_sdk import (
     AlreadyExistsError,
     Config,
     Field,
-    HealthStatus,
     ImmutableDependency,
     ImmutableField,
     LogEntry,
     Outputs,
     Resource,
+    Vitals,
 )
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
@@ -52,7 +52,7 @@ from kubernetes_provider.objects import (
     wait_for_absence,
 )
 from kubernetes_provider.resources.config import KubernetesConfig
-from kubernetes_provider.rollout import build_replica_health, wait_for_rollout
+from kubernetes_provider.rollout import build_replica_vitals, wait_for_rollout
 
 
 class ContainerPortConfig(BaseModel):
@@ -490,22 +490,23 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
             await delete_object(client, K8sStatefulSet, self.name, self.resolved(self.config.namespace))
             await wait_for_absence(client, K8sStatefulSet, self.name, self.resolved(self.config.namespace))
 
-    async def health(self) -> HealthStatus:
-        """Check StatefulSet health by comparing ready replicas to desired.
+    async def vitals(self) -> Vitals:
+        """Report the StatefulSet's vitals by comparing ready replicas to desired.
 
         Returns:
-            HealthStatus indicating healthy/degraded/unhealthy.
+            Vitals: nominal, impaired or down by ready replicas, down when the
+            StatefulSet is absent.
         """
         async with self._get_client() as client:
             statefulset = await fetch_object(client, K8sStatefulSet, self.name, self.resolved(self.config.namespace))
 
         if statefulset is None:
-            return HealthStatus(
-                status="unhealthy",
+            return Vitals(
+                status="down",
                 message=f"StatefulSet {self.name} not found",
             )
 
-        return build_replica_health(statefulset)
+        return build_replica_vitals(statefulset)
 
     async def logs(
         self,
