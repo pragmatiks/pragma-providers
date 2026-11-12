@@ -28,7 +28,7 @@ from google.cloud.container_v1.types import (
 )
 from google.cloud.logging_v2 import Client as LoggingClient
 from google.oauth2 import service_account
-from pragma_sdk import Config, Field, HealthStatus, ImmutableField, LogEntry, Outputs, Resource
+from pragma_sdk import Config, Field, ImmutableField, LogEntry, Outputs, Resource, Vitals
 from pydantic import Field as PydanticField
 from pydantic import field_validator, model_validator
 
@@ -343,8 +343,8 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
     """GCP GKE cluster resource supporting Autopilot and Standard modes.
 
     Creates and manages GKE clusters using user-provided service account
-    credentials (multi-tenant SaaS pattern). Supports health checks and
-    log streaming from Cloud Logging.
+    credentials (multi-tenant SaaS pattern). Reports vitals and streams
+    logs from Cloud Logging.
 
     Modes:
         - **Autopilot** (default): Fully managed node infrastructure. GCP
@@ -731,45 +731,46 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
         except NotFound:
             pass
 
-    async def health(self) -> HealthStatus:
-        """Check cluster health by querying cluster status.
+    async def vitals(self) -> Vitals:
+        """Report the cluster's vitals from its GKE status.
 
         Returns:
-            HealthStatus indicating cluster health.
+            Vitals: nominal when RUNNING, impaired while DEGRADED, PROVISIONING
+            or RECONCILING, down in any other status or when the cluster is absent.
         """
         client = self._get_client()
 
         try:
             cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
         except NotFound:
-            return HealthStatus(
-                status="unhealthy",
+            return Vitals(
+                status="down",
                 message="Cluster not found",
             )
 
         status = Cluster.Status(cluster.status)
 
         if status == Cluster.Status.RUNNING:
-            return HealthStatus(
-                status="healthy",
+            return Vitals(
+                status="nominal",
                 message="Cluster is running",
                 details={"node_count": sum(np.initial_node_count for np in cluster.node_pools)},
             )
 
         if status == Cluster.Status.DEGRADED:
-            return HealthStatus(
-                status="degraded",
+            return Vitals(
+                status="impaired",
                 message=f"Cluster is serving but degraded: {cluster.status_message or 'no reason reported'}",
             )
 
         if status in (Cluster.Status.PROVISIONING, Cluster.Status.RECONCILING):
-            return HealthStatus(
-                status="degraded",
+            return Vitals(
+                status="impaired",
                 message=f"Cluster is {status.name.lower()}",
             )
 
-        return HealthStatus(
-            status="unhealthy",
+        return Vitals(
+            status="down",
             message=f"Cluster status: {status.name}",
             details={"status_message": cluster.status_message} if cluster.status_message else None,
         )

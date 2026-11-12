@@ -23,7 +23,7 @@ Manage Google Cloud Platform resources declaratively through the Pragmatiks plat
    - `secretmanager.googleapis.com`
    - `container.googleapis.com`
    - `sqladmin.googleapis.com`
-   - `logging.googleapis.com` (for health checks and log streaming)
+   - `logging.googleapis.com` (for vitals and log streaming)
 4. **Service account key** exported as JSON (passed via `credentials` field on each resource).
 
 ## Installation
@@ -74,7 +74,7 @@ resources:
 
 ### GKE Cluster (`gcp/gke`)
 
-Manages GKE clusters in either Autopilot (default) or Standard mode. Includes health checks and log streaming from Cloud Logging.
+Manages GKE clusters in either Autopilot (default) or Standard mode. Reports vitals and streams logs from Cloud Logging.
 
 **Config fields:**
 
@@ -135,14 +135,14 @@ resources:
 - Observe: Reads the cluster by project, location and name.
 - Update: When the live channel differs, waits for the cluster's pending operations, moves the cluster to the configured `release_channel` and waits for the update; when it matches and no cluster update is pending, sends no write and waits on no operation, so a node upgrade does not hold it. Either way, waits for the cluster to serve, in RUNNING, RECONCILING or DEGRADED state. A write GKE refuses because another operation runs on the cluster fails with GKE's message. `credentials` is mutable too; every other field is immutable and requires delete and recreate.
 - Delete: Deletes the cluster and polls until fully removed.
-- Health: Reports `healthy` (RUNNING), `degraded` (DEGRADED/PROVISIONING/RECONCILING), or `unhealthy` (ERROR/not found).
+- Vitals: Reports `nominal` (RUNNING), `impaired` (DEGRADED/PROVISIONING/RECONCILING), or `down` (ERROR/not found).
 - Logs: Streams cluster logs from Cloud Logging.
 
 ---
 
 ### Cloud SQL Database Instance (`gcp/cloudsql/database_instance`)
 
-Manages Cloud SQL instances for PostgreSQL, MySQL, and SQL Server. Supports configurable tiers, high availability, backups, and network access. Includes health checks and log streaming.
+Manages Cloud SQL instances for PostgreSQL, MySQL, and SQL Server. Supports configurable tiers, high availability, backups, and network access. Reports vitals and streams logs.
 
 **Config fields:**
 
@@ -189,7 +189,7 @@ resources:
 - Observe: Reads the instance by project and instance name.
 - Update: Patches mutable settings (tier, availability, backups, network config), waits for the patch operation, then for RUNNABLE.
 - Delete: Deletes the instance. Respects `deletion_protection` -- disable it first to allow deletion.
-- Health: Reports `healthy` (RUNNABLE), `degraded` (PENDING_CREATE/MAINTENANCE), or `unhealthy`.
+- Vitals: Reports `nominal` (RUNNABLE), `impaired` (PENDING_CREATE/MAINTENANCE), or `down` (any other state/not found).
 - Logs: Streams instance logs from Cloud Logging.
 
 ---
