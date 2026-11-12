@@ -1,3 +1,9 @@
+## supabase-v6.2.22 (2026-11-12)
+
+### Refactor
+
+- **supabase**: report vitals instead of health (PRA-855)
+
 ## supabase-v6.2.21 (2026-11-12)
 
 ### Fix
