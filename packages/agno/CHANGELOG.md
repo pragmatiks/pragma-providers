@@ -1,3 +1,13 @@
+## agno-v2.2.29 (2026-11-12)
+
+### Fix
+
+- **agno**: require the kubernetes release that reports vitals (PRA-855)
+
+### Refactor
+
+- **agno**: report vitals instead of health (PRA-855)
+
 ## agno-v2.2.28 (2026-11-12)
 
 ### Fix
