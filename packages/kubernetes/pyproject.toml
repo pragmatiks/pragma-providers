@@ -7,7 +7,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "pragmatiks-sdk>=29.0.0",
-    "pragmatiks-gcp>=7.0.0",
+    "pragmatiks-gcp>=7.3.8",
     "lightkube>=0.15.0",
     "google-auth>=2.30.0",
     "requests>=2.32.0",
