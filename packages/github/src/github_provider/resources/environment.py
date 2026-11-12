@@ -203,12 +203,14 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
         Returns:
             EnvironmentOutputs with environment details.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             body = _build_create_body(self.config, previous_config)
             response = await client.put(self.environment_path(), json=body)
             await raise_for_status(response)
 
-            return _build_outputs(response.json(), cast(str, self.config.owner), cast(str, self.config.repository))
+            return _build_outputs(
+                response.json(), self.resolved(self.config.owner), self.resolved(self.config.repository)
+            )
 
     async def on_create(self) -> EnvironmentOutputs:
         """Create a deployment environment on the repository.
@@ -219,7 +221,7 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
         Raises:
             AlreadyExistsError: If the environment already exists on the repository.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             await ensure_absent(
                 client,
                 self.environment_path(),
@@ -238,13 +240,13 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
             AlreadyExistsError: If GitHub redirects because the repository was
                 renamed or transferred.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             environment = await fetch_optional_json(client, self.environment_path())
 
         if environment is None:
             return None
 
-        return _build_outputs(environment, cast(str, self.config.owner), cast(str, self.config.repository))
+        return _build_outputs(environment, self.resolved(self.config.owner), self.resolved(self.config.repository))
 
     async def on_update(self, previous_config: EnvironmentConfig | None) -> EnvironmentOutputs:
         """Update the environment configuration.
@@ -262,5 +264,5 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
 
         Idempotent: Succeeds if the environment does not exist.
         """
-        async with create_github_client(cast(str, self.config.access_token)) as client:
+        async with create_github_client(self.resolved(self.config.access_token)) as client:
             await delete_if_present(client, self.environment_path())
