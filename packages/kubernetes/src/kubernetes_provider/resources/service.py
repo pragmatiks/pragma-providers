@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Literal, cast
+from typing import Literal
 
 from lightkube import AsyncClient
 from lightkube.models.core_v1 import ServicePort, ServiceSpec
@@ -180,11 +180,11 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
                 targetPort=p.target_port or p.port,
                 protocol=p.protocol,
             )
-            for p in cast(list[PortConfig], self.config.ports)
+            for p in self.resolved(self.config.ports)
         ]
 
-        service_type = cast(str, self.config.type)
-        cluster_ip = cast(str | None, self.config.cluster_ip)
+        service_type = self.resolved(self.config.type)
+        cluster_ip = self.resolved(self.config.cluster_ip)
 
         if service_type == "Headless":
             service_type = "ClusterIP"
@@ -192,7 +192,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
 
         spec = ServiceSpec(
             type=service_type,
-            selector=cast(dict[str, str], self.config.selector),
+            selector=self.resolved(self.config.selector),
             ports=ports,
         )
 
@@ -200,7 +200,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             spec.clusterIP = cluster_ip
 
         return K8sService(
-            metadata=build_object_metadata(self.id, self.name, cast(str, self.config.namespace)),
+            metadata=build_object_metadata(self.id, self.name, self.resolved(self.config.namespace)),
             spec=spec,
         )
 
@@ -247,7 +247,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
         if self.config.type != "LoadBalancer":
             return service
 
-        namespace = cast(str, self.config.namespace)
+        namespace = self.resolved(self.config.namespace)
         address = extract_load_balancer_address(service)
 
         if address is None:
@@ -315,7 +315,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
         """
         async with self._get_client() as client:
             service = await fetch_own_object(
-                client, K8sService, self.id, self.name, cast(str, self.config.namespace), MarkerRefusal.OBSERVE
+                client, K8sService, self.id, self.name, self.resolved(self.config.namespace), MarkerRefusal.OBSERVE
             )
 
         if service is None:
@@ -343,7 +343,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
         desired_headless = self.config.type == "Headless" or self.config.cluster_ip == "None"
 
         async with self._get_client() as client:
-            live_service = await fetch_object(client, K8sService, self.name, cast(str, self.config.namespace))
+            live_service = await fetch_object(client, K8sService, self.name, self.resolved(self.config.namespace))
             live_headless = live_service is not None and self.build_outputs(live_service).cluster_ip == "None"
 
             if live_service is not None and live_headless != desired_headless:
@@ -368,8 +368,8 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             TimeoutError: If the service is still present after the deletion timeout.
         """
         async with self._get_client() as client:
-            await delete_object(client, K8sService, self.name, cast(str, self.config.namespace))
-            await wait_for_absence(client, K8sService, self.name, cast(str, self.config.namespace))
+            await delete_object(client, K8sService, self.name, self.resolved(self.config.namespace))
+            await wait_for_absence(client, K8sService, self.name, self.resolved(self.config.namespace))
 
     async def health(self) -> HealthStatus:
         """Check Service health by verifying existence and endpoints.
@@ -378,8 +378,8 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             HealthStatus indicating healthy/degraded/unhealthy.
         """
         async with self._get_client() as client:
-            service = await fetch_object(client, K8sService, self.name, cast(str, self.config.namespace))
-            endpoints = await fetch_object(client, Endpoints, self.name, cast(str, self.config.namespace))
+            service = await fetch_object(client, K8sService, self.name, self.resolved(self.config.namespace))
+            endpoints = await fetch_object(client, Endpoints, self.name, self.resolved(self.config.namespace))
 
         if service is None:
             return HealthStatus(

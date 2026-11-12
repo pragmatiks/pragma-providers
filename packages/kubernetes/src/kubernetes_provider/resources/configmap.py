@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import cast
 
 from lightkube.resources.core_v1 import ConfigMap as K8sConfigMap
 from pragma_sdk import (
@@ -102,8 +101,8 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
             Kubernetes ConfigMap object ready to apply.
         """
         return K8sConfigMap(
-            metadata=build_object_metadata(self.id, self.name, cast(str, self.config.namespace)),
-            data=cast(dict[str, str], self.config.data),
+            metadata=build_object_metadata(self.id, self.name, self.resolved(self.config.namespace)),
+            data=self.resolved(self.config.data),
         )
 
     def build_outputs(self, configmap: K8sConfigMap) -> ConfigMapOutputs:
@@ -117,7 +116,7 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
         """
         return ConfigMapOutputs(
             name=self.name,
-            namespace=cast(str, self.config.namespace),
+            namespace=self.resolved(self.config.namespace),
             data=configmap.data or {},
         )
 
@@ -156,7 +155,7 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
         """
         async with self._get_client() as client:
             configmap = await fetch_own_object(
-                client, K8sConfigMap, self.id, self.name, cast(str, self.config.namespace), MarkerRefusal.OBSERVE
+                client, K8sConfigMap, self.id, self.name, self.resolved(self.config.namespace), MarkerRefusal.OBSERVE
             )
 
         if configmap is None:
@@ -187,8 +186,8 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
             TimeoutError: If the configmap is still present after the deletion timeout.
         """
         async with self._get_client() as client:
-            await delete_object(client, K8sConfigMap, self.name, cast(str, self.config.namespace))
-            await wait_for_absence(client, K8sConfigMap, self.name, cast(str, self.config.namespace))
+            await delete_object(client, K8sConfigMap, self.name, self.resolved(self.config.namespace))
+            await wait_for_absence(client, K8sConfigMap, self.name, self.resolved(self.config.namespace))
 
     async def health(self) -> HealthStatus:
         """Check ConfigMap health by verifying it exists.
@@ -197,7 +196,7 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
             HealthStatus indicating healthy/unhealthy.
         """
         async with self._get_client() as client:
-            configmap = await fetch_object(client, K8sConfigMap, self.name, cast(str, self.config.namespace))
+            configmap = await fetch_object(client, K8sConfigMap, self.name, self.resolved(self.config.namespace))
 
         if configmap is None:
             return HealthStatus(
