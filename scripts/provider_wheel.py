@@ -6,6 +6,7 @@ Usage:
     python provider_wheel.py report <distribution> <report_path>
     python provider_wheel.py embeds <wheel_dir> <distribution>
     python provider_wheel.py floor-tags <workspace_dir> <distribution>
+    python provider_wheel.py unreleased-floors <wheel_dir>
 
 Commands:
     name: prints the distribution name a provider's pyproject.toml declares.
@@ -21,6 +22,12 @@ Commands:
         no tag satisfies is a floor not released yet: it prints a GitHub Actions warning to stderr and a
         `tree <sibling>` line, whose in-tree package stands in and is read in the working tree for its own
         sibling requirements.
+
+    unreleased-floors: prints, one per line, a uv override `<name> @ file://<wheel>` for every wheel in
+        wheel_dir that some wheel there requires with a floor above its version, and a GitHub Actions
+        warning to stderr for each such requirement. A floor above the in-tree version is not released
+        yet: the in-tree wheel is the sibling's last released one until CI bumps it, so it stands in.
+        A requirement that fails on any other clause gets no override and stays strict.
 
 A requirement is followed when it has no marker or its marker holds for this interpreter with no extra.
 Needs packaging installed; floor-tags also needs git and every `<provider>-v<version>` tag fetched.
@@ -54,11 +61,15 @@ class BuiltWheel:
 
     Attributes:
         path: Wheel file path.
+        version: The wheel's version.
+        followed_requirements: The requirements followed under the marker rule.
         requirements: Canonical names of the requirements followed under the marker rule.
         entry_point_groups: Entry point group name to its entry names.
     """
 
     path: Path
+    version: Version
+    followed_requirements: tuple[Requirement, ...]
     requirements: tuple[str, ...]
     entry_point_groups: dict[str, set[str]]
 
@@ -79,21 +90,21 @@ def read_dist_info_member(archive: zipfile.ZipFile, member_name: str) -> str | N
     return None
 
 
-def build_followed_requirements(metadata_requirements: list[str]) -> tuple[str, ...]:
-    """Return the canonical names of the requirements the marker rule follows.
+def build_followed_requirements(metadata_requirements: list[str]) -> tuple[Requirement, ...]:
+    """Return the requirements the marker rule follows.
 
     Args:
         metadata_requirements: `Requires-Dist` values.
 
     Returns:
-        Canonical names whose requirement has no marker or a marker that holds with no extra.
+        The requirements with no marker or a marker that holds with no extra.
     """
-    followed = []
-    for text in metadata_requirements:
-        requirement = Requirement(text)
-        if requirement.marker is None or requirement.marker.evaluate({"extra": ""}):
-            followed.append(canonicalize_name(requirement.name))
-    return tuple(followed)
+    requirements = (Requirement(text) for text in metadata_requirements)
+    return tuple(
+        requirement
+        for requirement in requirements
+        if requirement.marker is None or requirement.marker.evaluate({"extra": ""})
+    )
 
 
 def load_built_wheels(wheel_directory: str) -> dict[str, BuiltWheel]:
@@ -112,9 +123,12 @@ def load_built_wheels(wheel_directory: str) -> dict[str, BuiltWheel]:
             entry_points = ConfigParser(delimiters=("=",), interpolation=None)
             entry_points.optionxform = str
             entry_points.read_string(read_dist_info_member(archive, "entry_points.txt") or "")
+        followed_requirements = build_followed_requirements(metadata.get_all("Requires-Dist") or [])
         wheels[canonicalize_name(metadata["Name"])] = BuiltWheel(
             path=wheel_path,
-            requirements=build_followed_requirements(metadata.get_all("Requires-Dist") or []),
+            version=Version(metadata["Version"]),
+            followed_requirements=followed_requirements,
+            requirements=tuple(canonicalize_name(requirement.name) for requirement in followed_requirements),
             entry_point_groups={group: set(entry_points[group]) for group in entry_points.sections()},
         )
     return wheels
@@ -195,6 +209,43 @@ def require_matching_embeds(wheel_directory: str, served_name: str) -> None:
             f"but the wheel reaches providers {sorted(expected)} and must not embed itself"
         )
     print(f"{PREFIX}: {served}: introspection and embeds pass")
+
+
+def is_unreleased_floor(requirement: Requirement, version: Version) -> bool:
+    """Tell whether a requirement refuses a version only through a floor above it.
+
+    Args:
+        requirement: The requirement on a sibling.
+        version: The sibling's in-tree version.
+
+    Returns:
+        True when the version fails the requirement and every clause it fails is a `>=` or `>` floor.
+    """
+    failing = [clause for clause in requirement.specifier if not clause.contains(version, prereleases=True)]
+    return bool(failing) and all(clause.operator in (">=", ">") for clause in failing)
+
+
+def print_unreleased_floor_overrides(wheel_directory: str) -> None:
+    """Print a uv override for every wheel some wheel in the directory requires above its version.
+
+    Args:
+        wheel_directory: Directory of built wheels.
+    """
+    wheels = load_built_wheels(wheel_directory)
+    overridden: set[str] = set()
+    for dependent, wheel in sorted(wheels.items()):
+        for requirement in wheel.followed_requirements:
+            name = canonicalize_name(requirement.name)
+            if name not in wheels or not is_unreleased_floor(requirement, wheels[name].version):
+                continue
+            print(
+                f"::warning::{dependent} requires {requirement}; in-tree {wheels[name].version} is not "
+                "released yet, so its in-tree wheel stands in",
+                file=sys.stderr,
+            )
+            overridden.add(name)
+    for name in sorted(overridden):
+        print(f"{name} @ {wheels[name].path.resolve().as_uri()}")
 
 
 def read_git_output(workspace_directory: str, arguments: list[str]) -> str:
@@ -363,6 +414,7 @@ COMMANDS = {
     "report": (require_successful_report, 2),
     "embeds": (require_matching_embeds, 2),
     "floor-tags": (print_floor_tags, 2),
+    "unreleased-floors": (print_unreleased_floor_overrides, 1),
 }
 
 

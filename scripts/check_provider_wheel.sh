@@ -12,8 +12,8 @@
 #                 uv build --wheel --no-sources (scripts/tasks/check_wheels.sh builds it).
 #   override_file Optional uv overrides file of `<distribution> @ file://<wheel>` lines; each such wheel
 #                 satisfies every requirement on its distribution, whatever the version
-#                 (scripts/tasks/check_floor_wheels.sh writes one for an in-tree sibling standing in
-#                 for a floor not released yet).
+#                 (scripts/tasks/check_wheels.sh and scripts/tasks/check_floor_wheels.sh write one for
+#                 an in-tree sibling standing in for a floor not released yet).
 #
 # The provider's wheel is installed in an isolated environment with only the wheels in wheel_dir its
 # Requires-Dist reaches without an extra, directly or through the chain, through uv tool run, the uv
