@@ -6,7 +6,7 @@ import secrets
 import string
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from google.cloud.logging_v2 import Client as LoggingClient
 from pragma_sdk import (
@@ -237,7 +237,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             AlreadyExistsError: If an instance with ``instance_name`` that this resource did not
                 create already exists in the project.
         """
-        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
+        service = await get_sqladmin_service(get_credentials(self.resolved(self.config.credentials)))
         target = self.build_marker_target()
 
         try:
@@ -269,7 +269,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             AlreadyExistsError: If the instance carries no ``pragma_resource`` user label naming this
                 resource.
         """
-        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
+        service = await get_sqladmin_service(get_credentials(self.resolved(self.config.credentials)))
         instance = await self.fetch_instance(service)
 
         if instance is None:
@@ -295,7 +295,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             TimeoutError: If a pending operation, the write's operation, or the instance reaching RUNNABLE
                 is not done by the operation deadline.
         """
-        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
+        service = await get_sqladmin_service(get_credentials(self.resolved(self.config.credentials)))
         deadline = compute_operation_deadline()
 
         await run_instance_operation(
@@ -330,7 +330,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
             TimeoutError: If a pending operation, the delete operation or the deletion is not done by the operation
                 deadline.
         """
-        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
+        service = await get_sqladmin_service(get_credentials(self.resolved(self.config.credentials)))
         deadline = compute_operation_deadline()
 
         await run_instance_operation(
@@ -352,7 +352,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         Returns:
             HealthStatus indicating instance health.
         """
-        service = await get_sqladmin_service(get_credentials(cast(dict[str, Any] | str, self.config.credentials)))
+        service = await get_sqladmin_service(get_credentials(self.resolved(self.config.credentials)))
 
         instance = await execute(
             service.instances().get(project=self.config.project_id, instance=self.config.instance_name),
@@ -386,7 +386,7 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         Yields:
             LogEntry objects from Cloud Logging.
         """
-        credentials = get_credentials(cast(dict[str, Any] | str, self.config.credentials))
+        credentials = get_credentials(self.resolved(self.config.credentials))
         project = self.config.project_id
 
         filter_parts = [

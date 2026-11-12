@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, cast
+from typing import Any
 
 from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.secretmanager_v1 import Secret as SecretManagerSecret
@@ -126,7 +126,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         Returns:
             The UTF-8 encoding of ``data``.
         """
-        return cast(str, self.config.data).encode("utf-8")
+        return self.resolved(self.config.data).encode("utf-8")
 
     async def add_version(self, client: SecretManagerServiceAsyncClient, secret_name: str) -> SecretVersion:
         """Add a version holding ``data`` to the secret.

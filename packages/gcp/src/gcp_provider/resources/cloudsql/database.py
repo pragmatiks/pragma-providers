@@ -214,7 +214,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         )
 
         return DatabaseOutputs(
-            database_name=cast(str, self.config.database_name),
+            database_name=self.resolved(self.config.database_name),
             instance_name=cast(str, instance_config.instance_name),
             host=host,
             port=int(db_port),

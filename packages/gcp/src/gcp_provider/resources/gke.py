@@ -523,7 +523,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
         )
 
         if self.config.subnetwork:
-            cluster.subnetwork = cast(str, self.config.subnetwork)
+            cluster.subnetwork = self.resolved(self.config.subnetwork)
 
         if self.config.autopilot:
             cluster.autopilot = Autopilot(enabled=True)
@@ -670,7 +670,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
         Returns:
             True when the live channel matches and no ``UPDATE_CLUSTER`` operation targets the cluster.
         """
-        channel = ReleaseChannel.Channel[cast(str, self.config.release_channel)]
+        channel = ReleaseChannel.Channel[self.resolved(self.config.release_channel)]
         live_cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
 
         if live_cluster.release_channel.channel != channel:
@@ -678,7 +678,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
 
         return not any(
             operation.operation_type == Operation.Type.UPDATE_CLUSTER
-            and targets_cluster_itself(operation.target_link, cast(str, self.config.name))
+            and targets_cluster_itself(operation.target_link, self.resolved(self.config.name))
             for operation in await list_pending_operations(client, self.config)
         )
 
@@ -691,7 +691,7 @@ class GKE(Resource[GKEConfig, GKEOutputs]):
         Returns:
             The operation GKE started for the update, or None when the live channel already matches.
         """
-        channel = ReleaseChannel.Channel[cast(str, self.config.release_channel)]
+        channel = ReleaseChannel.Channel[self.resolved(self.config.release_channel)]
         live_cluster = await client.get_cluster(request=GetClusterRequest(name=self._cluster_path()))
 
         if live_cluster.release_channel.channel == channel:
