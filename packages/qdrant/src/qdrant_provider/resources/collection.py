@@ -113,10 +113,10 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         Returns:
             Configured AsyncQdrantClient instance.
         """
-        api_key = cast(str, self.config.api_key) if self.config.api_key else None
+        api_key = self.resolved(self.config.api_key) if self.config.api_key else None
 
         return AsyncQdrantClient(
-            url=cast(str, self.config.url),
+            url=self.resolved(self.config.url),
             api_key=api_key,
         )
 
@@ -131,7 +131,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             "Euclid": models.Distance.EUCLID,
             "Dot": models.Distance.DOT,
         }
-        return distance_map[cast(VectorConfig, self.config.vectors).distance]
+        return distance_map[self.resolved(self.config.vectors).distance]
 
     def build_outputs(self) -> CollectionOutputs:
         """Build outputs for the configured collection.
@@ -139,16 +139,16 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         Returns:
             CollectionOutputs naming the collection.
         """
-        return CollectionOutputs(name=cast(str, self.config.name))
+        return CollectionOutputs(name=self.resolved(self.config.name))
 
     async def _create_collection(self, client: AsyncQdrantClient) -> None:
         """Create the collection with configured parameters."""
         await client.create_collection(
-            collection_name=cast(str, self.config.name),
+            collection_name=self.resolved(self.config.name),
             vectors_config=models.VectorParams(
-                size=cast(VectorConfig, self.config.vectors).size,
+                size=self.resolved(self.config.vectors).size,
                 distance=self._get_distance(),
-                on_disk=cast(bool, self.config.on_disk),
+                on_disk=self.resolved(self.config.on_disk),
             ),
             metadata=build_resource_marker(self.id),
         )
@@ -167,7 +167,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             return True
 
         return (
-            live_vectors.size != cast(VectorConfig, self.config.vectors).size
+            live_vectors.size != self.resolved(self.config.vectors).size
             or live_vectors.distance != self._get_distance()
         )
 
@@ -204,7 +204,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             UnexpectedResponse: If the read fails for any reason other than the collection being absent.
         """
         try:
-            return await client.get_collection(cast(str, self.config.name))
+            return await client.get_collection(self.resolved(self.config.name))
         except UnexpectedResponse as error:
             if error.status_code != HTTPStatus.NOT_FOUND:
                 raise
@@ -239,7 +239,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
             if not reports_existing_collection(error):
                 raise
 
-            name = cast(str, self.config.name)
+            name = self.resolved(self.config.name)
             existing = await self.fetch_collection(client)
 
             if existing is None:
@@ -274,7 +274,9 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         if collection is None:
             return None
 
-        check_resource_marker(collection.config.metadata, self.id, cast(str, self.config.name), MarkerRefusal.OBSERVE)
+        check_resource_marker(
+            collection.config.metadata, self.id, self.resolved(self.config.name), MarkerRefusal.OBSERVE
+        )
 
         return self.build_outputs()
 
@@ -290,9 +292,9 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         Raises:
             RuntimeError: If the live vector size or distance differs from config.
         """
-        name = cast(str, self.config.name)
-        vectors = cast(VectorConfig, self.config.vectors)
-        on_disk = cast(bool, self.config.on_disk)
+        name = self.resolved(self.config.name)
+        vectors = self.resolved(self.config.vectors)
+        on_disk = self.resolved(self.config.on_disk)
         client = self._get_client()
 
         try:
@@ -323,7 +325,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         client = self._get_client()
 
         try:
-            name = cast(str, self.config.name)
+            name = self.resolved(self.config.name)
             if await client.collection_exists(name):
                 await client.delete_collection(name)
         finally:
@@ -341,7 +343,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         Raises:
             UnexpectedResponse: If Qdrant fails the lookup for a reason other than a missing collection.
         """
-        name = cast(str, self.config.name)
+        name = self.resolved(self.config.name)
         client = self._get_client()
 
         try:
