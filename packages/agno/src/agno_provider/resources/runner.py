@@ -38,12 +38,12 @@ from pragma_sdk import (
     Config,
     Dependency,
     Field,
-    HealthStatus,
     ImmutableDependency,
     LifecycleState,
     LogEntry,
     Outputs,
     Resource,
+    Vitals,
 )
 from pydantic import model_validator
 
@@ -604,14 +604,14 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
     async def on_delete(self) -> None:
         """Do nothing; the owned Deployment and Service are deleted with this runner."""
 
-    async def health(self) -> HealthStatus:
-        """Check Runner health by delegating to child kubernetes/deployment.
+    async def vitals(self) -> Vitals:
+        """Report the Runner's vitals from its child kubernetes/deployment.
 
         Returns:
-            HealthStatus indicating healthy/degraded/unhealthy.
+            Vitals of the owned Deployment: nominal, impaired or down.
         """
         kubernetes_deployment = await self._kubernetes_deployment()
-        return await kubernetes_deployment.health()
+        return await kubernetes_deployment.vitals()
 
     async def logs(
         self,
