@@ -7,7 +7,7 @@ import time
 from typing import Any, cast
 
 import httpx
-from pragma_sdk import Config, Field, HealthStatus, ImmutableField, Outputs, Resource, SensitiveField
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField, Vitals
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
@@ -552,24 +552,24 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
 
             await self.wait_for_deleted(client)
 
-    async def health(self) -> HealthStatus:
-        """Report the project's status as health.
+    async def vitals(self) -> Vitals:
+        """Report the project's status as vitals.
 
         Returns:
-            Healthy when ``ACTIVE_HEALTHY``, degraded while transitioning, unhealthy otherwise.
+            Nominal when ``ACTIVE_HEALTHY``, impaired while transitioning, down otherwise.
         """
         async with create_management_client(self.resolved(self.config.access_token)) as client:
             project = await self.find_project(client)
 
         if project is None:
-            return HealthStatus(status="unhealthy", message="Project not found")
+            return Vitals(status="down", message="Project not found")
 
         status = project["status"]
 
         if status == "ACTIVE_HEALTHY":
-            return HealthStatus(status="healthy", message="Project is active")
+            return Vitals(status="nominal", message="Project is active")
 
         if status in TRANSITIONAL_STATUSES:
-            return HealthStatus(status="degraded", message=f"Project is {status}")
+            return Vitals(status="impaired", message=f"Project is {status}")
 
-        return HealthStatus(status="unhealthy", message=f"Project is {status}")
+        return Vitals(status="down", message=f"Project is {status}")
