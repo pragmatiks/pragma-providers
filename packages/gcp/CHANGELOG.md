@@ -1,3 +1,9 @@
+## gcp-v7.3.8 (2026-11-12)
+
+### Refactor
+
+- **gcp**: report vitals instead of health (PRA-855)
+
 ## gcp-v7.3.7 (2026-11-12)
 
 ### Fix
