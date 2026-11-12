@@ -11,12 +11,12 @@ from pragma_sdk import (
     AlreadyExistsError,
     Config,
     Field,
-    HealthStatus,
     ImmutableDependency,
     ImmutableField,
     LogEntry,
     Outputs,
     Resource,
+    Vitals,
 )
 
 from kubernetes_provider.marker import MarkerRefusal
@@ -70,7 +70,7 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
     Creates the ConfigMap, marked with this resource's ``pragma.io/resource``
     annotation; an existing ConfigMap carrying it is this resource's earlier
     create and is applied over, any other is refused. Updates use server-side
-    apply under ``field_manager="pragma-kubernetes"``, forcing conflicts. Health checks
+    apply under ``field_manager="pragma-kubernetes"``, forcing conflicts. Vitals
     verify the ConfigMap exists and report the number of stored keys.
 
     Lifecycle:
@@ -189,25 +189,25 @@ class ConfigMap(Resource[ConfigMapConfig, ConfigMapOutputs]):
             await delete_object(client, K8sConfigMap, self.name, self.resolved(self.config.namespace))
             await wait_for_absence(client, K8sConfigMap, self.name, self.resolved(self.config.namespace))
 
-    async def health(self) -> HealthStatus:
-        """Check ConfigMap health by verifying it exists.
+    async def vitals(self) -> Vitals:
+        """Report the ConfigMap's vitals from its existence and key count.
 
         Returns:
-            HealthStatus indicating healthy/unhealthy.
+            Vitals: nominal when the ConfigMap exists, down when it is absent.
         """
         async with self._get_client() as client:
             configmap = await fetch_object(client, K8sConfigMap, self.name, self.resolved(self.config.namespace))
 
         if configmap is None:
-            return HealthStatus(
-                status="unhealthy",
+            return Vitals(
+                status="down",
                 message=f"ConfigMap {self.name} not found",
             )
 
         key_count = len(configmap.data) if configmap.data else 0
 
-        return HealthStatus(
-            status="healthy",
+        return Vitals(
+            status="nominal",
             message=f"ConfigMap exists with {key_count} key(s)",
             details={"key_count": key_count},
         )

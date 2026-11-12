@@ -27,12 +27,12 @@ from lightkube import AsyncClient, KubeConfig
 from lightkube.core.exceptions import ConfigError
 from pragma_sdk import (
     Config,
-    HealthStatus,
     ImmutableDependency,
     ImmutableField,
     LogEntry,
     Outputs,
     Resource,
+    Vitals,
 )
 from pydantic import model_validator
 
@@ -305,24 +305,24 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
         """No external state to clean up."""
         return
 
-    async def health(self) -> HealthStatus:
-        """Check config health by attempting to build a client.
+    async def vitals(self) -> Vitals:
+        """Report the config's vitals by attempting to build a client.
 
         Returns:
-            HealthStatus indicating whether the config can produce a client.
+            Vitals: nominal when the config produces a client, down when it does not.
         """
         try:
             async with self.build_client():
                 pass
         except Exception as exc:  # noqa: BLE001
-            return HealthStatus(
-                status="unhealthy",
+            return Vitals(
+                status="down",
                 message=f"Failed to build client: {exc}",
                 details={"mode": self.config.mode},
             )
 
-        return HealthStatus(
-            status="healthy",
+        return Vitals(
+            status="nominal",
             message=f"Config ready (mode={self.config.mode})",
             details={"mode": self.config.mode},
         )

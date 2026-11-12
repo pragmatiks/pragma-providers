@@ -17,12 +17,12 @@ from pragma_sdk import (
     AlreadyExistsError,
     Config,
     Field,
-    HealthStatus,
     ImmutableDependency,
     ImmutableField,
     LogEntry,
     Outputs,
     Resource,
+    Vitals,
 )
 from pydantic import BaseModel
 
@@ -138,7 +138,7 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
     cluster that assigns none (kind, bare metal without a load-balancer
     controller) the operation fails at its operation deadline. An address the
     cloud re-assigns to a live Service no longer matches the recorded
-    outputs. Every other type is ready once applied. Health checks verify
+    outputs. Every other type is ready once applied. Vitals verify
     both the Service existence and the presence of backend endpoints.
 
     Creates the service, marked with this resource's ``pragma.io/resource``
@@ -371,39 +371,40 @@ class Service(Resource[ServiceConfig, ServiceOutputs]):
             await delete_object(client, K8sService, self.name, self.resolved(self.config.namespace))
             await wait_for_absence(client, K8sService, self.name, self.resolved(self.config.namespace))
 
-    async def health(self) -> HealthStatus:
-        """Check Service health by verifying existence and endpoints.
+    async def vitals(self) -> Vitals:
+        """Report the Service's vitals from its existence and backend endpoints.
 
         Returns:
-            HealthStatus indicating healthy/degraded/unhealthy.
+            Vitals: nominal when the Service has endpoints, impaired when it has
+            none, down when the Service is absent.
         """
         async with self._get_client() as client:
             service = await fetch_object(client, K8sService, self.name, self.resolved(self.config.namespace))
             endpoints = await fetch_object(client, Endpoints, self.name, self.resolved(self.config.namespace))
 
         if service is None:
-            return HealthStatus(
-                status="unhealthy",
+            return Vitals(
+                status="down",
                 message=f"Service {self.name} not found",
             )
 
         if endpoints is None:
-            return HealthStatus(
-                status="degraded",
+            return Vitals(
+                status="impaired",
                 message="Service exists but endpoints not found",
             )
 
         endpoint_count = sum(len(subset.addresses or []) for subset in endpoints.subsets or [])
 
         if endpoint_count:
-            return HealthStatus(
-                status="healthy",
+            return Vitals(
+                status="nominal",
                 message=f"Service has {endpoint_count} endpoint(s)",
                 details={"endpoint_count": endpoint_count},
             )
 
-        return HealthStatus(
-            status="degraded",
+        return Vitals(
+            status="impaired",
             message="Service exists but has no endpoints",
         )
 
