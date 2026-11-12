@@ -1,3 +1,13 @@
+## qdrant-v8.3.10 (2026-11-12)
+
+### Fix
+
+- **qdrant**: require the kubernetes release that reports vitals (PRA-855)
+
+### Refactor
+
+- **qdrant**: report vitals instead of health (PRA-855)
+
 ## qdrant-v8.3.9 (2026-11-12)
 
 ### Fix
