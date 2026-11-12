@@ -458,7 +458,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
             TimeoutError: If the project does not become healthy, or is not listed as
                 ``ACTIVE_HEALTHY``, in time.
         """
-        async with create_management_client(cast(str, self.config.access_token)) as client:
+        async with create_management_client(self.resolved(self.config.access_token)) as client:
             response = await client.post(
                 "/projects",
                 json={
@@ -482,7 +482,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
             ProjectOutputs for the project, or ``None`` when it does not exist. The
             API keys and auth settings are left unread unless the project is ``ACTIVE_HEALTHY``.
         """
-        async with create_management_client(cast(str, self.config.access_token)) as client:
+        async with create_management_client(self.resolved(self.config.access_token)) as client:
             project = await self.find_project(client)
 
             if project is None:
@@ -511,7 +511,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
             TimeoutError: If the project does not become healthy, or is not listed as
                 ``ACTIVE_HEALTHY``, in time.
         """
-        async with create_management_client(cast(str, self.config.access_token)) as client:
+        async with create_management_client(self.resolved(self.config.access_token)) as client:
             project = await self.find_project(client)
 
             if project is None:
@@ -539,7 +539,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Raises:
             TimeoutError: If the project is still listed live after ``DELETED_TIMEOUT_SECONDS``.
         """
-        async with create_management_client(cast(str, self.config.access_token)) as client:
+        async with create_management_client(self.resolved(self.config.access_token)) as client:
             project = await self.find_project(client)
 
             if project is None:
@@ -558,7 +558,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Returns:
             Healthy when ``ACTIVE_HEALTHY``, degraded while transitioning, unhealthy otherwise.
         """
-        async with create_management_client(cast(str, self.config.access_token)) as client:
+        async with create_management_client(self.resolved(self.config.access_token)) as client:
             project = await self.find_project(client)
 
         if project is None:
