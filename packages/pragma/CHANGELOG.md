@@ -1,3 +1,9 @@
+## pragma-v6.3.0 (2026-11-12)
+
+### Feat
+
+- **pragma**: read files from their project's storage key (PRA-593)
+
 ## pragma-v6.2.19 (2026-11-12)
 
 ### Fix
