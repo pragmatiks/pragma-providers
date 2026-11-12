@@ -4,16 +4,21 @@
 # registry admits it, against a directory of wheels built for one release.
 #
 # Usage:
-#   check_provider_wheel.sh <provider_dir> <wheel_dir>
+#   check_provider_wheel.sh <provider_dir> <wheel_dir> [override_file]
 #
 # Arguments:
 #   provider_dir  Provider package directory, such as packages/qdrant.
 #   wheel_dir     Directory holding every workspace provider's wheel built with
 #                 uv build --wheel --no-sources (scripts/tasks/check_wheels.sh builds it).
+#   override_file Optional uv overrides file of `<distribution> @ file://<wheel>` lines; each such wheel
+#                 satisfies every requirement on its distribution, whatever the version
+#                 (scripts/tasks/check_floor_wheels.sh writes one for an in-tree sibling standing in
+#                 for a floor not released yet).
 #
 # The provider's wheel is installed in an isolated environment with only the wheels in wheel_dir its
-# Requires-Dist reaches without an extra, directly or through the chain; every other requirement
-# resolves from the package index. The check fails when pragma_sdk.introspection reports a failure,
+# Requires-Dist reaches without an extra, directly or through the chain, through uv tool run, the uv
+# command whose install takes an overrides file; every other requirement resolves from the package
+# index. The check fails when pragma_sdk.introspection reports a failure,
 # or when the pragma.embeds keys differ from the providers among those reached wheels, or name the
 # provider itself.
 #
@@ -24,8 +29,8 @@
 
 set -euo pipefail
 
-if [ "$#" -ne 2 ]; then
-  echo "check_provider_wheel: usage: check_provider_wheel.sh <provider_dir> <wheel_dir>" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  echo "check_provider_wheel: usage: check_provider_wheel.sh <provider_dir> <wheel_dir> [override_file]" >&2
   exit 2
 fi
 
@@ -44,13 +49,16 @@ run_helper() {
 DISTRIBUTION="$(run_helper name "${PROVIDER_DIRECTORY}/pyproject.toml")"
 mapfile -t RELEASE_SET_WHEELS < <(run_helper release-set "${WHEEL_DIRECTORY}" "${DISTRIBUTION}")
 
-WITH_ARGUMENTS=()
-for wheel_path in "${RELEASE_SET_WHEELS[@]}"; do
-  WITH_ARGUMENTS+=(--with "${wheel_path}")
+INSTALL_ARGUMENTS=(--from "${RELEASE_SET_WHEELS[0]}")
+for wheel_path in "${RELEASE_SET_WHEELS[@]:1}"; do
+  INSTALL_ARGUMENTS+=(--with "${wheel_path}")
 done
+if [ "$#" -eq 3 ]; then
+  INSTALL_ARGUMENTS+=(--overrides "$3")
+fi
 
 run_in_release_set() {
-  uv run --isolated --no-project --quiet "${WITH_ARGUMENTS[@]}" "$@"
+  uv tool run --isolated --quiet "${INSTALL_ARGUMENTS[@]}" "$@"
 }
 
 PRAGMA_PROVIDER_DISTRIBUTION="${DISTRIBUTION}" \

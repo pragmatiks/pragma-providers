@@ -12,7 +12,10 @@
 # uv build --wheel --no-sources, the command publishing uses, beside the provider's own wheel built
 # from the working tree, and scripts/check_provider_wheel.sh installs that set (third-party
 # requirements from the package index) and runs pragma_sdk.introspection. A floor no tag satisfies
-# yet warns, and the sibling's in-tree wheel stands in.
+# yet warns, and the sibling's in-tree wheel stands in: it is passed to check_provider_wheel.sh as an
+# override that satisfies every requirement on that sibling, since its in-tree version is the last
+# released one until CI bumps it, and its own sibling requirements are read in the working tree.
+# Siblings at a release tag get no override, so their floors stay strict.
 #
 # Requires: git with every <provider>-v<version> tag fetched, and uv at the pinned version.
 #
@@ -57,6 +60,9 @@ for provider_directory in "${WORKSPACE_DIRECTORY}"/packages/*/; do
   mkdir -p "${wheel_directory}"
   uv build "${provider_directory}" --wheel --no-sources --quiet --out-dir "${wheel_directory}"
 
+  override_path="${SCRATCH_DIRECTORY}/overrides/${distribution}.txt"
+  mkdir -p "$(dirname "${override_path}")"
+  : > "${override_path}"
   floor_names=()
   for record in "${floor_records[@]}"; do
     read -r kind sibling tag <<< "${record}"
@@ -66,7 +72,13 @@ for provider_directory in "${WORKSPACE_DIRECTORY}"/packages/*/; do
         floor_names+=("${tag}")
         ;;
       tree)
-        uv build "${WORKSPACE_DIRECTORY}/packages/${sibling}" --wheel --no-sources --quiet --out-dir "${wheel_directory}"
+        tree_wheel_directory="${SCRATCH_DIRECTORY}/tree/${distribution}/${sibling}"
+        mkdir -p "${tree_wheel_directory}"
+        uv build "${WORKSPACE_DIRECTORY}/packages/${sibling}" --wheel --no-sources --quiet --out-dir "${tree_wheel_directory}"
+        cp "${tree_wheel_directory}"/*.whl "${wheel_directory}/"
+        for tree_wheel in "${tree_wheel_directory}"/*.whl; do
+          echo "pragmatiks-${sibling} @ file://${wheel_directory}/$(basename "${tree_wheel}")" >> "${override_path}"
+        done
         floor_names+=("${sibling}@tree")
         ;;
       *)
@@ -77,5 +89,5 @@ for provider_directory in "${WORKSPACE_DIRECTORY}"/packages/*/; do
   done
 
   echo "check_floors: ${distribution} against ${floor_names[*]}"
-  "${WORKSPACE_DIRECTORY}/scripts/check_provider_wheel.sh" "${provider_directory}" "${wheel_directory}"
+  "${WORKSPACE_DIRECTORY}/scripts/check_provider_wheel.sh" "${provider_directory}" "${wheel_directory}" "${override_path}"
 done

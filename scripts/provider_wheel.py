@@ -19,7 +19,8 @@ Commands:
         requirement resolves to the lowest tag whose version satisfies it, read again at that tag for the
         sibling's own sibling requirements, and a sibling reached twice keeps the higher tag. A requirement
         no tag satisfies is a floor not released yet: it prints a GitHub Actions warning to stderr and a
-        `tree <sibling>` line, whose in-tree package stands in.
+        `tree <sibling>` line, whose in-tree package stands in and is read in the working tree for its own
+        sibling requirements.
 
 A requirement is followed when it has no marker or its marker holds for this interpreter with no extra.
 Needs packaging installed; floor-tags also needs git and every `<provider>-v<version>` tag fetched.
@@ -314,7 +315,8 @@ def load_floor_versions(workspace_directory: str, provider: str) -> dict[str, Ve
     Returns:
         Sibling package directory name to the version of its lowest satisfying release tag, or None when
         some requirement on it no release satisfies; None wins over any release, since only the in-tree
-        package satisfies that requirement.
+        package satisfies that requirement, and that in-tree package's own sibling requirements are
+        followed in the working tree.
     """
     floors: dict[str, Version | None] = {}
     pending: list[tuple[str, str | None]] = [(provider, None)]
@@ -329,6 +331,8 @@ def load_floor_versions(workspace_directory: str, provider: str) -> dict[str, Ve
                     "satisfies it yet, so the in-tree wheel stands in",
                     file=sys.stderr,
                 )
+                if sibling not in floors or floors[sibling] is not None:
+                    pending.append((sibling, None))
                 floors[sibling] = None
                 continue
             if sibling in floors and (floors[sibling] is None or floors[sibling] >= lowest):
