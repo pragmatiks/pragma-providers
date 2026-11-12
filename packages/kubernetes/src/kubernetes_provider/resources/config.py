@@ -206,7 +206,7 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
 
         if self.config.mode == "kubeconfig_file":
             assert self.config.kubeconfig_path is not None
-            resolved = _validate_kubeconfig_path(cast(str, self.config.kubeconfig_path))
+            resolved = _validate_kubeconfig_path(self.resolved(self.config.kubeconfig_path))
 
             KubeConfig.from_file(str(resolved))
             return
@@ -252,7 +252,7 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
 
         if self.config.mode == "kubeconfig_file":
             assert self.config.kubeconfig_path is not None
-            resolved = _validate_kubeconfig_path(cast(str, self.config.kubeconfig_path))
+            resolved = _validate_kubeconfig_path(self.resolved(self.config.kubeconfig_path))
             kubeconfig = KubeConfig.from_file(str(resolved))
             return AsyncClient(config=kubeconfig)
 
@@ -286,7 +286,7 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
         """
         await self._validate()
 
-        return ConfigOutputs(mode=cast(str, self.config.mode))
+        return ConfigOutputs(mode=self.resolved(self.config.mode))
 
     async def on_update(self, previous_config: ConfigConfig | None) -> ConfigOutputs:
         """Re-validate the cluster config.
@@ -299,7 +299,7 @@ class KubernetesConfig(Resource[ConfigConfig, ConfigOutputs]):
         """
         await self._validate()
 
-        return ConfigOutputs(mode=cast(str, self.config.mode))
+        return ConfigOutputs(mode=self.resolved(self.config.mode))
 
     async def on_delete(self) -> None:
         """No external state to clean up."""

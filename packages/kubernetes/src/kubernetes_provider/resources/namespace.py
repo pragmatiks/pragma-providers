@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import cast
 
 from lightkube.resources.core_v1 import Namespace as K8sNamespace
 from pragma_sdk import AlreadyExistsError, Config, Field, HealthStatus, ImmutableDependency, LogEntry, Outputs, Resource
@@ -91,7 +90,7 @@ class Namespace(Resource[NamespaceConfig, NamespaceOutputs]):
             Kubernetes Namespace object ready to apply.
         """
         return K8sNamespace(
-            metadata=build_object_metadata(self.id, self.name, labels=cast(dict[str, str] | None, self.config.labels)),
+            metadata=build_object_metadata(self.id, self.name, labels=self.resolved(self.config.labels)),
         )
 
     def build_outputs(self, namespace: K8sNamespace) -> NamespaceOutputs:

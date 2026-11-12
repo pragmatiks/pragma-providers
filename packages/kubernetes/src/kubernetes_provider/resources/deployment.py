@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Literal, cast
+from typing import Literal
 
 from lightkube import ApiError
 from lightkube.models.apps_v1 import DeploymentSpec, DeploymentStrategy, RollingUpdateDeployment
@@ -349,11 +349,11 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         Returns:
             Kubernetes Deployment object ready to apply.
         """
-        selector = cast(dict[str, str], self.config.selector)
-        labels = cast(dict[str, str] | None, self.config.labels) or selector
-        containers = [self._build_container(c) for c in cast(list[ContainerConfig], self.config.containers)]
+        selector = self.resolved(self.config.selector)
+        labels = self.resolved(self.config.labels) or selector
+        containers = [self._build_container(c) for c in self.resolved(self.config.containers)]
 
-        strategy = DeploymentStrategy(type=cast(str, self.config.strategy))
+        strategy = DeploymentStrategy(type=self.resolved(self.config.strategy))
 
         if self.config.strategy == "RollingUpdate":
             strategy.rollingUpdate = RollingUpdateDeployment(
@@ -362,7 +362,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             )
 
         spec = DeploymentSpec(
-            replicas=cast(int, self.config.replicas),
+            replicas=self.resolved(self.config.replicas),
             selector=LabelSelector(matchLabels=selector),
             template=PodTemplateSpec(
                 metadata=ObjectMeta(labels=labels),
@@ -372,7 +372,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         )
 
         return K8sDeployment(
-            metadata=build_object_metadata(self.id, self.name, cast(str, self.config.namespace)),
+            metadata=build_object_metadata(self.id, self.name, self.resolved(self.config.namespace)),
             spec=spec,
         )
 
@@ -416,7 +416,9 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             except AlreadyExistsError as error:
                 await check_create_conflict(client, desired, self.id, error)
             else:
-                deployment = await wait_for_rollout(client, K8sDeployment, self.name, cast(str, self.config.namespace))
+                deployment = await wait_for_rollout(
+                    client, K8sDeployment, self.name, self.resolved(self.config.namespace)
+                )
 
                 return self.build_outputs(deployment)
 
@@ -434,7 +436,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         """
         async with self._get_client() as client:
             deployment = await fetch_own_object(
-                client, K8sDeployment, self.id, self.name, cast(str, self.config.namespace), MarkerRefusal.OBSERVE
+                client, K8sDeployment, self.id, self.name, self.resolved(self.config.namespace), MarkerRefusal.OBSERVE
             )
 
         if deployment is None:
@@ -457,7 +459,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         async with self._get_client() as client:
             await client.apply(self._build_deployment(), field_manager=FIELD_MANAGER, force=True)
 
-            deployment = await wait_for_rollout(client, K8sDeployment, self.name, cast(str, self.config.namespace))
+            deployment = await wait_for_rollout(client, K8sDeployment, self.name, self.resolved(self.config.namespace))
 
         return self.build_outputs(deployment)
 
@@ -470,8 +472,8 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             TimeoutError: If the deployment is still present after the deletion timeout.
         """
         async with self._get_client() as client:
-            await delete_object(client, K8sDeployment, self.name, cast(str, self.config.namespace))
-            await wait_for_absence(client, K8sDeployment, self.name, cast(str, self.config.namespace))
+            await delete_object(client, K8sDeployment, self.name, self.resolved(self.config.namespace))
+            await wait_for_absence(client, K8sDeployment, self.name, self.resolved(self.config.namespace))
 
     async def health(self) -> HealthStatus:
         """Check Deployment health by comparing ready replicas to desired.
@@ -480,7 +482,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             HealthStatus indicating healthy/degraded/unhealthy.
         """
         async with self._get_client() as client:
-            deployment = await fetch_object(client, K8sDeployment, self.name, cast(str, self.config.namespace))
+            deployment = await fetch_object(client, K8sDeployment, self.name, self.resolved(self.config.namespace))
 
         if deployment is None:
             return HealthStatus(
@@ -505,11 +507,11 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
             LogEntry for each log line from pods.
         """
         async with self._get_client() as client:
-            label_selector = ",".join(f"{k}={v}" for k, v in cast(dict[str, str], self.config.selector).items())
+            label_selector = ",".join(f"{k}={v}" for k, v in self.resolved(self.config.selector).items())
 
             pods = client.list(
                 Pod,
-                namespace=cast(str, self.config.namespace),
+                namespace=self.resolved(self.config.namespace),
                 labels=label_selector,
             )
 
