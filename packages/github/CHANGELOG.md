@@ -1,3 +1,9 @@
+## github-v6.2.23 (2026-11-12)
+
+### Fix
+
+- **github**: require pragmatiks-sdk 29 for protocol 7 (PRA-855)
+
 ## github-v6.2.22 (2026-11-12)
 
 ### Fix
