@@ -1,3 +1,9 @@
+## gcp-v7.3.6 (2026-11-12)
+
+### Refactor
+
+- **gcp**: read resolved config through Resource.resolved (PRA-917)
+
 ## gcp-v7.3.5 (2026-11-12)
 
 ### Fix
