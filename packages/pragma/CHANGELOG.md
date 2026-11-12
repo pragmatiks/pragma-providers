@@ -1,3 +1,9 @@
+## pragma-v6.3.1 (2026-11-12)
+
+### Fix
+
+- **pragma**: require pragmatiks-sdk 29 for protocol 7 (PRA-855)
+
 ## pragma-v6.3.0 (2026-11-12)
 
 ### Feat
