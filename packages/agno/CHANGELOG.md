@@ -1,3 +1,9 @@
+## agno-v2.2.27 (2026-11-12)
+
+### Refactor
+
+- **agno**: read resolved config through Resource.resolved (PRA-917)
+
 ## agno-v2.2.26 (2026-11-12)
 
 ### Fix
