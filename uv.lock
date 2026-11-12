@@ -2008,7 +2008,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-pragma"
-version = "6.2.19"
+version = "6.3.0"
 source = { editable = "packages/pragma" }
 dependencies = [
     { name = "obstore" },
