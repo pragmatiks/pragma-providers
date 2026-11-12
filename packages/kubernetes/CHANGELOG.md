@@ -1,3 +1,13 @@
+## kubernetes-v2.4.8 (2026-11-12)
+
+### Fix
+
+- **kubernetes**: require the gcp release that reports vitals (PRA-855)
+
+### Refactor
+
+- **kubernetes**: report vitals instead of health (PRA-855)
+
 ## kubernetes-v2.4.7 (2026-11-12)
 
 ### Fix
