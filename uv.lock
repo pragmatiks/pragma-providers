@@ -1935,7 +1935,7 @@ requires-dist = [
     { name = "google-cloud-container", specifier = ">=2.50.0" },
     { name = "google-cloud-logging", specifier = ">=3.10.0" },
     { name = "google-cloud-secret-manager", specifier = ">=2.20.0" },
-    { name = "pragmatiks-sdk", specifier = ">=27.7.0" },
+    { name = "pragmatiks-sdk", specifier = ">=29.0.0" },
 ]
 
 [package.metadata.requires-dev]

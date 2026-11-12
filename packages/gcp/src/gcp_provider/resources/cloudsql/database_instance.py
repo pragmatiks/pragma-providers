@@ -14,11 +14,12 @@ from pragma_sdk import (
     Config,
     Dependency,
     Field,
-    HealthStatus,
     ImmutableField,
     LogEntry,
     Outputs,
     Resource,
+    Vitals,
+    VitalsStatus,
 )
 from pydantic import field_validator
 
@@ -155,8 +156,8 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
     Creates and manages Cloud SQL instances for PostgreSQL, MySQL, and SQL Server
     using user-provided service account credentials (multi-tenant SaaS pattern).
     Supports configurable machine tiers, high availability, automatic backups,
-    and network access control. Includes health checks and log streaming from
-    Cloud Logging.
+    and network access control. Reports vitals and streams logs from Cloud
+    Logging.
 
     Lifecycle:
         - on_create: Creates the instance with a randomly generated root password,
@@ -346,11 +347,12 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
 
         await self._wait_for_deletion(service, deadline)
 
-    async def health(self) -> HealthStatus:
-        """Check instance health by querying instance status.
+    async def vitals(self) -> Vitals:
+        """Report the instance's vitals from its Cloud SQL state.
 
         Returns:
-            HealthStatus indicating instance health.
+            Vitals: nominal when RUNNABLE, impaired while pending create or in
+            maintenance, down in any other state or when the instance is absent.
         """
         service = await get_sqladmin_service(get_credentials(self.resolved(self.config.credentials)))
 
@@ -360,20 +362,20 @@ class DatabaseInstance(Resource[DatabaseInstanceConfig, DatabaseInstanceOutputs]
         )
 
         if instance is None:
-            return HealthStatus(status="unhealthy", message="Instance not found")
+            return Vitals(status="down", message="Instance not found")
 
         state = instance.get("state")
-        status_map: dict[str, tuple[Literal["healthy", "unhealthy", "degraded"], str]] = {
-            "RUNNABLE": ("healthy", "Instance is running"),
-            "PENDING_CREATE": ("degraded", "Instance is pending create"),
-            "MAINTENANCE": ("degraded", "Instance is in maintenance"),
+        status_map: dict[str, tuple[VitalsStatus, str]] = {
+            "RUNNABLE": ("nominal", "Instance is running"),
+            "PENDING_CREATE": ("impaired", "Instance is pending create"),
+            "MAINTENANCE": ("impaired", "Instance is in maintenance"),
         }
-        status, message = status_map.get(state, ("unhealthy", f"Instance state: {state}"))
+        status, message = status_map.get(state, ("down", f"Instance state: {state}"))
 
-        return HealthStatus(
+        return Vitals(
             status=status,
             message=message,
-            details={"tier": instance.get("settings", {}).get("tier")} if status == "healthy" else None,
+            details={"tier": instance.get("settings", {}).get("tier")} if status == "nominal" else None,
         )
 
     async def logs(
