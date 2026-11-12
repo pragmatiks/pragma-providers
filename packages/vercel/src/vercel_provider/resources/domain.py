@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pragma_sdk import Config, Field, HealthStatus, ImmutableField, Outputs, Resource, SensitiveField
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField, Vitals
 
 from vercel_provider.client import (
     create_vercel_client,
@@ -207,24 +207,24 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
 
             await raise_for_status(response)
 
-    async def health(self) -> HealthStatus:
+    async def vitals(self) -> Vitals:
         """Report whether Vercel has verified the domain.
 
         Returns:
-            ``healthy`` when verified, ``degraded`` while verification is pending,
-            ``unhealthy`` when the domain is not attached.
+            ``nominal`` when verified, ``impaired`` while verification is pending,
+            ``down`` when the domain is not attached.
         """
         async with create_vercel_client(self.resolved(self.config.access_token)) as client:
             data = await fetch_optional_json(client, self.domain_path(), self._query_params())
 
         if data is None:
-            return HealthStatus(status="unhealthy", message=f"Domain {self.config.domain} is not attached")
+            return Vitals(status="down", message=f"Domain {self.config.domain} is not attached")
 
         if data["verified"]:
-            return HealthStatus(status="healthy")
+            return Vitals(status="nominal")
 
-        return HealthStatus(
-            status="degraded",
+        return Vitals(
+            status="impaired",
             message=f"Domain {self.config.domain} is not verified yet",
             details={"verification": data.get("verification", [])},
         )
