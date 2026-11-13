@@ -39,7 +39,7 @@ Always use mise tasks (`mise tasks` lists them all):
 | `mise run check:floors` | Resolve the workspace with `--no-sources` (a provider floor above a sibling's in-tree, last released, version warns; any other resolve failure fails), then install each provider's wheel with every sibling it reaches at the lowest `<provider>-v<version>` tag released under the required distribution name that its floor allows (recursively at that tag, built from the tag with `uv build --wheel --no-sources`; a floor no tag satisfies yet warns, and the sibling's in-tree wheel stands in as a uv override that satisfies every requirement on it, read in the working tree for its own siblings, while siblings at a tag get no override) and fail on a failed `pragma_sdk.introspection` report or embeds mismatch; needs the release tags fetched; CI runs it on every pull request and push |
 | `mise run lock:toolchain` | Regenerate `mise.lock` and `.mise/locks/` (macOS arm64 or Linux x64 only; never bumps) |
 | `mise run check:mise-pins` | Fail when a `jdx/mise-action` step's `version:` or `sha256:` differs from `min_version` and its runner's mise binary checksum |
-| `mise run check:toolchain-scripts` | Fail when a shared toolchain script under `scripts/tasks/` differs from the public repositories' copies (same-named branch, else `main`) |
+| `mise run check:toolchain-scripts` | Fail when a shared toolchain script under `scripts/tasks/` or the git hook `scripts/git_hooks/hook.sh` differs from the public repositories' copies (same-named branch, else `main`) |
 
 ### Provider environments
 
