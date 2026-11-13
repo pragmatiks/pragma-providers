@@ -1,3 +1,9 @@
+## agno-v2.2.30 (2026-11-13)
+
+### Fix
+
+- **agno**: count only a Content's own Agno warnings in read and embed failures (PRA-937)
+
 ## agno-v2.2.29 (2026-11-12)
 
 ### Fix
