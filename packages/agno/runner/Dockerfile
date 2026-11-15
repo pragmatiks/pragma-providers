@@ -23,7 +23,7 @@
 #     --build-arg PROVIDER_VERSION="$(cd packages/agno && cz version --project)" \
 #     -t agno-runner:dev .
 
-FROM python:3.13-slim@sha256:bf44cdfcb76cd3b41e879bc058fc37ec5872002ccfde7fcb765e218cde0cd79c AS manifests
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS manifests
 
 WORKDIR /app
 
@@ -32,7 +32,7 @@ COPY packages ./packages
 
 RUN find packages -mindepth 2 -maxdepth 2 ! -name pyproject.toml -exec rm -rf {} +
 
-FROM python:3.13-slim@sha256:bf44cdfcb76cd3b41e879bc058fc37ec5872002ccfde7fcb765e218cde0cd79c AS builder
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS builder
 
 ENV UV_COMPILE_BYTECODE=1
 
@@ -52,7 +52,7 @@ COPY packages ./packages
 RUN uv sync --frozen --package pragmatiks-agno --no-dev --no-editable
 
 # --- Final image ---
-FROM python:3.13-slim@sha256:bf44cdfcb76cd3b41e879bc058fc37ec5872002ccfde7fcb765e218cde0cd79c
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
 
 ARG PROVIDER_VERSION=dev
 
