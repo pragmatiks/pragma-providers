@@ -1,3 +1,9 @@
+## pragma-v6.3.2 (2026-11-17)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v30.0.0
+
 ## pragma-v6.3.1 (2026-11-12)
 
 ### Fix
