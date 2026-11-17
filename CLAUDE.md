@@ -2,7 +2,7 @@
 
 ## Project
 
-**pragma-providers**: Official providers for the Pragmatiks platform (GCP, AWS, etc.).
+**pragma-providers**: Official providers for the Pragmatiks platform (GCP, Kubernetes, Supabase, etc.).
 
 ## Shared rules
 
@@ -47,13 +47,13 @@ Always use mise tasks (`mise tasks` lists them all):
 
 ### Toolchain
 
-mise is the only toolchain source. `mise.toml` pins python, uv, pre-commit, git-cliff, commitizen and yq; `mise.lock` and `.mise/locks/` are committed. Install the pinned mise version (`min_version` in `mise.toml`); the install and the one-sweep bump rule across repositories live in the hub's `docs/runbooks/local-dev-setup.md`. A toolchain change ships with its `mise run lock:toolchain` output in the same commit. On a fresh clone run `mise trust`, then `mise run install`.
+mise is the only toolchain source. `mise.toml` pins python, uv, pre-commit, git-cliff, commitizen, the pragma CLI (`pragmatiks-cli`, with `pragmatiks-lint[check]` and semgrep) and yq; `mise.lock` and `.mise/locks/` are committed. Install the pinned mise version (`min_version` in `mise.toml`); the install and the one-sweep bump rule across repositories live in the hub's `docs/runbooks/local-dev-setup.md`. A toolchain change ships with its `mise run lock:toolchain` output in the same commit. On a fresh clone run `mise trust`, then `mise run install`.
 
 ### Lockfile
 
 The root `uv.lock` is committed and must match the manifests; so must `scripts/publish_tooling/uv.lock`, the separate lock of the pragma CLI and `uv_build` backend that publishing installs (not a workspace member). Any change to a `pyproject.toml` ships with its `uv lock` in the same commit. Relock both with `mise run lock`; `mise run check` and CI fail on a stale tooling lock. Bumping the publish CLI or backend pin is an edit to `scripts/publish_tooling/pyproject.toml` plus `mise run lock`, in a `build:` PR. `[tool.uv] required-version` must equal the uv version in `mise.toml`; uv refuses to run at any other version.
 
-Humans change `main` only through pull requests. The pragma-ci-bot GitHub App pushes release commits to it directly, from the `push` job of `publish.yaml` in the main-only `release` environment. CI runs `uv lock --check` and `uv sync --all-packages --all-groups --locked` on every pull request and on every push to `main`, except release pushes: they carry `[skip ci]`, so GitHub starts no workflow for them (`ci.yaml` also skips a push whose head commit starts with `bump:`).
+Humans change `main` only through pull requests. The pragma-ci-bot GitHub App pushes release commits to it directly, from the `push` job of `publish.yaml` in the main-only `release` environment. CI runs `uv lock --check`, `mise run check:tooling-lock` and `mise run check:ci` (every provider's check in its own `--locked` environment, the pre-commit hooks and the Pragmatiks lint rules) on every pull request and on every push to `main`, except release pushes: they carry `[skip ci]`, so GitHub starts no workflow for them (`ci.yaml` also skips a push whose head commit starts with `bump:`).
 
 ### Releases
 
@@ -127,7 +127,7 @@ Each provider publishes to the Pragmatiks registry as its own distribution, neve
 
 **Versioning**: CI bumps each provider with git-cliff from the conventional commits on its own paths and pushes the tag. Never bump versions or edit changelogs by hand.
 
-**Publishing**: `publish-provider.yaml` takes its tooling (scripts, `mise.toml`, the tooling lock) from the workflow's own commit and only the provider package from the tag commit, checked out under `release-tag/`, in two jobs. `build` runs with no environment, no secret and read-only contents: `scripts/build_provider_wheel.sh` builds the wheel with `uv build --no-config --wheel --no-sources` (so the tag commit's `[tool.uv]` settings and sources are ignored and any tag builds under the pinned uv) and `uv_build` constrained by hash to the version `scripts/publish_tooling/uv.lock` pins, refusing a `[build-system]` that locked backend cannot satisfy, and uploads it as an artifact; `mise run check:wheels` builds the same way. `publish` runs in the main-only `pypi` environment, which holds `PRAGMA_PUBLISH_API_KEY`, on a fresh runner that runs no tag-commit code: it downloads the wheel, writes the key to a file, and `scripts/publish_platform_provider.sh` moves the key into the hash-locked pragma CLI's isolated credentials file (never an environment variable or argument), checks the wheel's distribution and version, and publishes with `pragma providers publish --wheel`.
+**Publishing**: `publish-provider.yaml` takes its tooling (scripts, `mise.toml`, the tooling lock) from the workflow's own commit and only the provider package from the tag commit, checked out under `release-tag/`, in three jobs. `build` runs with no environment, no secret and read-only contents: `scripts/build_provider_wheel.sh` builds the wheel with `uv build --no-config --wheel --no-sources` (so the tag commit's `[tool.uv]` settings and sources are ignored and any tag builds under the pinned uv) and `uv_build` constrained by hash to the version `scripts/publish_tooling/uv.lock` pins, refusing a `[build-system]` that locked backend cannot satisfy, and uploads it as an artifact; `mise run check:wheels` builds the same way. `publish` runs in the main-only `pypi` environment, which holds `PRAGMA_PUBLISH_API_KEY`, on a fresh runner that runs no tag-commit code: it downloads the wheel, writes the key to a file, and `scripts/publish_platform_provider.sh` moves the key into the hash-locked pragma CLI's isolated credentials file (never an environment variable or argument), checks the wheel's distribution and version, and publishes with `pragma providers publish --wheel`. `release`, when `create_release` is set, then creates the GitHub Release through `release-provider.yaml`.
 
 **Embedded providers**: a provider declares every Pragmatiks provider among its dependencies, direct or transitive, under `[project.entry-points."pragma.embeds"]`, keyed by distribution name. The platform reads only the key; by convention the value is the embedded provider's import package:
 
