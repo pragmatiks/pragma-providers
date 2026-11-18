@@ -1,137 +1,20 @@
-# CLAUDE.md
+# pragma-providers
 
-## Project
+Official Pragmatiks providers (GCP, Kubernetes, Supabase, Vercel, GitHub, Pragma, Qdrant, Agno). Each handles resource lifecycle events by calling a vendor API and returning outputs to the platform. The providers form one uv workspace: each `packages/<provider>` is its own package, version and changelog, published to the Pragmatiks registry only, never PyPI.
 
-**pragma-providers**: Official providers for the Pragmatiks platform (GCP, Kubernetes, Supabase, etc.).
+Delivery: pragma-kit `project-instructions.md`. Engineering rules: the `pragma-kit:engineering-principles` skill; load it before planning, writing or reviewing a change. Tasks, environments and lockfiles: `docs/development.md`. Releases and publishing: `docs/releasing.md`.
 
-## Shared rules
+## Gotchas
 
-Delivery lives in pragma-kit `project-instructions.md`. Evidence-based development, the solution preference order, the 13 engineering principles and the reviewer and developer protocols live in the pragma-kit plugin's `pragma-kit:engineering-principles` skill: load it before planning, writing or reviewing a change here. This file holds only what is specific to this repository.
-
-## Architecture
-
-Providers handle resource lifecycle events (CREATE, UPDATE, DELETE) by calling cloud APIs and returning results to the platform.
-
-**The providers form one uv workspace.** Each provider is its own package with its own version and changelog. Providers that build on a sibling depend on it through a `workspace = true` source, never a path. Every provider publishes to the Pragmatiks registry only.
-
-## Cross-Cutting Changes
-
-**Never bundle changes across multiple providers in a single commit or PR.** Each provider must be modified independently.
-
-Exception: a workspace-level change (build, publishing, naming) lands as one commit per provider in one rebase-merged PR.
-
-When an SDK interface change affects all providers:
-1. SDK change publishes to PyPI first
-2. SDK cascade (`update-sdk.yaml`) updates the root lockfile
-3. Each provider adapts individually — one commit per provider
-4. The publish workflow handles ordering (gcp → kubernetes → qdrant/agno)
-
-## Development
-
-Always use mise tasks (`mise tasks` lists them all):
-
-| Command | Purpose |
-|---------|---------|
-| `mise run install` | Install the toolchain from `mise.lock`, every provider from `uv.lock`, and the git hooks |
-| `mise run format` | Format with ruff |
-| `mise run check` | Lint + type check, each provider in its own environment |
-| `mise run check:wheels` | Build every provider's wheel once with `--no-sources` and the hash-locked `uv_build` (as publishing does), install each with only the sibling wheels its `Requires-Dist` reaches (a floor above a sibling's in-tree, last released, version warns and that in-tree wheel stands in as a uv override; on the bumped release tree no floor is above, so the check is fully strict there), and fail on a failed `pragma_sdk.introspection` report or `pragma.embeds` keys that differ from the providers among them; CI runs it on every pull request and push |
-| `mise run check:floors` | Resolve the workspace with `--no-sources` (a provider floor above a sibling's in-tree, last released, version warns; any other resolve failure fails), then install each provider's wheel with every sibling it reaches at the lowest `<provider>-v<version>` tag released under the required distribution name that its floor allows (recursively at that tag, built from the tag with `uv build --wheel --no-sources`; a floor no tag satisfies yet warns, and the sibling's in-tree wheel stands in as a uv override that satisfies every requirement on it, read in the working tree for its own siblings, while siblings at a tag get no override) and fail on a failed `pragma_sdk.introspection` report or embeds mismatch; needs the release tags fetched; CI runs it on every pull request and push |
-| `mise run lock:toolchain` | Regenerate `mise.lock` and `.mise/locks/` (macOS arm64 or Linux x64 only; never bumps) |
-| `mise run check:mise-pins` | Fail when a `jdx/mise-action` step's `version:` or `sha256:` differs from `min_version` and its runner's mise binary checksum |
-| `mise run check:toolchain-scripts` | Fail when a shared toolchain script under `scripts/tasks/` or the git hook `scripts/git_hooks/hook.sh` differs from the public repositories' copies (same-named branch, else `main`) |
-
-### Provider environments
-
-`mise run check` and `mise run format` run each provider in its own environment, `.venvs/<distribution>/` at the repository root (gitignored), built by `uv run --package <distribution> --exact --locked --group dev` from `uv.lock`. It holds only the provider, its declared and transitive dependencies (workspace siblings it declares, editable) and its `dev` group, matching what the provider sees when installed alone, so ty fails an import of a sibling the provider does not declare. The distribution name is read from `project.name` in the provider's `pyproject.toml`. The root `.venv` from `mise run install` still holds every provider and serves editors and the git hooks.
-
-### Toolchain
-
-mise is the only toolchain source. `mise.toml` pins python, uv, pre-commit, git-cliff, commitizen, the pragma CLI (`pragmatiks-cli`, with `pragmatiks-lint[check]` and semgrep) and yq; `mise.lock` and `.mise/locks/` are committed. Install the pinned mise version (`min_version` in `mise.toml`); the install and the one-sweep bump rule across repositories live in the hub's `docs/runbooks/local-dev-setup.md`. A toolchain change ships with its `mise run lock:toolchain` output in the same commit. On a fresh clone run `mise trust`, then `mise run install`.
-
-### Lockfile
-
-The root `uv.lock` is committed and must match the manifests; so must `scripts/publish_tooling/uv.lock`, the separate lock of the pragma CLI and `uv_build` backend that publishing installs (not a workspace member). Any change to a `pyproject.toml` ships with its `uv lock` in the same commit. Relock both with `mise run lock`; `mise run check` and CI fail on a stale tooling lock. Bumping the publish CLI or backend pin is an edit to `scripts/publish_tooling/pyproject.toml` plus `mise run lock`, in a `build:` PR. `[tool.uv] required-version` must equal the uv version in `mise.toml`; uv refuses to run at any other version.
-
-Humans change `main` only through pull requests. The pragma-ci-bot GitHub App pushes release commits to it directly, from the `push` job of `publish.yaml` in the main-only `release` environment. CI runs `uv lock --check`, `mise run check:tooling-lock` and `mise run check:ci` (every provider's check in its own `--locked` environment, the pre-commit hooks and the Pragmatiks lint rules) on every pull request and on every push to `main`, except release pushes: they carry `[skip ci]`, so GitHub starts no workflow for them (`ci.yaml` also skips a push whose head commit starts with `bump:`).
-
-### Releases
-
-Every push to `main` that starts workflows, and a manual dispatch from `main`, runs `publish.yaml`. Runs queue in order and run one at a time. `update-sdk.yaml` merges with `GITHUB_TOKEN`, which starts no push-triggered run, so after it merges an SDK bump it dispatches `publish.yaml` on `main` itself; a bump that crosses an SDK major version it opens but leaves for review, and the human merge starts `publish.yaml`.
-
-- `bump` checks out the latest `main` and handles every provider in dependency order (gcp → kubernetes → qdrant/agno). git-cliff, configured by the root `cliff.toml`, reads only the commits since the provider's tag that touch its own path (`packages/<provider>`), computes the next version and prepends the changelog entry; commitizen then writes the version, commits and tags. A provider releases only when one of those commits is a `feat`, `fix`, `refactor` or `perf` commit or a breaking change, and its changelog lists only those commits. A provider that depends on one bumped in the same run is bumped too, as a PATCH with a heading-only changelog entry when it has no such commit of its own. agno, which ships the runner image, is bumped the same way when the third-party runtime dependencies `uv.lock` resolves for it (`uv export --no-dev --no-emit-workspace`) differ from those at its release tag, whatever commit changed the lock. The root `pyproject.toml` and `ci:`/`chore:`/`docs:` commits release nothing. `bump` then relocks `uv.lock` as `build: relock the provider workspace after version bumps [skip ci]`. When anything was bumped, `bump` runs `mise run check:wheels` on the bumped tree before `push`, so a failure tags and pushes nothing. It runs all third-party tooling and holds no secrets.
-- `push` pushes `main` and every new tag in one atomic push. When `main` moved after the bump, it pushes nothing and starts a new `publish.yaml` run on `main`, which bumps from the latest `main`; any other rejection fails the run.
-- Each provider then publishes from the commit its tag points to, after verifying the tag on GitHub, and gets a GitHub Release, created last (agno publishes only after its runner image: `agno-runner-image.yaml` verifies the tag, pushes `ghcr.io/pragmatiks/agno-runner:<agno version>` unless it exists, then points the transport tag and `latest` at its digest, so the Runner's default image, that version tag, exists before any agno version that names it can be installed; on a pull request that touches agno, its siblings or the lock it only builds the image). A provider publishes only when every provider it depends on, directly or through the chain, published in this run or had nothing to publish; one that failed stops its dependents. Any later run completes a release a failed run left behind: a provider with nothing to bump whose current tag has no GitHub Release is published from that tag without a new bump or push. A version the registry already published and an existing release are skipped, so **Re-run failed jobs**, **Re-run all jobs**, a new dispatch and the next merge's run all recover. To re-publish every provider's current version, for example after a registry reset, dispatch `publish.yaml` from `main` with `publish_only`.
-
-`git-cliff`, `commitizen`, uv and python are pinned in `mise.toml`; every workflow job that runs them installs them through the pinned mise-action step, and `environment: release` jobs install nothing.
-
-## Provider Interface
-
-Each provider implements resource classes using the SDK:
-
-```python
-from pragma_sdk import Provider, Resource, Config, Outputs
-
-gcp = Provider()
-
-
-@gcp.resource("storage")
-class Bucket(Resource[BucketConfig, BucketOutputs]):
-    async def on_create(self) -> BucketOutputs: ...
-    async def on_observe(self) -> BucketOutputs | None: ...
-    async def on_update(self, previous_config: BucketConfig | None) -> BucketOutputs: ...
-    async def on_delete(self) -> None: ...
-```
-
-## Testing
-
-- No mocks, no `tests/`
+- **One provider per change.** A commit and a PR touch one provider, so each releases on its own; a workspace-level change (build, publishing, naming) is one commit per provider in one PR, and an SDK interface change lands per provider after the SDK cascade relocks (`docs/development.md`).
+- **Siblings through the workspace.** A provider that builds on a sibling depends on it through a `workspace = true` source, never a path, and declares every Pragmatiks provider it reaches under `[project.entry-points."pragma.embeds"]`; `mise run check:wheels` fails on a mismatch (`docs/releasing.md`).
+- **Lock with the manifest.** A `pyproject.toml` change ships with `mise run lock` output in the same commit; a `mise.toml` change with `mise run lock:toolchain` output. `[tool.uv] required-version` must equal the uv pin in `mise.toml` (`docs/development.md`).
+- **Releases are CI's.** Never bump a version or edit a changelog by hand; git-cliff bumps each provider from the conventional commits on its own path (`docs/releasing.md`).
+- **No tests.** No mocks and no `tests/`.
+- **Setup.** Fresh clone: `mise trust`, then `mise run install`. `mise run check` runs each provider in its own `.venvs/<distribution>/`, so ty fails an import of an undeclared sibling.
 
 ## Findability audit
 
-Pragmatiks can stop a handler at any moment, including after a create is sent and before its answer arrives; the retry calls `on_observe` first. So the object a create sends must be findable by `on_observe` from the resource's own identity from the moment the create is sent, and every handler must be safe to rerun. `on_observe` reports only an object this resource created: for an object at the resource's identity that the create's conflict path would refuse, it raises `AlreadyExistsError` with the message that conflict uses. The host then never runs `on_update` or `on_delete` on that object: a create or update fails already-exists and a delete settles with no provider call (pragma-os `docs/decisions/reactive-conditions-engine.md` §4.5, `docs/decisions/provider-distribution.md` §4.10). That host guard is the only one; `on_update` and `on_delete` act by name and check no marker. Each provider records how every resource type meets this in `packages/<provider>/FINDABILITY.md`, one row per type:
+A handler can stop after a create is sent and before its answer arrives, so the object a create sends must be findable by `on_observe` from the resource's own identity, every handler must be safe to rerun, and `on_observe` raises `AlreadyExistsError` for an object this resource did not create. The contract, the resource marker, the `FINDABILITY.md` columns and the verdict rule are in `docs/findability.md`.
 
-| Column | Content |
-|---|---|
-| Type | `<provider>/<type>`; `computed` for a type that writes nothing outside Pragmatiks |
-| Identity | Request fields that name the object; each field `on_observe` reads must be `ImmutableField` or `ImmutableDependency` |
-| `on_observe` lookup | Call and key, cited as `Class.method` |
-| Uniqueness | Does the vendor refuse a second object with that identity, or does the create carry an idempotency key that returns the original object? Vendor URL |
-| Findable from send | Once the vendor has stored the object, even for a create whose answer never arrived, does that lookup find it? One of: sync / LRO visible while pending / eventually consistent / unknown. Vendor URL |
-| Conflict on create | What the create does when the vendor reports the identity taken: idempotency key returns the original / marker re-observe (recognizes its own object by the resource marker the create request carried, else fails, and `on_observe` raises `AlreadyExistsError` for every object that re-observe refuses, cited as `Class.method`) / raises / adopts any object |
-| Partial create | Writes after the first one (or between child applies); does `on_update(previous_config=None)` finish every prefix? |
-| Rerun | `on_update` converges from a partial earlier update; `on_delete` succeeds on an absent object |
-| Verdict | `holds`, or `gap (PRA-n)` naming the filed issue |
-| Evidence | Symbols, vendor URL and the date it was read |
-
-A verdict is `holds` only when Uniqueness is yes, Findable from send is `sync` or `LRO visible while pending`, every lookup field is immutable, Conflict on create is the idempotency key or the marker re-observe with `on_observe` refusing the same objects, Partial create is finishable and Rerun converges. Where the vendor is silent, assume not unique and not findable; no timing argument replaces a check, since a vendor can store the object after its client gave up. A type that cannot hold is a gap with a filed issue; a fix lands with the row it turns to `holds`.
-
-**Resource marker.** The marker a create request carries is the resource marker: the key `pragma_resource` holding the canonical resource ID (`self.id`), written in the vendor's own medium (label, annotation, metadata). A provider whose create recognizes its own object by the marker keeps it in one `marker.py` module (`RESOURCE_MARKER_KEY`, `build_resource_marker`, `match_resource_marker`, `MarkerMatch`, `build_conflict_message(subject, match)`) and logs `<provider>_create_conflict_recognized` or `<provider>_create_conflict_refused ... reason=<absent|unmarked|other_resource> owner=<marker value>` on a conflict; kubernetes, which recreates an object gone when read back and refuses its own object while it is being deleted, logs those two cases as `kubernetes_create_conflict_absent` and `kubernetes_create_conflict_terminating`. Such a provider's `on_observe` matches the marker on the object its lookup reads, through the same recognizer as the create's conflict path, and for an unmarked object or another resource's logs `<provider>_observe_refused ... reason=<unmarked|other_resource> owner=<marker value>` and raises `AlreadyExistsError` with the message the create's refusal uses. A vendor naming rule that forces another key spelling or value encoding is named in that provider's `FINDABILITY.md`. The marker tells this resource's earlier create from an object made outside Pragmatiks or by another resource; it is not proof against someone who can write the object, and it names the resource identity, so an object left by an earlier incarnation of the same resource ID is recognized as its own. An object whose marker was removed or changed, or one made by a provider version before the marker, is refused as not its own; restoring the marker or deleting the object outside Pragmatiks is the only recovery.
-
-**Review check.** A diff that changes a resource type's create, observe, update, delete or conflict path, or adds a type, updates that type's row in `packages/<provider>/FINDABILITY.md` with the columns and verdict rule above. A marker type whose `on_observe` reports an object without this resource's marker instead of raising `AlreadyExistsError` = blocker. A missing or stale row = blocker. A row whose verdict is not `holds` names its gap issue.
-
-## Publishing to the Pragmatiks registry
-
-Each provider publishes to the Pragmatiks registry as its own distribution, never to PyPI:
-
-| Provider | Distribution | Tag Format |
-|----------|--------------|------------|
-| GCP | `pragmatiks-gcp` | `gcp-v{version}` |
-| Supabase | `pragmatiks-supabase` | `supabase-v{version}` |
-| Vercel | `pragmatiks-vercel` | `vercel-v{version}` |
-| GitHub | `pragmatiks-github` | `github-v{version}` |
-| Pragma | `pragmatiks-pragma` | `pragma-v{version}` |
-| Kubernetes | `pragmatiks-kubernetes` | `kubernetes-v{version}` |
-| Qdrant | `pragmatiks-qdrant` | `qdrant-v{version}` |
-| Agno | `pragmatiks-agno` | `agno-v{version}` |
-
-**Versioning**: CI bumps each provider with git-cliff from the conventional commits on its own paths and pushes the tag. Never bump versions or edit changelogs by hand.
-
-**Publishing**: `publish-provider.yaml` takes its tooling (scripts, `mise.toml`, the tooling lock) from the workflow's own commit and only the provider package from the tag commit, checked out under `release-tag/`, in three jobs. `build` runs with no environment, no secret and read-only contents: `scripts/build_provider_wheel.sh` builds the wheel with `uv build --no-config --wheel --no-sources` (so the tag commit's `[tool.uv]` settings and sources are ignored and any tag builds under the pinned uv) and `uv_build` constrained by hash to the version `scripts/publish_tooling/uv.lock` pins, refusing a `[build-system]` that locked backend cannot satisfy, and uploads it as an artifact; `mise run check:wheels` builds the same way. `publish` runs in the main-only `pypi` environment, which holds `PRAGMA_PUBLISH_API_KEY`, on a fresh runner that runs no tag-commit code: it downloads the wheel, writes the key to a file, and `scripts/publish_platform_provider.sh` moves the key into the hash-locked pragma CLI's isolated credentials file (never an environment variable or argument), checks the wheel's distribution and version, and publishes with `pragma providers publish --wheel`. `release`, when `create_release` is set, then creates the GitHub Release through `release-provider.yaml`.
-
-**Embedded providers**: a provider declares every Pragmatiks provider among its dependencies, direct or transitive, under `[project.entry-points."pragma.embeds"]`, keyed by distribution name. The platform reads only the key; by convention the value is the embedded provider's import package:
-
-```toml
-[project.entry-points."pragma.embeds"]
-pragmatiks-gcp = "gcp_provider"
-```
+Review check: a diff that changes a type's create, observe, update, delete or conflict path, or adds a type, updates its row in `packages/<provider>/FINDABILITY.md`. A missing or stale row, or a marker type whose `on_observe` reports an unmarked object instead of raising, is a blocker; a row not `holds` names its gap issue.
