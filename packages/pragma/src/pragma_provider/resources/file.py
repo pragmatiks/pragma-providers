@@ -1,29 +1,35 @@
 """Pragma platform file resource.
 
-Reads storage metadata for uploaded files and exposes URLs and file metadata
-as outputs. File content is uploaded separately through the Pragmatiks API.
+Reads what storage records for an uploaded file and exposes its URLs, size,
+content type, checksum and upload time as outputs. File content is uploaded
+separately, by ``pragma resources apply`` or the SDK's ``upload_file``.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
+import contextlib
 from datetime import datetime
-from typing import Any
 
 import obstore as obs
 from obstore.store import GCSStore
-from pragma_sdk import Config, Outputs, Resource
+from pragma_sdk import AlreadyExistsError, Config, Outputs, Resource
 
 from pragma_provider import settings
+
+
+CHECKSUM_ATTRIBUTE = "checksum"
+"""User metadata attribute holding the hex MD5 storage verified when the file was stored."""
+
+DEFAULT_CONTENT_TYPE = "application/octet-stream"
+"""Media type of an object stored without one."""
 
 
 class FileConfig(Config):
     """Configuration for a platform-managed file.
 
-    File content is uploaded separately through the Pragmatiks API. This
-    resource tracks the uploaded file and exposes its metadata as outputs,
-    so no user-configurable fields are required today.
+    File content is uploaded separately, by ``pragma resources apply`` or the
+    SDK's ``upload_file``. This resource tracks the stored file and exposes its
+    metadata as outputs, so it has no user-configurable fields.
     """
 
 
@@ -32,11 +38,13 @@ class FileOutputs(Outputs):
 
     Attributes:
         url: Internal pragma:// URL for resource references.
-        public_url: Public HTTP URL for external/user access.
+        public_url: Download address under the project's file routes; it needs
+            Pragmatiks credentials and redirects to the file's content.
         size: File size in bytes.
-        content_type: MIME type of the file.
-        checksum: SHA256 hash of the file content.
-        uploaded_at: Timestamp when file was uploaded.
+        content_type: Media type the file is served with.
+        checksum: Hex MD5 of the file content, which storage verified when the
+            file was stored.
+        uploaded_at: When the file's current content was stored.
     """
 
     url: str
@@ -50,14 +58,22 @@ class FileOutputs(Outputs):
 class File(Resource[FileConfig, FileOutputs]):
     """Platform-managed file storage.
 
-    Reads metadata from object storage for files uploaded via the Pragmatiks
-    API. Files are project-owned, stored under
-    ``files/{organization_id}/{project_id}/{name}`` and their metadata alongside
-    them as ``files/{organization_id}/{project_id}/{name}.meta``.
+    Reads the object Pragmatiks stores for an uploaded file at
+    ``files/{organization_id}/{project_id}/{name}``. The object is the record
+    of what is stored: its size, its ``Content-Type`` and its ``checksum``
+    attribute, all fixed by the upload.
+
+    Note:
+        Requires the Pragmatiks upload flow that records the ``checksum``
+        attribute on every stored object, so this provider releases after
+        that flow is deployed. An object at the key without the attribute
+        was not stored by that flow and is refused as not this resource's.
+        The outputs change only when ``on_observe`` next runs: uploading new
+        content under the name leaves the configuration unchanged.
     """
 
-    def load_store(self) -> GCSStore:
-        """Load the object store holding uploaded file content.
+    def build_store(self) -> GCSStore:
+        """Build the object store holding uploaded file content.
 
         Returns:
             Store for the bucket ``PRAGMA_FILE_GCS_BUCKET`` names.
@@ -72,14 +88,6 @@ class File(Resource[FileConfig, FileOutputs]):
         """
         return f"files/{settings.organization_id()}/{self.project_id}/{self.name}"
 
-    def metadata_path(self) -> str:
-        """Return the storage path of the file's metadata sidecar.
-
-        Returns:
-            The file content path with a ``.meta`` suffix.
-        """
-        return f"{self.file_path()}.meta"
-
     def internal_url(self) -> str:
         """Return the pragma:// URL other resources reference the file by.
 
@@ -89,100 +97,85 @@ class File(Resource[FileConfig, FileOutputs]):
         return f"pragma://files/{self.name}"
 
     def public_url(self) -> str:
-        """Return the file's public download URL.
+        """Return the file's download address, which needs Pragmatiks credentials and redirects to the content.
 
         Returns:
             ``{PRAGMA_FILE_PUBLIC_URL}/projects/{project_id}/files/{name}/download``.
         """
         return f"{settings.file_public_base_url()}/projects/{self.project_id}/files/{self.name}/download"
 
-    async def fetch_content_metadata(self, store: GCSStore) -> dict[str, Any]:
-        """Derive the file's metadata from its stored content.
-
-        Args:
-            store: Store holding the file content.
-
-        Returns:
-            Size, content type, SHA256 checksum, and upload timestamp.
-        """
-        response = await obs.get_async(store, self.file_path())
-        checksum = hashlib.sha256()
-
-        async for chunk in response:
-            checksum.update(chunk)
-
-        return {
-            "size": response.meta["size"],
-            "content_type": response.attributes.get("Content-Type", "application/octet-stream"),
-            "checksum": checksum.hexdigest(),
-            "uploaded_at": response.meta["last_modified"],
-        }
-
     async def on_observe(self) -> FileOutputs | None:
-        """Read the uploaded file's metadata from storage.
+        """Read what storage records for the file, with one head-only read.
 
         Returns:
-            Outputs with file URL, size, checksum, and upload timestamp, or
-            None when no content is uploaded.
-        """
-        store = self.load_store()
+            Outputs with the file's URLs, size, content type, checksum and
+            upload time, or None when no file is stored under the name.
 
+        Raises:
+            AlreadyExistsError: If the stored object carries no ``checksum``
+                attribute, so a Pragmatiks upload did not store it; the
+                platform then neither writes nor deletes it.
+        """
         try:
-            await obs.head_async(store, self.file_path())
+            result = await obs.get_async(self.build_store(), self.file_path(), options={"head": True})
         except FileNotFoundError:
             return None
 
-        try:
-            response = await obs.get_async(store, self.metadata_path())
-            content = await response.bytes_async()
-            data = json.loads(bytes(content))
-        except FileNotFoundError:
-            data = await self.fetch_content_metadata(store)
+        checksum = result.attributes.get(CHECKSUM_ATTRIBUTE)
+
+        if checksum is None:
+            message = (
+                f"File {self.name} in project {self.project_id} holds content a Pragmatiks upload did not store. "
+                "Upload the file again with pragma resources apply, which replaces it, then apply again."
+            )
+            raise AlreadyExistsError(message)
 
         return FileOutputs(
             url=self.internal_url(),
             public_url=self.public_url(),
-            size=data["size"],
-            content_type=data["content_type"],
-            checksum=data["checksum"],
-            uploaded_at=data["uploaded_at"],
+            size=result.meta["size"],
+            content_type=result.attributes.get("Content-Type") or DEFAULT_CONTENT_TYPE,
+            checksum=checksum,
+            uploaded_at=result.meta["last_modified"],
         )
 
     async def on_create(self) -> FileOutputs:
-        """Read file metadata from storage.
+        """Read the stored file's metadata.
 
         Returns:
-            Outputs with file URL, size, checksum, and upload timestamp.
+            Outputs with the file's URLs, size, content type, checksum and
+            upload time.
 
         Raises:
-            FileNotFoundError: If the file content has not been uploaded.
+            AlreadyExistsError: As :meth:`on_observe` describes.
+            FileNotFoundError: If no file is stored under the name.
         """
         outputs = await self.on_observe()
 
         if outputs is None:
             raise FileNotFoundError(
-                f"File content not uploaded. Use POST /projects/{self.project_id}/files/{self.name}/upload first."
+                f"File {self.name} in project {self.project_id} is not uploaded. "
+                "Upload it with pragma resources apply, or the SDK's upload_file, then apply again."
             )
 
         return outputs
 
     async def on_update(self, previous_config: FileConfig | None) -> FileOutputs:
-        """Re-read file metadata from storage.
+        """Re-read the stored file's metadata.
 
         Args:
             previous_config: Previous file configuration, if any.
 
         Returns:
-            Outputs with updated file metadata.
+            Outputs with the file's current metadata.
         """
         return await self.on_create()
 
     async def on_delete(self) -> None:
-        """Delete file and metadata from storage."""
-        store = self.load_store()
+        """Delete the file's object from storage.
 
-        for path in [self.metadata_path(), self.file_path()]:
-            try:
-                await obs.delete_async(store, path)
-            except FileNotFoundError:
-                pass
+        Note:
+            Idempotent: a missing object is treated as already deleted.
+        """
+        with contextlib.suppress(FileNotFoundError):
+            await obs.delete_async(self.build_store(), self.file_path())
