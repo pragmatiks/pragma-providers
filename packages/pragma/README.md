@@ -16,7 +16,7 @@ pragma providers install pragmatiks/pragma
 |----------|-----------|-------------|
 | [Secret](#secret) | `pragma/secret` | Platform-managed secrets referenced by other resources |
 | [Config](#config) | `pragma/config` | Non-sensitive configuration values shared across resources |
-| [File](#file) | `pragma/file` | Platform-managed file storage with public download URLs |
+| [File](#file) | `pragma/file` | Platform-managed file storage with download URLs |
 
 ---
 
@@ -33,7 +33,7 @@ Stores sensitive key-value data and exposes each entry as an output so that othe
 ```yaml
 resources:
   database-credentials:
-    provider: pragma
+    provider: pragmatiks/pragma
     resource: secret
     config:
       data:
@@ -61,7 +61,7 @@ Non-sensitive configuration store. Unlike `pragma/secret`, values may be any JSO
 ```yaml
 resources:
   gcp-defaults:
-    provider: pragma
+    provider: pragmatiks/pragma
     resource: config
     config:
       data:
@@ -81,30 +81,31 @@ resources:
 
 ### File
 
-Platform-managed file storage. The actual file content is uploaded through the Pragmatiks API into the resource's project (`POST /projects/{project_id}/files/{name}/upload`); this resource reads the uploaded metadata and exposes URLs, size, and checksum as outputs.
+Platform-managed file storage. The file content is uploaded into the resource's project by `pragma resources apply` (from a `content: "@./path"` field) or the SDK's `upload_file`; this resource reads what storage records for the stored file and exposes its URLs, size, content type, checksum and upload time as outputs.
 
-**Config:** none -- the resource tracks a file already uploaded through the Pragmatiks API under the resource's name.
+**Config:** none -- the resource tracks the file stored under the resource's name.
 
 **Outputs:**
 - `url` -- Internal `pragma://` URL used for cross-resource references.
-- `public_url` -- Public HTTP URL for external download.
+- `public_url` -- Download address under the project's file routes. It needs Pragmatiks credentials and redirects to the file's content.
 - `size` -- File size in bytes.
-- `content_type` -- MIME type stored at upload time.
-- `checksum` -- SHA256 hash of the file content.
-- `uploaded_at` -- Timestamp the file was uploaded.
+- `content_type` -- Media type fixed at upload.
+- `checksum` -- Hex MD5 of the file content, which storage verified when the file was stored (it matches `md5sum`).
+- `uploaded_at` -- When the file's current content was stored.
 
 ```yaml
 resources:
   onboarding-doc:
-    provider: pragma
+    provider: pragmatiks/pragma
     resource: file
     config: {}
 ```
 
 **Behavior:**
-- Create: Reads the uploaded file metadata and exposes URLs, size, and checksum as outputs. Fails with a clear error if the file content has not been uploaded yet.
-- Update: Re-reads the metadata from storage so outputs reflect the latest uploaded version.
-- Delete: Removes both the file content and its metadata from the underlying object store. Idempotent -- missing files are treated as already deleted.
+- Create: Reads the stored file and exposes its outputs. Fails with a clear error if no file is stored under the name, and fails as already existing if the object under the name was not stored by a Pragmatiks upload (it carries no checksum); uploading the file again replaces it.
+- Update: Re-reads the stored file so outputs reflect its current content.
+- Observe: Uploading new content under the name leaves the configuration unchanged, so the outputs change only when the resource is next observed.
+- Delete: Deletes the file from storage. Idempotent -- a missing file is treated as already deleted. An object a Pragmatiks upload did not store is left in place.
 
 ## Runtime Environment
 
@@ -113,7 +114,7 @@ The `pragma/file` resource reads storage configuration from environment variable
 | Variable | Purpose |
 |----------|---------|
 | `PRAGMA_FILE_GCS_BUCKET` | Object-store bucket holding uploaded file content |
-| `PRAGMA_FILE_PUBLIC_URL` | Base URL used to compose public download URLs |
+| `PRAGMA_FILE_PUBLIC_URL` | Base URL used to compose download addresses |
 | `PRAGMA_RUNTIME_ORGANIZATION_ID` | Identifies the organization's file prefix in the bucket |
 
 ## Development
