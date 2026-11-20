@@ -1,3 +1,17 @@
+## kubernetes-v2.5.0 (2026-11-20)
+
+### Feat
+
+- **kubernetes**: follow Deployment and StatefulSet logs (PRA-479)
+
+### Fix
+
+- **kubernetes**: require pragmatiks-sdk 31 for the protocol 8 host (PRA-479)
+
+### Refactor
+
+- **kubernetes**: name the since filter as a predicate the lint accepts (PRA-479)
+
 ## kubernetes-v2.4.12 (2026-11-20)
 
 ### Fix
