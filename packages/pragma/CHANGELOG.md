@@ -1,3 +1,9 @@
+## pragma-v6.3.6 (2026-11-20)
+
+### Fix
+
+- **pragma**: require pragmatiks-sdk 31 for the protocol 8 host (PRA-479)
+
 ## pragma-v6.3.5 (2026-11-20)
 
 ### Fix
