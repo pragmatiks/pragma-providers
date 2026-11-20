@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from contextlib import aclosing, asynccontextmanager
+from datetime import datetime
 from typing import Literal
 
-from lightkube import ApiError
 from lightkube.models.apps_v1 import DeploymentSpec, DeploymentStrategy, RollingUpdateDeployment
 from lightkube.models.core_v1 import (
     Container,
@@ -23,7 +22,6 @@ from lightkube.models.core_v1 import (
 )
 from lightkube.models.meta_v1 import LabelSelector, ObjectMeta
 from lightkube.resources.apps_v1 import Deployment as K8sDeployment
-from lightkube.resources.core_v1 import Pod
 from pragma_sdk import (
     AlreadyExistsError,
     Config,
@@ -48,6 +46,7 @@ from kubernetes_provider.objects import (
     fetch_own_object,
     wait_for_absence,
 )
+from kubernetes_provider.pod_logs import follow_selected_pod_logs, read_selected_pod_logs
 from kubernetes_provider.resources.config import KubernetesConfig
 from kubernetes_provider.rollout import build_replica_vitals, wait_for_rollout
 
@@ -501,54 +500,43 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         """Fetch logs from pods managed by this Deployment.
 
         Args:
-            since: Only return logs after this timestamp.
+            since: Only return logs at or after this timestamp.
             tail: Maximum number of log lines per pod.
 
         Yields:
             LogEntry for each log line from pods.
         """
+        namespace = self.resolved(self.config.namespace)
+        labels = self.resolved(self.config.selector)
+
         async with self._get_client() as client:
-            label_selector = ",".join(f"{k}={v}" for k, v in self.resolved(self.config.selector).items())
+            async for entry in read_selected_pod_logs(client, namespace, labels, since, tail):
+                yield entry
 
-            pods = client.list(
-                Pod,
-                namespace=self.resolved(self.config.namespace),
-                labels=label_selector,
-            )
+    async def follow_logs(
+        self,
+        since: datetime | None = None,
+        tail: int = 100,
+    ) -> AsyncIterator[LogEntry]:
+        """Follow logs from the pods of this Deployment: the last ``tail`` lines of each, then new lines.
 
-            async for pod in pods:
-                pod_name = pod.metadata.name
+        The pods are the ones selected when following starts; a pod started later is not picked up.
+        The stream ends when every followed pod's log ends, and is safe to cancel at any point.
 
-                try:
-                    since_seconds = None
+        Args:
+            since: Only return logs at or after this timestamp.
+            tail: Number of backlog lines per pod before following.
 
-                    if since:
-                        delta = datetime.now(UTC) - since
-                        since_seconds = max(1, int(delta.total_seconds()))
+        Yields:
+            LogEntry for each log line, in arrival order across pods.
 
-                    log_lines = await client.request(
-                        "GET",
-                        f"/api/v1/namespaces/{self.config.namespace}/pods/{pod_name}/log",
-                        params={
-                            "tailLines": tail,
-                            **({"sinceSeconds": since_seconds} if since_seconds else {}),
-                        },
-                        response_type=str,
-                    )
+        Raises:
+            Exception: The first failure of a pod stream other than a refused open.
+        """
+        namespace = self.resolved(self.config.namespace)
+        labels = self.resolved(self.config.selector)
 
-                    for line in log_lines.strip().split("\n"):
-                        if line:
-                            yield LogEntry(
-                                timestamp=datetime.now(UTC),
-                                level="info",
-                                message=line,
-                                metadata={"pod": pod_name},
-                            )
-
-                except ApiError:
-                    yield LogEntry(
-                        timestamp=datetime.now(UTC),
-                        level="warn",
-                        message=f"Failed to fetch logs from pod {pod_name}",
-                        metadata={"pod": pod_name},
-                    )
+        async with self._get_client() as client:
+            async with aclosing(follow_selected_pod_logs(client, namespace, labels, since, tail)) as entries:
+                async for entry in entries:
+                    yield entry
