@@ -1,3 +1,9 @@
+## agno-v2.2.35 (2026-11-20)
+
+### Fix
+
+- **agno**: require pragmatiks-sdk 31 for the protocol 8 host (PRA-479)
+
 ## agno-v2.2.34 (2026-11-20)
 
 ### Fix
