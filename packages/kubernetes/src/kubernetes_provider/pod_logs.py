@@ -31,7 +31,7 @@ def compute_since_seconds(since: datetime | None) -> int | None:
 
     Returns:
         Whole seconds between ``since`` and now, rounded up and at least 1, or None when ``since``
-        is None. Rounding up makes the window cover ``since``; ``is_entry_at_or_after`` drops the
+        is None. Rounding up makes the window cover ``since``; ``is_entry_since`` drops the
         surplus.
     """
     if since is None:
@@ -62,7 +62,7 @@ def build_pod_log_entry(pod_name: str, line: str) -> LogEntry:
     )
 
 
-def is_entry_at_or_after(entry: LogEntry, since: datetime | None) -> bool:
+def is_entry_since(entry: LogEntry, since: datetime | None) -> bool:
     """Decide whether an entry falls in the ``since`` window.
 
     Args:
@@ -175,7 +175,7 @@ async def read_pod_logs(
                 async for line in lines
                 if line
                 for entry in [build_pod_log_entry(pod_name, line)]
-                if is_entry_at_or_after(entry, since)
+                if is_entry_since(entry, since)
             ]
         except ApiError:
             yield build_pod_failure_entry(pod_name)
@@ -281,7 +281,7 @@ async def put_pod_follow_line(
 
     entry = build_pod_log_entry(pod_name, line)
 
-    if is_entry_at_or_after(entry, since):
+    if is_entry_since(entry, since):
         await queue.put(entry)
 
 
