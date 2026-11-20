@@ -1,3 +1,9 @@
+## qdrant-v8.3.15 (2026-11-20)
+
+### Fix
+
+- **qdrant**: require pragmatiks-sdk 31 for the protocol 8 host (PRA-479)
+
 ## qdrant-v8.3.14 (2026-11-20)
 
 ### Fix
