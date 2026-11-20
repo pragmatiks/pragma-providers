@@ -1,3 +1,9 @@
+## vercel-v6.2.27 (2026-11-20)
+
+### Fix
+
+- **vercel**: require pragmatiks-sdk 31 for the protocol 8 host (PRA-479)
+
 ## vercel-v6.2.26 (2026-11-20)
 
 ### Fix
