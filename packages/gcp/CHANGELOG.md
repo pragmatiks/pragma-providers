@@ -1,3 +1,9 @@
+## gcp-v7.3.13 (2026-11-20)
+
+### Fix
+
+- **gcp**: require pragmatiks-sdk 31 for the protocol 8 host (PRA-479)
+
 ## gcp-v7.3.12 (2026-11-20)
 
 ### Fix
