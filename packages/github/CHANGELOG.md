@@ -1,3 +1,9 @@
+## github-v6.2.28 (2026-11-20)
+
+### Fix
+
+- **github**: require pragmatiks-sdk 31 for the protocol 8 host (PRA-479)
+
 ## github-v6.2.27 (2026-11-20)
 
 ### Fix
