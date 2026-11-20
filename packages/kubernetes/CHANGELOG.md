@@ -1,3 +1,9 @@
+## kubernetes-v2.4.11 (2026-11-20)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v30.1.1 (#211)
+
 ## kubernetes-v2.4.10 (2026-11-18)
 
 ### Fix
