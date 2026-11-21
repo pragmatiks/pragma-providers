@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField, Vitals
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, Vitals
+from pydantic import SecretStr
 
 from vercel_provider.client import (
     create_vercel_client,
@@ -18,7 +19,8 @@ class DomainConfig(Config):
     """Configuration for a custom domain on a Vercel project.
 
     Attributes:
-        access_token: Vercel API token for authentication.
+        access_token: Vercel API token for authentication, a reference to a
+            secret output such as a pragma/secret entry.
         project_id: Vercel project ID to attach the domain to.
         domain: Custom domain name (e.g., ``example.com``, ``app.example.com``).
         redirect: Optional domain to redirect to. When set, requests to this
@@ -30,7 +32,7 @@ class DomainConfig(Config):
         team_id: Vercel team ID. Required for team-owned projects. Immutable.
     """
 
-    access_token: SensitiveField[str]
+    access_token: Field[SecretStr]
     project_id: ImmutableField[str]
     domain: ImmutableField[str]
     redirect: Field[str] | None = None
@@ -90,6 +92,14 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
                 field: outputs.project_id
               domain: myapp.example.com
     """
+
+    def reveal_access_token(self) -> str:
+        """Reveal the resolved access token for an API client.
+
+        Returns:
+            The plaintext access token.
+        """
+        return self.resolved(self.config.access_token).get_secret_value()
 
     def _query_params(self) -> dict[str, str]:
         """Build common query parameters for API requests.
@@ -151,7 +161,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
         Raises:
             AlreadyExistsError: If Vercel answers 409 because the domain is already assigned to a project.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             response = await client.post(
                 f"/v10/projects/{self.config.project_id}/domains",
                 params=self._query_params(),
@@ -167,7 +177,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
         Returns:
             DomainOutputs, or ``None`` if the domain is not attached.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             domain = await fetch_optional_json(client, self.domain_path(), self._query_params())
 
         if domain is None:
@@ -184,7 +194,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
         Returns:
             DomainOutputs with updated domain details.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             response = await client.patch(
                 self.domain_path(),
                 params=self._query_params(),
@@ -199,7 +209,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
 
         Succeeds if the domain is not attached to the project.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             response = await client.delete(self.domain_path(), params=self._query_params())
 
             if response.status_code == 404:
@@ -214,7 +224,7 @@ class Domain(Resource[DomainConfig, DomainOutputs]):
             ``nominal`` when verified, ``impaired`` while verification is pending,
             ``down`` when the domain is not attached.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             data = await fetch_optional_json(client, self.domain_path(), self._query_params())
 
         if data is None:

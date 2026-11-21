@@ -17,3 +17,5 @@ pragma providers install pragmatiks/vercel
 ## Authentication
 
 This provider uses Vercel API tokens for authentication. Generate a token at https://vercel.com/account/tokens.
+
+The `access_token` of every resource is a secret: it takes a reference to a secret output, such as a `pragma/secret` entry, and a literal token is refused. It is shown as `********` on `describe`, `list`, the web graph and the live event stream, and the provider receives the real token.

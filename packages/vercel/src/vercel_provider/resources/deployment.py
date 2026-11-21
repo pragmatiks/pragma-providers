@@ -7,7 +7,8 @@ import time
 from typing import Any
 
 import httpx
-from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
+from pydantic import SecretStr
 
 from vercel_provider.client import create_vercel_client, raise_for_status
 
@@ -16,7 +17,8 @@ class DeploymentConfig(Config):
     """Configuration for a Vercel deployment.
 
     Attributes:
-        access_token: Vercel API token for authentication.
+        access_token: Vercel API token for authentication, a reference to a
+            secret output such as a pragma/secret entry.
         project_id: Vercel project ID to deploy. Typically a dependency
             reference to a Vercel project resource.
         project_name: Vercel project name. Used as the deployment target.
@@ -26,7 +28,7 @@ class DeploymentConfig(Config):
         team_id: Vercel team ID. Required for team-owned projects. Immutable.
     """
 
-    access_token: SensitiveField[str]
+    access_token: Field[SecretStr]
     project_id: ImmutableField[str]
     project_name: ImmutableField[str]
     git_ref: Field[str] | None = None
@@ -100,6 +102,14 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
                 field: outputs.name
               target: production
     """
+
+    def reveal_access_token(self) -> str:
+        """Reveal the resolved access token for an API client.
+
+        Returns:
+            The plaintext access token.
+        """
+        return self.resolved(self.config.access_token).get_secret_value()
 
     def _query_params(self) -> dict[str, str]:
         """Build common query parameters for API requests.
@@ -365,7 +375,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         Returns:
             DeploymentOutputs with deployment details.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             return await self._trigger_deployment(client)
 
     async def on_observe(self) -> DeploymentOutputs | None:
@@ -374,7 +384,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         Returns:
             DeploymentOutputs of that deployment, or ``None`` when there is none.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             deployment = await self.fetch_deployment(client)
 
         if deployment is None:
@@ -394,7 +404,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
         Returns:
             DeploymentOutputs of the kept or new deployment.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             deployment = await self.fetch_deployment(client)
 
             if deployment is None:
@@ -416,7 +426,7 @@ class Deployment(Resource[DeploymentConfig, DeploymentOutputs]):
 
         Succeeds if there is none.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             deployment_id = await self.find_deployment_id(client)
 
             if deployment_id is None:
