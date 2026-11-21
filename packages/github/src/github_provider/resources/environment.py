@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField
-from pydantic import BaseModel
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
+from pydantic import BaseModel, SecretStr
 from pydantic import Field as PydanticField
 
 from github_provider.client import (
@@ -50,7 +50,8 @@ class EnvironmentConfig(Config):
     """Configuration for a GitHub deployment environment.
 
     Attributes:
-        access_token: GitHub personal access token for authentication.
+        access_token: GitHub personal access token for authentication, a
+            reference to a secret output such as a pragma/secret entry.
         owner: GitHub user or organization that owns the repository.
         repository: Repository name where the environment is created.
         environment_name: Name of the deployment environment
@@ -58,7 +59,7 @@ class EnvironmentConfig(Config):
         protection_rules: Optional protection rules for the environment.
     """
 
-    access_token: SensitiveField[str]
+    access_token: Field[SecretStr]
     owner: ImmutableField[str]
     repository: ImmutableField[str]
     environment_name: ImmutableField[str]
@@ -186,6 +187,14 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
                     reviewer_id: 12345
     """
 
+    def reveal_access_token(self) -> str:
+        """Reveal the resolved access token for an API client.
+
+        Returns:
+            The plaintext access token.
+        """
+        return self.resolved(self.config.access_token).get_secret_value()
+
     def environment_path(self) -> str:
         """Build the REST path of this environment.
 
@@ -203,7 +212,7 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
         Returns:
             EnvironmentOutputs with environment details.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             body = _build_create_body(self.config, previous_config)
             response = await client.put(self.environment_path(), json=body)
             await raise_for_status(response)
@@ -221,7 +230,7 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
         Raises:
             AlreadyExistsError: If the environment already exists on the repository.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             await ensure_absent(
                 client,
                 self.environment_path(),
@@ -240,7 +249,7 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
             AlreadyExistsError: If GitHub redirects because the repository was
                 renamed or transferred.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             environment = await fetch_optional_json(client, self.environment_path())
 
         if environment is None:
@@ -264,5 +273,5 @@ class Environment(Resource[EnvironmentConfig, EnvironmentOutputs]):
 
         Idempotent: Succeeds if the environment does not exist.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             await delete_if_present(client, self.environment_path())
