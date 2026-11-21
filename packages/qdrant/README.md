@@ -13,7 +13,8 @@ Manage [Qdrant](https://qdrant.tech) vector database deployments and collections
 
 - **For Database resources:** A `kubernetes/config` resource pointing at the target cluster. The cluster must support LoadBalancer services for external access.
 - **For Collection resources:** A running Qdrant instance -- either a Database resource from this provider, a [Qdrant Cloud](https://cloud.qdrant.io) cluster, or any self-hosted Qdrant server accessible via HTTP.
-- **API key** (optional): Required for Qdrant Cloud. For self-hosted, can be generated automatically or provided explicitly.
+- **API key** (optional): Required for Qdrant Cloud. For self-hosted, can be generated automatically or provided explicitly. An explicit key is a reference to a secret output, such as a `pragma/secret` entry; a literal key is refused.
+- **For Database resources:** the `pragmatiks/pragma` provider installed, since the database keeps its API key in a `pragma/secret` it owns.
 
 ## Installation
 
@@ -25,7 +26,7 @@ pragma providers install pragmatiks/qdrant
 
 ## Database (`qdrant/database`)
 
-Deploys a Qdrant vector database to a Kubernetes cluster as a StatefulSet with persistent storage. Creates a headless Service for pod DNS, a StatefulSet with configurable replicas and storage, and a LoadBalancer Service for external HTTP and gRPC access.
+Deploys a Qdrant vector database to a Kubernetes cluster as a StatefulSet with persistent storage. Creates a `pragma/secret` named `qdrant-<name>-api-key` holding the API key, a headless Service for pod DNS, a StatefulSet with configurable replicas and storage, and a LoadBalancer Service for external HTTP and gRPC access.
 
 **Config:**
 
@@ -34,8 +35,8 @@ Deploys a Qdrant vector database to a Kubernetes cluster as a StatefulSet with p
 | `config` | dependency | yes | no | -- | `kubernetes/config` resource for cluster access |
 | `replicas` | int | no | yes | `1` | Number of Qdrant StatefulSet pods |
 | `image` | string | no | yes | `"qdrant/qdrant:latest"` | Qdrant Docker image |
-| `api_key` | string | no | yes | -- | Explicit API key for authentication (mutually exclusive with `generate_api_key`) |
-| `generate_api_key` | bool | no | yes | `false` | Generate a secure 32-character hex API key once; later runs keep the key the database's StatefulSet already carries |
+| `api_key` | string | no | yes | -- | Explicit API key for authentication, a reference to a secret output (mutually exclusive with `generate_api_key`) |
+| `generate_api_key` | bool | no | yes | `false` | Generate a secure 32-character hex API key once; later runs keep the key the database's secret already holds |
 | `storage` | object | no | yes | -- | Persistent volume configuration (see below) |
 | `resources` | object | no | yes | -- | CPU and memory limits (see below) |
 
@@ -54,6 +55,8 @@ Deploys a Qdrant vector database to a Kubernetes cluster as a StatefulSet with p
 | `cpu` | string | `"1"` | CPU limit for each Qdrant pod |
 
 **Outputs:** `url`, `grpc_url`, `api_key`
+
+The secret the database owns is the one store of its API key: the StatefulSet's `QDRANT__SERVICE__API_KEY` references that secret's `outputs.api_key`, and the database's `outputs.api_key` is a copy of the same key. Reference the database's `outputs.api_key` from collections and other consumers; the secret's name is internal to the database. Every API key value is shown as `********` on `describe`, `list`, the web graph and the live event stream, and the resources that reference it receive the real value.
 
 **Example:**
 
@@ -76,9 +79,9 @@ resources:
 ```
 
 **Behavior:**
-- Create: Applies the headless Service, the StatefulSet and the LoadBalancer Service as resources the database owns. The database waits until all three are ready, the LoadBalancer Service once it has its external address, then reports its outputs.
-- Update: Reapplies all three owned resources with the full configuration and waits until all are ready; resources whose configuration did not change stay ready. The `config` dependency is immutable; changing it requires delete and recreate.
-- Delete: The owned resources (LoadBalancer Service, StatefulSet, headless Service) are deleted before the database. The stored vectors live on the StatefulSet's PersistentVolumeClaims; whether they are deleted with the StatefulSet follows the kubernetes provider's StatefulSet.
+- Create: Applies the API key secret first, then the headless Service, the StatefulSet and the LoadBalancer Service, as resources the database owns. The StatefulSet waits for the secret it references. The database waits until all four are ready, the LoadBalancer Service once it has its external address, then reports its outputs. Without an API key, the secret holds no entry and Qdrant runs without authentication.
+- Update: Reapplies all four owned resources with the full configuration and waits until all are ready; resources whose configuration did not change stay ready. The `config` dependency is immutable; changing it requires delete and recreate.
+- Delete: The owned resources (API key secret, LoadBalancer Service, StatefulSet, headless Service) are deleted before the database. The stored vectors live on the StatefulSet's PersistentVolumeClaims; whether they are deleted with the StatefulSet follows the kubernetes provider's StatefulSet.
 - Vitals: Delegates to the underlying StatefulSet's vitals.
 - Logs: Streams pod logs from the underlying StatefulSet.
 
@@ -93,7 +96,7 @@ Manages a vector collection on any Qdrant instance for similarity search. Works 
 | Field | Type | Required | Mutable | Default | Description |
 |-------|------|----------|---------|---------|-------------|
 | `url` | string | no | no | `"http://localhost:6333"` | Qdrant server URL (immutable) |
-| `api_key` | string | no | yes | -- | API key for Qdrant Cloud or secured instances |
+| `api_key` | string | no | yes | -- | API key for Qdrant Cloud or secured instances, a reference to a secret output; a literal key is refused |
 | `name` | string | yes | no | -- | Collection name within Qdrant (immutable) |
 | `vectors` | object | yes | no | -- | Vector configuration (immutable, see below) |
 | `on_disk` | bool | no | yes | `false` | Store vectors on disk instead of in memory |
@@ -254,9 +257,9 @@ Qdrant supports optional API key authentication. For the Database resource, you 
 
 1. **No authentication** -- omit both `api_key` and `generate_api_key` (suitable for development)
 2. **Generated key** -- set `generate_api_key: true` to auto-generate a secure 32-character hex key
-3. **Explicit key** -- set `api_key` to a specific value (useful when rotating keys or matching existing config)
+3. **Explicit key** -- set `api_key` to a reference to a secret output, such as a `pragma/secret` entry (useful when rotating keys or matching existing config)
 
-For Collection resources connecting to Qdrant Cloud, the `api_key` field is required and should reference a secret.
+Either way the key lives in the `pragma/secret` the database owns. For Collection resources connecting to Qdrant Cloud, the `api_key` field is required and references a secret. API key fields accept only references; a literal key is refused.
 
 ### Vector Dimensions
 
