@@ -1898,7 +1898,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.0" },
     { name = "mcp", specifier = ">=1.26.0" },
     { name = "pragmatiks-kubernetes", editable = "packages/kubernetes" },
-    { name = "pragmatiks-sdk", specifier = ">=31.0.0" },
+    { name = "pragmatiks-sdk", specifier = ">=32.0.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
 ]
@@ -1935,7 +1935,7 @@ requires-dist = [
     { name = "google-cloud-container", specifier = ">=2.50.0" },
     { name = "google-cloud-logging", specifier = ">=3.10.0" },
     { name = "google-cloud-secret-manager", specifier = ">=2.20.0" },
-    { name = "pragmatiks-sdk", specifier = ">=31.0.0" },
+    { name = "pragmatiks-sdk", specifier = ">=32.0.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -1963,7 +1963,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
-    { name = "pragmatiks-sdk", specifier = ">=31.0.0" },
+    { name = "pragmatiks-sdk", specifier = ">=32.0.1" },
     { name = "pynacl", specifier = ">=1.5.0" },
 ]
 
@@ -1996,7 +1996,7 @@ requires-dist = [
     { name = "google-auth", specifier = ">=2.30.0" },
     { name = "lightkube", specifier = ">=0.15.0" },
     { name = "pragmatiks-gcp", editable = "packages/gcp" },
-    { name = "pragmatiks-sdk", specifier = ">=31.0.0" },
+    { name = "pragmatiks-sdk", specifier = ">=32.0.1" },
     { name = "requests", specifier = ">=2.32.0" },
 ]
 
@@ -2024,7 +2024,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "obstore", specifier = ">=0.5.0" },
-    { name = "pragmatiks-sdk", specifier = ">=31.0.0" },
+    { name = "pragmatiks-sdk", specifier = ">=32.0.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -2052,7 +2052,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "pragmatiks-kubernetes", editable = "packages/kubernetes" },
-    { name = "pragmatiks-sdk", specifier = ">=31.0.0" },
+    { name = "pragmatiks-sdk", specifier = ">=32.0.1" },
     { name = "qdrant-client", specifier = ">=1.16.0" },
 ]
 
@@ -2064,7 +2064,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-sdk"
-version = "31.0.0"
+version = "32.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -2074,9 +2074,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/31/81/8b413c5062d7802e61edcabb3be27c1ecdfa3b31f8b5ab7a31692c67ff3a/pragmatiks_sdk-31.0.0.tar.gz", hash = "sha256:8a8ed6b3b6fb59d916a0b6578b1beee6770fac3246278c921251c09e9e1bd3ec", size = 142748, upload-time = "2026-11-20T15:37:53.935Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/c9/77d123d41ca99d38380891571dbaaf443cddb9e8a2865fc9a427e6c54a5f/pragmatiks_sdk-32.0.1.tar.gz", hash = "sha256:0174cc360c557a5b66b058aaa5616103b4e45112e1f7590b5ff7b17e29e21302", size = 152476, upload-time = "2026-11-21T12:14:25.716Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c5/c3/7bc948086198255c3b7318c1dc934f4ddd57aeb184cc65196b0f77bf3f38/pragmatiks_sdk-31.0.0-py3-none-any.whl", hash = "sha256:78f026320b0454b79f91007489929a5684557f78831f7e0c5fe1e0a386438916", size = 174135, upload-time = "2026-11-20T15:37:52.484Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/0c/6bc562dec5cdbfe76fd6f771b61119e7c62834577f4d7f7692ada9f94e47/pragmatiks_sdk-32.0.1-py3-none-any.whl", hash = "sha256:e9a97041cf950c6c1e3b28841f69e08ea64e73ff18f4a5265fa2c0774445d461", size = 185776, upload-time = "2026-11-21T12:14:24.377Z" },
 ]
 
 [[package]]
@@ -2097,7 +2097,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
-    { name = "pragmatiks-sdk", specifier = ">=31.0.0" },
+    { name = "pragmatiks-sdk", specifier = ">=32.0.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -2124,7 +2124,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
-    { name = "pragmatiks-sdk", specifier = ">=31.0.0" },
+    { name = "pragmatiks-sdk", specifier = ">=32.0.1" },
 ]
 
 [package.metadata.requires-dev]
