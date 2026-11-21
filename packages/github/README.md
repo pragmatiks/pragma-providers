@@ -27,3 +27,5 @@ To manage the moved repository, delete the resource and declare a new one at the
 ## Authentication
 
 This provider uses GitHub Personal Access Tokens (classic or fine-grained) for authentication. Generate a token at https://github.com/settings/tokens.
+
+The `access_token` of every resource and the secret's `secret_value` are secrets: each takes a reference to a secret output, such as a `pragma/secret` entry, and a literal value is refused. Both are shown as `********` on `describe`, `list`, the web graph and the live event stream, and the provider receives the real values.
