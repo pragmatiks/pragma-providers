@@ -7,8 +7,8 @@ import time
 from typing import Any, cast
 
 import httpx
-from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField, Vitals
-from pydantic import BaseModel
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, Vitals
+from pydantic import BaseModel, SecretStr
 from pydantic import Field as PydanticField
 
 from supabase_provider.client import create_management_client, raise_for_status
@@ -44,13 +44,14 @@ class ProjectConfig(Config):
     """Configuration for a Supabase project and its authentication settings.
 
     Attributes:
-        access_token: Supabase personal access token for the Management API.
-            Use a pragma/secret resource with a FieldReference to provide this.
+        access_token: Supabase personal access token for the Management API,
+            a reference to a secret output such as a pragma/secret entry.
         organization_slug: Slug of the Supabase organization that owns the project.
         name: Project name, unique within the organization.
         region: Deployment region (e.g., ``us-east-1``, ``eu-west-1``).
             Use ``GET /v1/projects/available-regions`` to list valid regions.
         database_password: Password for the project's PostgreSQL database,
+            a reference to a secret output such as a pragma/secret entry,
             applied at creation and whenever it changes.
         site_url: The base URL of the site where users are redirected after
             authentication. Left unchanged when unset.
@@ -65,11 +66,11 @@ class ProjectConfig(Config):
         external_apple: Apple OAuth provider configuration; disabled when unset.
     """
 
-    access_token: SensitiveField[str]
+    access_token: Field[SecretStr]
     organization_slug: ImmutableField[str]
     name: ImmutableField[str]
     region: ImmutableField[str]
-    database_password: SensitiveField[str]
+    database_password: Field[SecretStr]
     site_url: Field[str] | None = None
     additional_redirect_urls: Field[list[str]] = PydanticField(default_factory=list)
     disable_signup: Field[bool] = False
@@ -240,6 +241,14 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
                 client_id: "gh-client-id"
                 secret: "gh-client-secret"
     """
+
+    def reveal_access_token(self) -> str:
+        """Reveal the resolved access token for an API client.
+
+        Returns:
+            The plaintext access token.
+        """
+        return self.resolved(self.config.access_token).get_secret_value()
 
     async def find_project(self, client: httpx.AsyncClient) -> dict[str, Any] | None:
         """Find the project with this resource's organization and name.
@@ -412,7 +421,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         """
         response = await client.patch(
             f"/projects/{project_ref}/database/password",
-            json={"password": self.config.database_password},
+            json={"password": self.resolved(self.config.database_password).get_secret_value()},
         )
         await raise_for_status(response)
 
@@ -458,14 +467,14 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
             TimeoutError: If the project does not become healthy, or is not listed as
                 ``ACTIVE_HEALTHY``, in time.
         """
-        async with create_management_client(self.resolved(self.config.access_token)) as client:
+        async with create_management_client(self.reveal_access_token()) as client:
             response = await client.post(
                 "/projects",
                 json={
                     "organization_slug": self.config.organization_slug,
                     "name": self.config.name,
                     "region": self.config.region,
-                    "db_pass": self.config.database_password,
+                    "db_pass": self.resolved(self.config.database_password).get_secret_value(),
                 },
             )
             await raise_for_status(response)
@@ -482,7 +491,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
             ProjectOutputs for the project, or ``None`` when it does not exist. The
             API keys and auth settings are left unread unless the project is ``ACTIVE_HEALTHY``.
         """
-        async with create_management_client(self.resolved(self.config.access_token)) as client:
+        async with create_management_client(self.reveal_access_token()) as client:
             project = await self.find_project(client)
 
             if project is None:
@@ -511,7 +520,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
             TimeoutError: If the project does not become healthy, or is not listed as
                 ``ACTIVE_HEALTHY``, in time.
         """
-        async with create_management_client(self.resolved(self.config.access_token)) as client:
+        async with create_management_client(self.reveal_access_token()) as client:
             project = await self.find_project(client)
 
             if project is None:
@@ -539,7 +548,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Raises:
             TimeoutError: If the project is still listed live after ``DELETED_TIMEOUT_SECONDS``.
         """
-        async with create_management_client(self.resolved(self.config.access_token)) as client:
+        async with create_management_client(self.reveal_access_token()) as client:
             project = await self.find_project(client)
 
             if project is None:
@@ -558,7 +567,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Returns:
             Nominal when ``ACTIVE_HEALTHY``, impaired while transitioning, down otherwise.
         """
-        async with create_management_client(self.resolved(self.config.access_token)) as client:
+        async with create_management_client(self.reveal_access_token()) as client:
             project = await self.find_project(client)
 
         if project is None:
