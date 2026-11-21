@@ -66,6 +66,8 @@ pragma providers install pragmatiks/agno
 | Memory Manager | `memory/manager` | Agent memory management with PostgreSQL storage |
 | PostgreSQL DB | `db/postgres` | PostgreSQL database connection for sessions, memory, and storage |
 
+The `api_key` of the OpenAI and Anthropic models, the OpenAI embedder and the Qdrant VectorDB is a secret: it takes a reference to a secret output, such as a `pragma/secret` entry or a `qdrant/database` `outputs.api_key`, and a literal key is refused. The key is shown as `********` in the resource's config and in `outputs.spec.api_key` on `describe`, `list`, the web graph and the live event stream, and the model, embedder and vector database clients receive the real value.
+
 ## Example: Full Agent Deployment
 
 A realistic example showing a model, tools, knowledge base, and agent deployed to Kubernetes.
@@ -78,8 +80,8 @@ name: claude
 config:
   id: claude-sonnet-4-20250514
   api_key:
-    ref: secrets/anthropic-key
-    field: value
+    ref: pragma/secret/anthropic-key
+    field: outputs.api_key
 
 ---
 # 2. MCP tool server
@@ -107,8 +109,8 @@ name: embedder
 config:
   id: text-embedding-3-small
   api_key:
-    ref: secrets/openai-key
-    field: value
+    ref: pragma/secret/openai-key
+    field: outputs.api_key
 
 ---
 # 5. Collection the content is written into, sized for text-embedding-3-small
@@ -118,10 +120,10 @@ name: docs
 config:
   url:
     ref: qdrant/database/main
-    field: url
+    field: outputs.url
   api_key:
     ref: qdrant/database/main
-    field: api_key
+    field: outputs.api_key
   name: docs
   vectors:
     size: 1536
@@ -135,13 +137,13 @@ name: doc-vectors
 config:
   url:
     ref: qdrant/database/main
-    field: url
+    field: outputs.url
   collection:
     ref: qdrant/collection/docs
-    field: name
+    field: outputs.name
   api_key:
     ref: qdrant/database/main
-    field: api_key
+    field: outputs.api_key
   search_type: vector
   embedder:
     ref: agno/knowledge/embedder/openai/embedder
@@ -177,11 +179,11 @@ config:
     ref: cloudsql/instance/main
     field: connection_url
   username:
-    ref: secrets/db-creds
-    field: username
+    ref: pragma/secret/db-creds
+    field: outputs.username
   password:
-    ref: secrets/db-creds
-    field: password
+    ref: pragma/secret/db-creds
+    field: outputs.password
 
 ---
 # 10. Memory manager
@@ -245,8 +247,8 @@ config:
   cpu: 500m
   memory: 2Gi
   security_key:
-    ref: secrets/runner-security-key
-    field: value
+    ref: pragma/secret/runner-security-key
+    field: outputs.security_key
 ```
 
 ## Common Patterns
@@ -373,8 +375,8 @@ config:
   command: npx -y @modelcontextprotocol/server-github
   env:
     GITHUB_TOKEN:
-      ref: secrets/github-token
-      field: value
+      ref: pragma/secret/github-token
+      field: outputs.token
 
 ---
 provider: agno

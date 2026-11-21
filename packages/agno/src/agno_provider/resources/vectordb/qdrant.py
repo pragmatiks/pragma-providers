@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from agno.vectordb.qdrant import Qdrant, SearchType
 from pragma_sdk import Config, Dependency, Field, ImmutableField, Outputs
-from pydantic import computed_field
+from pydantic import SecretStr, computed_field
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
 from agno_provider.resources.knowledge.embedder.openai import (
@@ -30,7 +30,7 @@ class VectordbQdrantSpec(AgnoSpec):
 
     url: str
     collection: str
-    api_key: str | None = None
+    api_key: SecretStr | None = None
     search_type: Literal["vector"] = "vector"
     embedder_spec: EmbedderOpenAISpec | None = None
 
@@ -50,7 +50,8 @@ class VectordbQdrantConfig(Config):
     Attributes:
         url: Qdrant server URL. Can reference qdrant/database outputs.
         collection: Collection name. Can reference qdrant/collection outputs.
-        api_key: Optional API key for authentication.
+        api_key: Optional API key for authentication, a reference to a secret output such as
+            qdrant/database ``outputs.api_key``.
         search_type: Search type. Only vector search is supported, because a
             qdrant/collection holds one unnamed dense vector.
         embedder: Optional embedder resource for automatic vector generation.
@@ -58,7 +59,7 @@ class VectordbQdrantConfig(Config):
 
     url: ImmutableField[str]
     collection: ImmutableField[str]
-    api_key: Field[str] | None = None
+    api_key: Field[SecretStr] | None = None
     search_type: Field[Literal["vector"]] = "vector"
     embedder: Dependency[EmbedderOpenAI] | None = None
 
@@ -90,17 +91,17 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
             provider: qdrant
             resource: database
             name: main
-            field: url
+            field: outputs.url
           collection:
             provider: qdrant
             resource: collection
             name: embeddings
-            field: name
+            field: outputs.name
           api_key:
             provider: qdrant
             resource: database
             name: main
-            field: api_key
+            field: outputs.api_key
           search_type: vector
 
     Runtime reconstruction via spec:
@@ -130,8 +131,8 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
             "search_type": spec.search_type_enum,
         }
 
-        if spec.api_key:
-            kwargs["api_key"] = spec.api_key
+        if spec.api_key is not None:
+            kwargs["api_key"] = spec.api_key.get_secret_value()
 
         if spec.embedder_spec:
             kwargs["embedder"] = EmbedderOpenAI.from_spec(spec.embedder_spec)
@@ -147,7 +148,7 @@ class VectordbQdrant(AgnoResource[VectordbQdrantConfig, VectordbQdrantOutputs, V
         Returns:
             VectordbQdrantSpec with all configuration fields.
         """
-        api_key = str(self.config.api_key) if self.config.api_key is not None else None
+        api_key = self.resolved(self.config.api_key) if self.config.api_key is not None else None
 
         embedder_spec = None
         if (

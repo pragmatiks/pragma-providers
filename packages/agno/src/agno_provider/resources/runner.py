@@ -45,6 +45,7 @@ from pragma_sdk import (
     Resource,
     Vitals,
 )
+from pragma_sdk.provider import build_revealed_json
 from pydantic import model_validator
 
 from agno_provider.resources.agent import Agent, AgentOutputs, AgentSpec
@@ -382,8 +383,8 @@ class Runner(Resource[RunnerConfig, RunnerOutputs]):
             raise RuntimeError(msg)
 
         specs_payload = {
-            "agents": [spec.model_dump(mode="json") for spec in agent_specs],
-            "teams": [spec.model_dump(mode="json") for spec in team_specs],
+            "agents": [build_revealed_json(spec) for spec in agent_specs],
+            "teams": [build_revealed_json(spec) for spec in team_specs],
             "workflows": [],
         }
 

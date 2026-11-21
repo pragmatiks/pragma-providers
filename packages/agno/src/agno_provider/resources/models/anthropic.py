@@ -6,8 +6,8 @@ from typing import Any, Literal
 
 import anthropic
 from agno.models.anthropic import Claude
-from pragma_sdk import Field, SensitiveField
-from pydantic import model_validator
+from pragma_sdk import Field
+from pydantic import SecretStr, model_validator
 
 from agno_provider.resources.base import AgnoSpec
 from agno_provider.resources.models.base import Model, ModelConfig, ModelOutputs
@@ -190,7 +190,7 @@ class AnthropicModelSpec(AgnoSpec):
 
     type: Literal["anthropic"] = "anthropic"
     id: str
-    api_key: str
+    api_key: SecretStr
     max_tokens: int | None = None
     temperature: float | None = None
     top_p: float | None = None
@@ -233,7 +233,7 @@ class AnthropicModelConfig(ModelConfig):
     Maps to Agno's Claude class from agno.models.anthropic.
 
     Attributes:
-        api_key: Anthropic API key. Use a FieldReference to inject from pragma/secret.
+        api_key: Anthropic API key, a reference to a secret output such as a pragma/secret entry.
         max_tokens: Maximum tokens in responses. Defaults to 8192 (Agno default).
         temperature: Sampling temperature (0.0-1.0). Optional.
         top_p: Nucleus sampling parameter. Optional.
@@ -257,7 +257,7 @@ class AnthropicModelConfig(ModelConfig):
             ``"high"``).
     """
 
-    api_key: SensitiveField[str]
+    api_key: Field[SecretStr]
     max_tokens: Field[int] = 8192
     temperature: Field[float] | None = None
     top_p: Field[float] | None = None
@@ -349,10 +349,13 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         Returns:
             Configured Claude instance ready for use.
         """
-        kwargs = spec.model_dump(
-            exclude={"type", "thinking_mode", "thinking_budget_tokens", "effort"},
-            exclude_none=True,
-        )
+        kwargs: dict[str, Any] = {
+            **spec.model_dump(
+                exclude={"type", "api_key", "thinking_mode", "thinking_budget_tokens", "effort"},
+                exclude_none=True,
+            ),
+            "api_key": spec.api_key.get_secret_value(),
+        }
 
         thinking = _build_thinking_param(spec.thinking_mode, spec.thinking_budget_tokens)
         if thinking is not None:
@@ -375,7 +378,7 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         """
         return AnthropicModelSpec(
             id=self.resolved(self.config.id),
-            api_key=str(self.config.api_key),
+            api_key=self.resolved(self.config.api_key),
             max_tokens=self.resolved(self.config.max_tokens),
             temperature=self.resolved(self.config.temperature),
             top_p=self.resolved(self.config.top_p),
@@ -467,7 +470,7 @@ class AnthropicModel(Model[AnthropicModelConfig, AnthropicModelOutputs, Anthropi
         Any error from the Anthropic SDK propagates so the runtime marks
         the resource FAILED.
         """
-        client = anthropic.AsyncAnthropic(api_key=str(self.config.api_key))
+        client = anthropic.AsyncAnthropic(api_key=self.resolved(self.config.api_key).get_secret_value())
         await client.models.retrieve(self.resolved(self.config.id))
 
     async def on_update(self, previous_config: AnthropicModelConfig | None) -> AnthropicModelOutputs:  # noqa: ARG002
