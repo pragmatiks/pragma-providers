@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any, cast
 
 import httpx
-from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, SensitiveField
-from pydantic import BaseModel
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
+from pydantic import BaseModel, SecretStr
 from pydantic import Field as PydanticField
 
 from vercel_provider.client import (
@@ -53,8 +53,8 @@ class ProjectConfig(Config):
     """Configuration for a Vercel project.
 
     Attributes:
-        access_token: Vercel API token for authentication.
-            Use a pragma/secret resource with a FieldReference to provide this.
+        access_token: Vercel API token for authentication, a reference to a
+            secret output such as a pragma/secret entry.
         name: Project name. Must be unique within the team/account.
         framework: Framework preset (e.g., ``nextjs``, ``vite``, ``remix``).
             When None, Vercel auto-detects the framework.
@@ -68,7 +68,7 @@ class ProjectConfig(Config):
         team_id: Vercel team ID. Required for team-owned projects. Immutable.
     """
 
-    access_token: SensitiveField[str]
+    access_token: Field[SecretStr]
     name: ImmutableField[str]
     framework: Field[str] | None = None
     git_repository: ImmutableField[GitRepositoryConfig] | None = None
@@ -348,6 +348,14 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
                     - preview
     """
 
+    def reveal_access_token(self) -> str:
+        """Reveal the resolved access token for an API client.
+
+        Returns:
+            The plaintext access token.
+        """
+        return self.resolved(self.config.access_token).get_secret_value()
+
     def project_path(self) -> str:
         """Build the API path of the project named by ``config.name``.
 
@@ -378,7 +386,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Raises:
             AlreadyExistsError: If Vercel already has a project with this name.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             body = _build_create_body(self.config)
             response = await client.post("/v10/projects", params=self._query_params(), json=body)
             await raise_for_create_status(response, f"Vercel project {self.config.name}")
@@ -399,7 +407,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Returns:
             ProjectOutputs, or ``None`` if the project does not exist.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             project = await fetch_optional_json(client, self.project_path(), self._query_params())
 
         if project is None:
@@ -420,7 +428,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
         Returns:
             ProjectOutputs with current project state.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             params = self._query_params()
 
             response = await client.patch(self.project_path(), params=params, json=_build_update_body(self.config))
@@ -454,7 +462,7 @@ class Project(Resource[ProjectConfig, ProjectOutputs]):
 
         Succeeds if the project does not exist.
         """
-        async with create_vercel_client(self.resolved(self.config.access_token)) as client:
+        async with create_vercel_client(self.reveal_access_token()) as client:
             response = await client.delete(self.project_path(), params=self._query_params())
 
             if response.status_code == 404:
