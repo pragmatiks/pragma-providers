@@ -162,7 +162,9 @@ Manages stateful workloads with stable pod identity, persistent storage via PVC 
 - `replicas` (int, default: `1`) -- Desired pod replicas
 - `service_name` (string) -- Headless service for pod DNS (immutable)
 - `selector` (dict, optional) -- Label selector; defaults to `{"app": "<name>"}` (immutable)
-- `containers` (list) -- Container specs: image, ports, env, volume mounts, probes
+- `containers` (list) -- Container specs: image, ports, env, secret env, volume mounts, probes
+  - `env` (list, optional) -- Plain environment variables as `name`/`value` pairs
+  - `secret_env` (list, optional) -- Environment variables whose `value` references a secret output, such as a `pragma/secret` entry. The value is shown masked wherever the StatefulSet is read, and a literal value is refused. A name may appear only once across `env` and `secret_env`.
 - `volume_claim_templates` (list, optional) -- PVC templates for persistent storage (immutable)
 
 **Outputs:**
@@ -187,6 +189,9 @@ resources:
           env:
             - name: POSTGRES_DB
               value: myapp
+          secret_env:
+            - name: POSTGRES_PASSWORD
+              value: ${{ postgres-credentials.outputs.password }}
           volume_mounts:
             - name: data
               mount_path: /var/lib/postgresql/data
