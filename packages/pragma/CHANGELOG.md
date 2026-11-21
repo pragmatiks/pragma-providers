@@ -1,3 +1,13 @@
+## pragma-v7.0.0 (2026-11-21)
+
+### BREAKING CHANGE
+
+- read file metadata from the stored object
+
+### Feat
+
+- **pragma**: read file metadata from the stored object
+
 ## pragma-v6.3.6 (2026-11-20)
 
 ### Fix
