@@ -1,3 +1,13 @@
+## pragma-v8.0.0 (2026-11-21)
+
+### BREAKING CHANGE
+
+- run the file resource on a runtime host (PRA-1020)
+
+### Feat
+
+- **pragma**: run the file resource on a runtime host (PRA-1020)
+
 ## pragma-v7.0.0 (2026-11-21)
 
 ### BREAKING CHANGE
