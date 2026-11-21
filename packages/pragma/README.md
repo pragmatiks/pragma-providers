@@ -81,13 +81,14 @@ resources:
 
 ### File
 
-Platform-managed file storage. The file content is uploaded into the resource's project by `pragma resources apply` (from a `content: "@./path"` field) or the SDK's `upload_file`; this resource reads what storage records for the stored file and exposes its URLs, size, content type, checksum and upload time as outputs.
+Platform-managed file: a read-only view of the file uploaded under the resource's name in its project. The file content is uploaded by `pragma resources apply` (from a `content: "@./path"` field, which it uploads under the resource's name and replaces with the file's `pragma://files/<name>` reference) or the SDK's `upload_file`. On every operation Pragmatiks gives the resource a short-lived download address for its `content` reference; the resource reads the file's size, content type, checksum and upload time from that address, without downloading the content, and exposes them as outputs. It needs no storage credentials and no environment variables.
 
-**Config:** none -- the resource tracks the file stored under the resource's name.
+**Config:**
+- `content` -- The resource's own file, as `pragma://files/<name>` with the resource's name. A reference to any other file fails the operation.
+- `content_type` -- Media type of the upload, required with `@<path>`. The CLI uses it for the upload and removes it from the applied config.
 
 **Outputs:**
-- `url` -- Internal `pragma://` URL used for cross-resource references.
-- `public_url` -- Download address under the project's file routes. It needs Pragmatiks credentials and redirects to the file's content.
+- `url` -- The file's `pragma://files/<name>` reference, which other resources' configs take.
 - `size` -- File size in bytes.
 - `content_type` -- Media type fixed at upload.
 - `checksum` -- Hex MD5 of the file content, which storage verified when the file was stored (it matches `md5sum`).
@@ -95,27 +96,20 @@ Platform-managed file storage. The file content is uploaded into the resource's 
 
 ```yaml
 resources:
-  onboarding-doc:
+  onboarding.pdf:
     provider: pragmatiks/pragma
     resource: file
-    config: {}
+    config:
+      content: "@./onboarding.pdf"
+      content_type: application/pdf
 ```
 
 **Behavior:**
-- Create: Reads the stored file and exposes its outputs. Fails with a clear error if no file is stored under the name, and fails as already existing if the object under the name was not stored by a Pragmatiks upload (it carries no checksum); uploading the file again replaces it.
+- Create: Reads the stored file and exposes its outputs. Fails with a clear error if no file is stored under the name, or if the stored file was not stored by a Pragmatiks upload (it carries no checksum); uploading the file again replaces it. A download address that expired before the operation read it fails the operation, and applying again retries it.
 - Update: Re-reads the stored file so outputs reflect its current content.
-- Observe: Uploading new content under the name leaves the configuration unchanged, so the outputs change only when the resource is next observed.
-- Delete: Deletes the file from storage. Idempotent -- a missing file is treated as already deleted. An object a Pragmatiks upload did not store is left in place.
-
-## Runtime Environment
-
-The `pragma/file` resource reads storage configuration from environment variables populated by the Pragmatiks runtime. Standalone use is not supported.
-
-| Variable | Purpose |
-|----------|---------|
-| `PRAGMA_FILE_GCS_BUCKET` | Object-store bucket holding uploaded file content |
-| `PRAGMA_FILE_PUBLIC_URL` | Base URL used to compose download addresses |
-| `PRAGMA_RUNTIME_ORGANIZATION_ID` | Identifies the organization's file prefix in the bucket |
+- Drift: The resource is computed, so it is not observed: uploading new content under the name, or deleting the file through the files API, leaves the outputs unchanged until the resource is applied again.
+- Deactivate: Keeps the stored content.
+- Delete: Deleting the resource deletes its uploaded content shortly afterwards; the provider itself never deletes. Resources that depend on the file resource fail as their dependency is deleted.
 
 ## Development
 
