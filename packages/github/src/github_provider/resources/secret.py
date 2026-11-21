@@ -7,7 +7,8 @@ from typing import Any
 
 from nacl.encoding import Base64Encoder
 from nacl.public import PublicKey, SealedBox
-from pragma_sdk import Config, ImmutableField, Outputs, Resource, SensitiveField
+from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource
+from pydantic import SecretStr
 
 from github_provider.client import (
     create_github_client,
@@ -26,22 +27,24 @@ class SecretConfig(Config):
     the secret is created as an environment secret.
 
     Attributes:
-        access_token: GitHub personal access token for authentication.
+        access_token: GitHub personal access token for authentication, a
+            reference to a secret output such as a pragma/secret entry.
         owner: GitHub user or organization that owns the repository.
         repository: Repository name.
         secret_name: Name of the secret. Must match the pattern
             ``[A-Z_][A-Z0-9_]*``.
-        secret_value: Plaintext secret value. Encrypted automatically
-            before upload using the repository or environment public key.
+        secret_value: Secret value, a reference to a secret output such as
+            a pragma/secret entry. Encrypted automatically before upload
+            using the repository or environment public key.
         environment_name: Optional deployment environment name. When set,
             the secret is scoped to this environment instead of the repository.
     """
 
-    access_token: SensitiveField[str]
+    access_token: Field[SecretStr]
     owner: ImmutableField[str]
     repository: ImmutableField[str]
     secret_name: ImmutableField[str]
-    secret_value: SensitiveField[str]
+    secret_value: Field[SecretStr]
     environment_name: ImmutableField[str] | None = None
 
 
@@ -147,6 +150,14 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
               environment_name: production
     """
 
+    def reveal_access_token(self) -> str:
+        """Reveal the resolved access token for an API client.
+
+        Returns:
+            The plaintext access token.
+        """
+        return self.resolved(self.config.access_token).get_secret_value()
+
     def _is_environment_secret(self) -> bool:
         """Check whether this secret is scoped to an environment.
 
@@ -251,9 +262,9 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         Returns:
             SecretOutputs with secret metadata.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             key_b64, key_id = await self._fetch_public_key(client)
-            encrypted_value = _encrypt_secret(key_b64, self.resolved(self.config.secret_value))
+            encrypted_value = _encrypt_secret(key_b64, self.resolved(self.config.secret_value).get_secret_value())
             await self._put_secret(client, encrypted_value, key_id)
             metadata = await self._fetch_secret_metadata(client)
 
@@ -268,7 +279,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
         Raises:
             AlreadyExistsError: If the secret already exists in its repository or environment.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             await ensure_absent(
                 client, self.secret_path(), f"Secret {self.config.secret_name!r} at {self.secret_path()}"
             )
@@ -285,7 +296,7 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
             AlreadyExistsError: If GitHub redirects because the repository was
                 renamed or transferred.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             metadata = await fetch_optional_json(client, self.secret_path())
 
         if metadata is None:
@@ -312,5 +323,5 @@ class Secret(Resource[SecretConfig, SecretOutputs]):
 
         Idempotent: Succeeds if the secret does not exist.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             await delete_if_present(client, self.secret_path())

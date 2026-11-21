@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any, Literal
 
 import httpx
-from pragma_sdk import AlreadyExistsError, Config, Field, ImmutableField, Outputs, Resource, SensitiveField
+from pragma_sdk import AlreadyExistsError, Config, Field, ImmutableField, Outputs, Resource
+from pydantic import SecretStr
 
 from github_provider.client import create_github_client, delete_if_present, fetch_optional_json, raise_for_status
 
@@ -14,8 +15,8 @@ class RepositoryConfig(Config):
     """Configuration for a GitHub repository.
 
     Attributes:
-        access_token: GitHub personal access token for authentication.
-            Use a pragma/secret resource with a FieldReference to provide this.
+        access_token: GitHub personal access token for authentication, a
+            reference to a secret output such as a pragma/secret entry.
         owner: GitHub user or organization that owns the repository.
         name: Repository name. Must be unique within the owner's account.
         description: Short description of the repository.
@@ -36,7 +37,7 @@ class RepositoryConfig(Config):
         allow_rebase_merge: Whether to allow rebase-merging pull requests.
     """
 
-    access_token: SensitiveField[str]
+    access_token: Field[SecretStr]
     owner: ImmutableField[str]
     name: ImmutableField[str]
     description: Field[str] = ""
@@ -233,6 +234,14 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
               has_wiki: false
     """
 
+    def reveal_access_token(self) -> str:
+        """Reveal the resolved access token for an API client.
+
+        Returns:
+            The plaintext access token.
+        """
+        return self.resolved(self.config.access_token).get_secret_value()
+
     def repository_path(self) -> str:
         """Build the REST path of this repository.
 
@@ -251,7 +260,7 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
             AlreadyExistsError: If ``owner`` already has a repository with this name.
             ValueError: If ``owner`` is neither a usable organization nor the token's user.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             body = _build_create_body(self.config)
 
             response = await client.post(f"/orgs/{self.config.owner}/repos", json=body)
@@ -286,7 +295,7 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
             AlreadyExistsError: If ``owner/name`` redirects because the repository
                 was renamed or transferred.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             repository = await fetch_optional_json(client, self.repository_path())
 
         if repository is None:
@@ -307,7 +316,7 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
             httpx.HTTPStatusError: If GitHub rejects the update or reports the
                 repository moved to another owner or name.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             update_body = _build_update_body(self.config)
             response = await client.patch(self.repository_path(), json=update_body)
             await raise_for_status(response)
@@ -323,5 +332,5 @@ class Repository(Resource[RepositoryConfig, RepositoryOutputs]):
         Raises:
             httpx.HTTPStatusError: If GitHub rejects the deletion.
         """
-        async with create_github_client(self.resolved(self.config.access_token)) as client:
+        async with create_github_client(self.reveal_access_token()) as client:
             await delete_if_present(client, self.repository_path())
