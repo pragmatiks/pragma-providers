@@ -7,7 +7,7 @@ from http import HTTPStatus
 from typing import Literal, cast
 
 from pragma_sdk import Config, Field, ImmutableField, Outputs, Resource, Vitals, VitalsStatus
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 from pydantic import Field as PydanticField
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
@@ -68,7 +68,7 @@ class CollectionConfig(Config):
     """Configuration for a Qdrant collection.
 
     Attributes:
-        api_key: Qdrant Cloud API key. Use a FieldReference to inject from pragma/secret.
+        api_key: Qdrant Cloud API key, a reference to a secret output such as a pragma/secret entry.
             Optional for local Qdrant instances.
         url: Qdrant server URL. Immutable.
         name: Collection name within Qdrant.
@@ -76,7 +76,7 @@ class CollectionConfig(Config):
         on_disk: Store vectors on disk instead of memory for larger datasets.
     """
 
-    api_key: Field[str] | None = None
+    api_key: Field[SecretStr] | None = None
     url: ImmutableField[str] = "http://localhost:6333"
     name: ImmutableField[str]
     vectors: ImmutableField[VectorConfig]
@@ -113,7 +113,7 @@ class Collection(Resource[CollectionConfig, CollectionOutputs]):
         Returns:
             Configured AsyncQdrantClient instance.
         """
-        api_key = self.resolved(self.config.api_key) if self.config.api_key else None
+        api_key = self.resolved(self.config.api_key).get_secret_value() if self.config.api_key else None
 
         return AsyncQdrantClient(
             url=self.resolved(self.config.url),
