@@ -24,11 +24,13 @@ pragma providers install pragmatiks/pragma
 
 Stores sensitive key-value data and exposes each entry as an output so that other resources can reference individual values through `FieldReference`.
 
+This is the resource type for a sensitive value written as a literal. A field that other providers mark as a secret accepts only a reference, so its literal belongs here and the field references `outputs.<key>`. Every value in `data` and every output is a secret: `describe`, `list`, the web graph and the live event stream show it as `********`, and a resource that references it receives the real value.
+
 **Config:**
-- `data` (`dict[str, str]`, required, mutable) -- Key-value pairs of secret data. Values must be strings.
+- `data` (`dict[str, SecretStr]`, required, mutable) -- Key-value pairs of secret data. Values must be strings.
 
 **Outputs:**
-- Each key-value pair from `data` is exposed as a separately referenceable output field (e.g., `outputs.username`, `outputs.password`).
+- Each key-value pair from `data` is exposed as a separately referenceable secret output field (e.g., `outputs.username`, `outputs.password`).
 
 ```yaml
 resources:
