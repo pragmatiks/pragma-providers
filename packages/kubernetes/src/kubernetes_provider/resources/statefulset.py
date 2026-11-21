@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import AsyncIterator
 from contextlib import aclosing, asynccontextmanager
 from datetime import datetime
@@ -35,7 +36,7 @@ from pragma_sdk import (
     Resource,
     Vitals,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr, model_validator
 from pydantic import Field as PydanticField
 
 from kubernetes_provider.marker import MarkerRefusal
@@ -82,6 +83,23 @@ class EnvVarConfig(BaseModel):
 
     name: str
     value: str
+
+
+class SecretEnvVarConfig(BaseModel):
+    """Environment variable whose value is a secret, injected into a container.
+
+    The value is a reference to a secret output, such as a ``pragmatiks/pragma``
+    ``secret`` entry, and is shown masked wherever the StatefulSet is read.
+
+    Attributes:
+        name: Environment variable name.
+        value: Environment variable value.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    name: str
+    value: Field[SecretStr]
 
 
 class VolumeMountConfig(BaseModel):
@@ -144,6 +162,8 @@ class ContainerConfig(BaseModel):
         image: Container image including tag (e.g., "postgres:16").
         ports: Ports exposed by the container.
         env: Environment variables as name-value pairs.
+        secret_env: Environment variables whose values are secrets, each
+            referencing a secret output. A name may not also appear in ``env``.
         volume_mounts: Volume mounts attaching PVCs to container paths.
         resources: CPU and memory resource requests and limits.
         command: Override the container entrypoint.
@@ -158,12 +178,32 @@ class ContainerConfig(BaseModel):
     image: str
     ports: list[ContainerPortConfig] | None = None
     env: list[EnvVarConfig] | None = None
+    secret_env: list[SecretEnvVarConfig] | None = None
     volume_mounts: list[VolumeMountConfig] | None = None
     resources: ResourcesConfig | None = None
     command: list[str] | None = None
     args: list[str] | None = None
     liveness_probe: ProbeConfig | None = None
     readiness_probe: ProbeConfig | None = None
+
+    @model_validator(mode="after")
+    def validate_env_names(self) -> ContainerConfig:
+        """Refuse an env name set more than once across ``env`` and ``secret_env``.
+
+        Returns:
+            Self after validation.
+
+        Raises:
+            ValueError: If a name repeats within either list or appears in both.
+        """
+        names = Counter(variable.name for variable in [*(self.env or []), *(self.secret_env or [])])
+        duplicate_names = sorted(name for name, count in names.items() if count > 1)
+
+        if duplicate_names:
+            message = f"Env names set more than once across env and secret_env: {', '.join(duplicate_names)}"
+            raise ValueError(message)
+
+        return self
 
 
 class VolumeClaimTemplateConfig(BaseModel):
@@ -285,8 +325,11 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
     def _build_container(self, config: ContainerConfig) -> Container:
         """Build container from config.
 
+        Args:
+            config: Container configuration; every ``secret_env`` reference must be resolvable.
+
         Returns:
-            Kubernetes Container object.
+            Kubernetes Container object, whose env carries the resolved ``secret_env`` values.
         """
         container = Container(
             name=config.name,
@@ -303,8 +346,15 @@ class StatefulSet(Resource[StatefulSetConfig, StatefulSetOutputs]):
                 for p in config.ports
             ]
 
-        if config.env:
-            container.env = [EnvVar(name=e.name, value=e.value) for e in config.env]
+        plain_env = [EnvVar(name=variable.name, value=variable.value) for variable in config.env or []]
+        secret_env = [
+            EnvVar(name=variable.name, value=self.resolved(variable.value).get_secret_value())
+            for variable in config.secret_env or []
+        ]
+        env = plain_env + secret_env
+
+        if env:
+            container.env = env
 
         if config.volume_mounts:
             container.volumeMounts = [
