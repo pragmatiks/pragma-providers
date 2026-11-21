@@ -1993,6 +1993,7 @@ version = "8.3.15"
 source = { editable = "packages/qdrant" }
 dependencies = [
     { name = "pragmatiks-kubernetes" },
+    { name = "pragmatiks-pragma" },
     { name = "pragmatiks-sdk" },
     { name = "qdrant-client" },
 ]
@@ -2006,7 +2007,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "pragmatiks-kubernetes", editable = "packages/kubernetes" },
-    { name = "pragmatiks-sdk", specifier = ">=31.0.0" },
+    { name = "pragmatiks-pragma", editable = "packages/pragma" },
+    { name = "pragmatiks-sdk", specifier = ">=33.0.0,<34" },
     { name = "qdrant-client", specifier = ">=1.16.0" },
 ]
 

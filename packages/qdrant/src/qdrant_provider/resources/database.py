@@ -19,16 +19,18 @@ from kubernetes_provider.resources.service import PortConfig
 from kubernetes_provider.resources.statefulset import (
     ContainerConfig,
     ContainerPortConfig,
-    EnvVarConfig,
     ProbeConfig,
     ResourcesConfig,
+    SecretEnvVarConfig,
     VolumeClaimTemplateConfig,
     VolumeMountConfig,
 )
+from pragma_provider import Secret, SecretConfig
 from pragma_sdk import (
     ChildrenPending,
     Config,
     Field,
+    FieldReference,
     ImmutableDependency,
     LifecycleState,
     LogEntry,
@@ -36,31 +38,29 @@ from pragma_sdk import (
     Resource,
     Vitals,
 )
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, SecretStr, model_validator
 from pydantic import Field as PydanticField
 
 
 API_KEY_ENVIRONMENT_VARIABLE = "QDRANT__SERVICE__API_KEY"
+API_KEY_SECRET_ENTRY = "api_key"
 
 logger = logging.getLogger(__name__)
 
 
-def extract_api_key(statefulset: StatefulSet) -> str | None:
-    """Read the API key a StatefulSet's containers pass to Qdrant.
+def extract_api_key(secret: Secret) -> SecretStr | None:
+    """Read the API key a database's secret child holds.
 
     Args:
-        statefulset: The StatefulSet child as the platform records it.
+        secret: The secret child as the platform records it.
 
     Returns:
-        The first non-empty ``QDRANT__SERVICE__API_KEY`` value of its containers, or ``None``
-        when none passes one.
+        The ``api_key`` entry of the secret's data, a ``SecretStr`` the caller reveals with
+        ``get_secret_value()``, or ``None`` when it holds none.
     """
-    for container in cast(list[ContainerConfig], statefulset.config.containers):
-        for variable in container.env or []:
-            if variable.name == API_KEY_ENVIRONMENT_VARIABLE and variable.value:
-                return variable.value
+    data = cast(dict[str, SecretStr], secret.config.data)
 
-    return None
+    return data.get(API_KEY_SECRET_ENTRY)
 
 
 class StorageConfig(BaseModel):
@@ -98,9 +98,10 @@ class DatabaseConfig(Config):
         image: Docker image for Qdrant (default: qdrant/qdrant:latest).
         storage: Persistent storage configuration.
         resources: CPU and memory limits.
-        api_key: API key for Qdrant authentication. If provided, used directly.
+        api_key: API key for Qdrant authentication, a reference to a secret output. If
+            provided, used directly.
         generate_api_key: If True and api_key is None, generates a secure 32-char key once and
-            keeps the key its StatefulSet child already carries.
+            keeps the key its secret child already holds.
     """
 
     config: ImmutableDependency[KubernetesConfig]
@@ -108,7 +109,7 @@ class DatabaseConfig(Config):
     image: Field[str] = "qdrant/qdrant:latest"
     storage: Field[StorageConfig] | None = None
     resources: Field[ResourceConfig] | None = None
-    api_key: Field[str] | None = None
+    api_key: Field[SecretStr] | None = None
     generate_api_key: Field[bool] = False
 
     @model_validator(mode="after")
@@ -134,66 +135,67 @@ class DatabaseOutputs(Outputs):
     Attributes:
         url: HTTP endpoint for Qdrant REST API (external LoadBalancer URL).
         grpc_url: gRPC endpoint for Qdrant (external LoadBalancer URL).
-        api_key: The API key for authentication (if configured).
+        api_key: The API key for authentication (if configured), copied from the secret child.
     """
 
     url: str
     grpc_url: str
-    api_key: str | None
+    api_key: SecretStr | None
 
 
 class Database(Resource[DatabaseConfig, DatabaseOutputs]):
     """Qdrant database deployed to Kubernetes through owned child resources.
 
-    Applies three child resources through the platform, which records this database as their owner:
+    Applies four child resources through the platform, which records this database as their owner:
+    - ``pragma/secret`` holding the API key
     - Headless Service for pod DNS
     - StatefulSet with persistent storage
     - LoadBalancer client Service for external access
 
     Lifecycle:
-        - on_create, on_update: ``converge``: apply the three children, read them, and return
-          ``ChildrenPending()`` until all three are READY, then the outputs
+        - on_create, on_update: ``converge``: apply the secret child first, then the other three,
+          read them, and return ``ChildrenPending()`` until all four are READY, then the outputs
         - on_delete: Do nothing; the owned children are deleted with this database
 
-    With ``generate_api_key``, the key is the one the StatefulSet child already carries; a key is
-    generated only when there is no such child or it carries none, so a rerun keeps the key and
-    does not roll the pods. The outputs report the key the StatefulSet child carries when all
-    three children are READY.
+    The API key is ``api_key`` when set and not empty; with ``generate_api_key``, an existing key
+    is kept and a new one is generated only when none exists.
     """
 
     computed = True
 
-    async def resolve_api_key(self) -> str | None:
+    async def resolve_api_key(self) -> SecretStr | None:
         """Resolve the API key the database runs with.
 
         Returns:
-            ``api_key`` when set; with ``generate_api_key``, the key its StatefulSet child already
-            carries, or a new 32-character hex key when there is no such child or it carries
+            ``api_key`` when set and not empty; with ``generate_api_key``, the key its secret child already
+            holds, or a new 32-character hex key when there is no such child or it holds
             none; ``None`` otherwise.
 
         Raises:
-            CallbackRefusedError: If the platform refuses the read of the StatefulSet child.
+            CallbackRefusedError: If the platform refuses the read of the secret child.
         """
         if self.config.api_key is not None:
-            return self.resolved(self.config.api_key)
+            api_key = self.resolved(self.config.api_key)
+
+            return api_key if api_key.get_secret_value() else None
 
         if not self.config.generate_api_key:
             return None
 
-        recorded = await self._build_statefulset(None).read()
+        recorded = await self.build_api_key_secret(None).read()
         recorded_key = extract_api_key(recorded) if recorded is not None else None
 
         if recorded_key is not None:
             return recorded_key
 
         logger.warning(
-            "qdrant_api_key_generated resource=%s statefulset=%s reason=%s",
+            "qdrant_api_key_generated resource=%s secret=%s reason=%s",
             self.id,
-            self._statefulset_name(),
+            self.api_key_secret_name(),
             "absent" if recorded is None else "no_key",
         )
 
-        return secrets.token_hex(16)
+        return SecretStr(secrets.token_hex(16))
 
     def _headless_service_name(self) -> str:
         """Get headless service name for pod DNS.
@@ -219,6 +221,14 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         """
         return f"qdrant-{self.name}"
 
+    def api_key_secret_name(self) -> str:
+        """Get the name of the secret child holding the API key.
+
+        Returns:
+            The secret name.
+        """
+        return f"qdrant-{self.name}-api-key"
+
     def _namespace(self) -> str:
         """Get Kubernetes namespace.
 
@@ -238,6 +248,43 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             "app.kubernetes.io/name": "qdrant",
             "app.kubernetes.io/instance": self.name,
         }
+
+    def build_api_key_secret(self, api_key: SecretStr | None) -> Secret:
+        """Build the secret child holding the API key.
+
+        Args:
+            api_key: Key Qdrant requires from clients, or ``None`` for none.
+
+        Returns:
+            Configured Secret resource, with an ``api_key`` entry only when a key is given.
+        """
+        data = {API_KEY_SECRET_ENTRY: api_key} if api_key is not None else {}
+
+        return Secret(
+            project_id=self.project_id,
+            name=self.api_key_secret_name(),
+            config=SecretConfig(data=data),
+        )
+
+    @staticmethod
+    def build_api_key_reference(secret: Secret) -> FieldReference:
+        """Build the reference the StatefulSet's API key environment variable resolves.
+
+        Args:
+            secret: The secret child holding the API key.
+
+        Returns:
+            Reference to the secret child's ``outputs.api_key``.
+        """
+        identity = secret.identity
+
+        return FieldReference(
+            project_id=identity.project_id,
+            provider=identity.provider,
+            resource=identity.resource,
+            name=identity.name,
+            field=f"outputs.{API_KEY_SECRET_ENTRY}",
+        )
 
     def _build_headless_service(self) -> Service:
         """Build headless service for pod DNS.
@@ -285,11 +332,12 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             config=config,
         )
 
-    def _build_statefulset(self, api_key: str | None) -> StatefulSet:
+    def _build_statefulset(self, api_key_reference: FieldReference | None) -> StatefulSet:
         """Build StatefulSet for Qdrant pods.
 
         Args:
-            api_key: Key Qdrant requires from clients, or ``None`` for none.
+            api_key_reference: Reference to the secret child's ``outputs.api_key``, which Qdrant
+                requires from clients, or ``None`` for no key.
 
         Returns:
             Configured StatefulSet resource.
@@ -314,11 +362,11 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             VolumeMountConfig(name="qdrant-storage", mount_path="/qdrant/storage"),
         ]
 
-        env_vars = None
-        if api_key:
-            env_vars = [
-                EnvVarConfig(name=API_KEY_ENVIRONMENT_VARIABLE, value=api_key),
-            ]
+        secret_env = (
+            [SecretEnvVarConfig(name=API_KEY_ENVIRONMENT_VARIABLE, value=api_key_reference)]
+            if api_key_reference is not None
+            else None
+        )
 
         container = ContainerConfig(
             name="qdrant",
@@ -327,7 +375,7 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
                 ContainerPortConfig(name="rest", container_port=6333),
                 ContainerPortConfig(name="grpc", container_port=6334),
             ],
-            env=env_vars,
+            secret_env=secret_env,
             volume_mounts=volume_mounts,
             resources=resources_config,
             readiness_probe=ProbeConfig(tcp_socket_port=6333),
@@ -364,15 +412,15 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
             config=config,
         )
 
-    def build_outputs(self, recorded_statefulset: StatefulSet, recorded_client_service: Service) -> DatabaseOutputs:
+    def build_outputs(self, recorded_secret: Secret, recorded_client_service: Service) -> DatabaseOutputs:
         """Build the outputs from the READY children as the platform records them.
 
         Args:
-            recorded_statefulset: The StatefulSet child as read.
+            recorded_secret: The secret child as read.
             recorded_client_service: The client Service child as read.
 
         Returns:
-            DatabaseOutputs with the client Service's external URLs and the StatefulSet's key.
+            DatabaseOutputs with the client Service's external URLs and the secret child's key.
 
         Raises:
             RuntimeError: If the READY client Service reports no load-balancer address.
@@ -395,10 +443,10 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         return DatabaseOutputs(
             url=f"http://{address}:6333",
             grpc_url=f"http://{address}:6334",
-            api_key=extract_api_key(recorded_statefulset),
+            api_key=extract_api_key(recorded_secret),
         )
 
-    def log_pending_children(self, recorded_children: dict[str, StatefulSet | Service | None]) -> None:
+    def log_pending_children(self, recorded_children: dict[str, Secret | StatefulSet | Service | None]) -> None:
         """Log each child that is absent or not READY, the reason this pass returns ``ChildrenPending()``.
 
         A child absent right after its apply is logged at warning, one not READY at info.
@@ -418,7 +466,10 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
                 )
 
     async def converge(self) -> DatabaseOutputs | ChildrenPending:
-        """Apply the three children, then report the outputs once all of them are READY.
+        """Apply the four children, secret first, then report the outputs once all of them are READY.
+
+        A READY secret child that holds no key although one was resolved is logged as
+        ``qdrant_api_key_missing``.
 
         Returns:
             DatabaseOutputs when every child reads READY, else ``ChildrenPending()``.
@@ -429,17 +480,22 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
         """
         api_key = await self.resolve_api_key()
 
+        secret = self.build_api_key_secret(api_key)
         headless_service = self._build_headless_service()
-        statefulset = self._build_statefulset(api_key)
+        api_key_reference = self.build_api_key_reference(secret) if api_key is not None else None
+        statefulset = self._build_statefulset(api_key_reference)
         client_service = self._build_client_service()
 
-        for child in (headless_service, statefulset, client_service):
+        for child in (secret, headless_service, statefulset, client_service):
             await child.apply()
 
+        recorded_secret = await secret.read()
+        recorded_headless_service = await headless_service.read()
         recorded_statefulset = await statefulset.read()
         recorded_client_service = await client_service.read()
         recorded_children = {
-            headless_service.id: await headless_service.read(),
+            secret.id: recorded_secret,
+            headless_service.id: recorded_headless_service,
             statefulset.id: recorded_statefulset,
             client_service.id: recorded_client_service,
         }
@@ -449,7 +505,12 @@ class Database(Resource[DatabaseConfig, DatabaseOutputs]):
 
             return ChildrenPending()
 
-        return self.build_outputs(cast(StatefulSet, recorded_statefulset), cast(Service, recorded_client_service))
+        ready_secret = cast(Secret, recorded_secret)
+
+        if api_key is not None and extract_api_key(ready_secret) is None:
+            logger.error("qdrant_api_key_missing resource=%s secret=%s", self.id, ready_secret.name)
+
+        return self.build_outputs(ready_secret, cast(Service, recorded_client_service))
 
     async def on_create(self) -> DatabaseOutputs | ChildrenPending:
         """Deploy Qdrant through owned child resources.
