@@ -10,6 +10,7 @@ from typing import Literal
 
 from agno.knowledge.embedder.openai import OpenAIEmbedder
 from pragma_sdk import Config, Field, Outputs
+from pydantic import SecretStr
 
 from agno_provider.resources.base import AgnoResource, AgnoSpec
 
@@ -36,7 +37,7 @@ class EmbedderOpenAISpec(AgnoSpec):
     """
 
     id: str
-    api_key: str
+    api_key: SecretStr
     dimensions: int | None = None
     encoding_format: Literal["float", "base64"] = "float"
     organization: str | None = None
@@ -50,14 +51,14 @@ class EmbedderOpenAIConfig(Config):
 
     Attributes:
         id: OpenAI embedding model identifier.
-        api_key: OpenAI API key. Use a FieldReference to inject from pragma/secret.
+        api_key: OpenAI API key, a reference to a secret output such as a pragma/secret entry.
         dimensions: Override embedding dimensions (only for text-embedding-3-* models).
         organization: Optional OpenAI organization ID.
         base_url: Optional custom base URL for OpenAI-compatible APIs.
     """
 
     id: Field[str] = "text-embedding-3-small"
-    api_key: Field[str]
+    api_key: Field[SecretStr]
     dimensions: Field[int] | None = None
     encoding_format: Field[Literal["float", "base64"]] = "float"
     organization: Field[str] | None = None
@@ -103,7 +104,10 @@ class EmbedderOpenAI(AgnoResource[EmbedderOpenAIConfig, EmbedderOpenAIOutputs, E
         Returns:
             Configured OpenAIEmbedder instance.
         """
-        return OpenAIEmbedder(**spec.model_dump(exclude_none=True))
+        return OpenAIEmbedder(
+            **spec.model_dump(exclude={"api_key"}, exclude_none=True),
+            api_key=spec.api_key.get_secret_value(),
+        )
 
     def _build_spec(self) -> EmbedderOpenAISpec:
         """Build spec from current config.
@@ -116,7 +120,7 @@ class EmbedderOpenAI(AgnoResource[EmbedderOpenAIConfig, EmbedderOpenAIOutputs, E
         """
         return EmbedderOpenAISpec(
             id=self.resolved(self.config.id),
-            api_key=str(self.config.api_key),
+            api_key=self.resolved(self.config.api_key),
             dimensions=self.resolved(self.config.dimensions),
             encoding_format=self.resolved(self.config.encoding_format),
             organization=self.resolved(self.config.organization),

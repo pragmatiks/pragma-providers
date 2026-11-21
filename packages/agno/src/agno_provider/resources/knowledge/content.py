@@ -299,7 +299,10 @@ def build_qdrant_client(vector_database_spec: VectordbQdrantSpec) -> AsyncQdrant
     Returns:
         Client the caller must close.
     """
-    return AsyncQdrantClient(url=vector_database_spec.url, api_key=vector_database_spec.api_key)
+    api_key = vector_database_spec.api_key
+    revealed_api_key = api_key.get_secret_value() if api_key is not None else None
+
+    return AsyncQdrantClient(url=vector_database_spec.url, api_key=revealed_api_key)
 
 
 def build_resource_condition(resource_id: str) -> models.FieldCondition:
