@@ -9,7 +9,8 @@ from __future__ import annotations
 from typing import Literal
 
 from agno.models.openai import OpenAIChat
-from pragma_sdk import Field, SensitiveField
+from pragma_sdk import Field
+from pydantic import SecretStr
 
 from agno_provider.resources.base import AgnoSpec
 from agno_provider.resources.models.base import Model, ModelConfig, ModelOutputs
@@ -43,7 +44,7 @@ class OpenAIModelSpec(AgnoSpec):
 
     type: Literal["openai"] = "openai"
     id: str
-    api_key: str
+    api_key: SecretStr
     max_tokens: int | None = None
     temperature: float | None = None
     top_p: float | None = None
@@ -63,7 +64,7 @@ class OpenAIModelConfig(ModelConfig):
     Maps directly to Agno's OpenAIChat constructor parameters.
 
     Attributes:
-        api_key: OpenAI API key. Use a FieldReference to inject from pragma/secret.
+        api_key: OpenAI API key, a reference to a secret output such as a pragma/secret entry.
         max_tokens: Optional maximum tokens in the response.
         temperature: Optional sampling temperature (0.0-2.0).
         top_p: Optional nucleus sampling parameter.
@@ -77,7 +78,7 @@ class OpenAIModelConfig(ModelConfig):
         base_url: Optional custom base URL for OpenAI-compatible APIs.
     """
 
-    api_key: SensitiveField[str]
+    api_key: Field[SecretStr]
     max_tokens: Field[int] | None = None
     temperature: Field[float] | None = None
     top_p: Field[float] | None = None
@@ -126,7 +127,10 @@ class OpenAIModel(Model[OpenAIModelConfig, OpenAIModelOutputs, OpenAIModelSpec, 
         Returns:
             Configured OpenAIChat instance.
         """
-        return OpenAIChat(**spec.model_dump(exclude={"type"}, exclude_none=True))
+        return OpenAIChat(
+            **spec.model_dump(exclude={"type", "api_key"}, exclude_none=True),
+            api_key=spec.api_key.get_secret_value(),
+        )
 
     def _build_spec(self) -> OpenAIModelSpec:
         """Build spec from current config.
@@ -139,7 +143,7 @@ class OpenAIModel(Model[OpenAIModelConfig, OpenAIModelOutputs, OpenAIModelSpec, 
         """
         return OpenAIModelSpec(
             id=self.resolved(self.config.id),
-            api_key=str(self.config.api_key),
+            api_key=self.resolved(self.config.api_key),
             max_tokens=self.resolved(self.config.max_tokens),
             temperature=self.resolved(self.config.temperature),
             top_p=self.resolved(self.config.top_p),
