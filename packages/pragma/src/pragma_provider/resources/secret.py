@@ -1,22 +1,24 @@
 """Pragma platform secret resource.
 
-Pass-through resource that exposes config.data as outputs, enabling other
-resources to reference secret values via FieldReferences.
+Pass-through resource that exposes config.data as outputs, so other resources
+can reference secret values via FieldReferences. Every value is a ``SecretStr``.
 """
 
 from __future__ import annotations
 
 from pragma_sdk import Config, Field, Outputs, Resource
+from pydantic import Field as PydanticField
+from pydantic import SecretStr
 
 
 class SecretConfig(Config):
     """Configuration for a platform-managed secret.
 
     Attributes:
-        data: Key-value pairs of secret data. Values should be strings.
+        data: Key-value pairs of secret data. Each value is a secret string.
     """
 
-    data: Field[dict[str, str]]
+    data: Field[dict[str, SecretStr]]
 
 
 class SecretOutputs(Outputs):
@@ -24,9 +26,12 @@ class SecretOutputs(Outputs):
 
     Each key-value pair from config.data is exposed as an output field,
     enabling other resources to reference secret values via FieldReferences.
+    Every entry is a ``SecretStr``.
     """
 
     model_config = {"extra": "allow"}
+
+    __pydantic_extra__: dict[str, SecretStr] = PydanticField(init=False)
 
 
 class Secret(Resource[SecretConfig, SecretOutputs]):
