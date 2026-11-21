@@ -1826,7 +1826,7 @@ dev = [{ name = "ruff", specifier = "==0.16.8" }]
 
 [[package]]
 name = "pragmatiks-agno"
-version = "2.2.35"
+version = "2.2.36"
 source = { editable = "packages/agno" }
 dependencies = [
     { name = "agno", extra = ["anthropic", "openai", "postgres", "qdrant"] },
@@ -1962,7 +1962,7 @@ dev = [
 
 [[package]]
 name = "pragmatiks-pragma"
-version = "7.0.0"
+version = "8.0.0"
 source = { editable = "packages/pragma" }
 dependencies = [
     { name = "httpx" },
