@@ -9,6 +9,7 @@ from pragma_sdk import AlreadyExistsError
 
 
 _BASE_URL = "https://api.vercel.com"
+DEFAULT_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 
 def create_vercel_client(access_token: str) -> httpx.AsyncClient:
@@ -26,7 +27,7 @@ def create_vercel_client(access_token: str) -> httpx.AsyncClient:
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
         },
-        timeout=httpx.Timeout(60.0, connect=10.0),
+        timeout=DEFAULT_TIMEOUT,
     )
 
 
@@ -83,19 +84,25 @@ async def raise_for_create_status(response: httpx.Response, description: str) ->
         httpx.HTTPStatusError: If Vercel answers with any other error status.
     """
     if response.status_code == httpx.codes.CONFLICT:
-        msg = f"{description} already exists: {parse_error_message(response)}"
-        raise AlreadyExistsError(msg)
+        message = f"{description} already exists: {parse_error_message(response)}"
+        raise AlreadyExistsError(message)
 
     await raise_for_status(response)
 
 
-async def fetch_optional_json(client: httpx.AsyncClient, path: str, params: dict[str, str]) -> dict[str, Any] | None:
+async def fetch_optional_json(
+    client: httpx.AsyncClient,
+    path: str,
+    params: dict[str, str],
+    timeout: httpx.Timeout | float = DEFAULT_TIMEOUT,
+) -> dict[str, Any] | None:
     """Fetch the JSON object at ``path``, or ``None`` when Vercel reports it does not exist.
 
     Args:
         client: Authenticated Vercel API client.
         path: REST path of the object to read.
         params: Query parameters, such as the team ID.
+        timeout: HTTP timeout of the request.
 
     Returns:
         The response body, or ``None`` when Vercel answers 404.
@@ -103,7 +110,7 @@ async def fetch_optional_json(client: httpx.AsyncClient, path: str, params: dict
     Raises:
         httpx.HTTPStatusError: If Vercel answers with any other error status.
     """
-    response = await client.get(path, params=params)
+    response = await client.get(path, params=params, timeout=timeout)
 
     if response.status_code == 404:
         return None
