@@ -1,3 +1,9 @@
+## kubernetes-v2.6.0 (2026-11-23)
+
+### Feat
+
+- **kubernetes**: inject secret environment variables into a statefulset from references
+
 ## kubernetes-v2.5.0 (2026-11-20)
 
 ### Feat
