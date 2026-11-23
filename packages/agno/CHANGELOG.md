@@ -1,3 +1,9 @@
+## agno-v2.3.0 (2026-11-23)
+
+### Feat
+
+- **agno**: hold model, embedder and vector database API keys as SecretStr
+
 ## agno-v2.2.36 (2026-11-21)
 
 ## agno-v2.2.35 (2026-11-20)
