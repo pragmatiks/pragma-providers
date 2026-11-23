@@ -1,3 +1,9 @@
+## vercel-v6.3.0 (2026-11-23)
+
+### Feat
+
+- **vercel**: hold the API token as SecretStr
+
 ## vercel-v6.2.27 (2026-11-20)
 
 ### Fix
