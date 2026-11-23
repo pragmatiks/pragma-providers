@@ -1,3 +1,9 @@
+## supabase-v6.3.0 (2026-11-23)
+
+### Feat
+
+- **supabase**: hold the project access token and database password as SecretStr
+
 ## supabase-v6.2.27 (2026-11-20)
 
 ### Fix
