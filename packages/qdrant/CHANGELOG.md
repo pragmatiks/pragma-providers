@@ -1,3 +1,9 @@
+## qdrant-v8.4.0 (2026-11-23)
+
+### Feat
+
+- **qdrant**: keep the database API key in a pragma secret child
+
 ## qdrant-v8.3.15 (2026-11-20)
 
 ### Fix
