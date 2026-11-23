@@ -1,3 +1,9 @@
+## pragma-v8.1.0 (2026-11-23)
+
+### Feat
+
+- **pragma**: hold secret data and outputs as SecretStr
+
 ## pragma-v8.0.0 (2026-11-21)
 
 ### BREAKING CHANGE
