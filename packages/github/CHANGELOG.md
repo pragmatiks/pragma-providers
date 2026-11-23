@@ -1,3 +1,9 @@
+## github-v6.3.0 (2026-11-23)
+
+### Feat
+
+- **github**: hold access tokens and secret values as SecretStr
+
 ## github-v6.2.28 (2026-11-20)
 
 ### Fix
