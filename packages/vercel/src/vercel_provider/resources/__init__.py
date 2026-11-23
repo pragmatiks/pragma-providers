@@ -1,13 +1,5 @@
-"""Resource definitions for Vercel provider.
+"""Resource definitions for the Vercel provider: projects, with the deployments Pragmatiks makes, and domains."""
 
-Import and export your Resource classes here for discovery by the runtime.
-"""
-
-from vercel_provider.resources.deployment import (
-    Deployment,
-    DeploymentConfig,
-    DeploymentOutputs,
-)
 from vercel_provider.resources.domain import (
     Domain,
     DomainConfig,
@@ -20,12 +12,11 @@ from vercel_provider.resources.project import (
     ProjectConfig,
     ProjectOutputs,
 )
+from vercel_provider.resources.project_deployment import DeploymentConfig
 
 
 __all__ = [
-    "Deployment",
     "DeploymentConfig",
-    "DeploymentOutputs",
     "Domain",
     "DomainConfig",
     "DomainOutputs",
