@@ -62,7 +62,7 @@ pragma providers install pragmatiks/supabase
 
 ### Vercel Provider
 
-Manage Vercel projects, deployments, and domains.
+Manage Vercel projects, the deployments Pragmatiks makes of their Git link, and domains.
 
 ```bash
 pragma providers install pragmatiks/vercel
@@ -70,8 +70,7 @@ pragma providers install pragmatiks/vercel
 
 | Resource | Description |
 |----------|-------------|
-| `vercel/project` | Vercel projects |
-| `vercel/deployment` | Deployments of a Vercel project |
+| `vercel/project` | Vercel projects, and the Git ref Pragmatiks deploys |
 | `vercel/domain` | Custom domains on Vercel projects |
 
 ### GitHub Provider
@@ -268,7 +267,7 @@ pragma-providers/
 ├── packages/
 │   ├── gcp/              # GCP provider (secret, gke, cloudsql)
 │   ├── supabase/         # Supabase provider (project)
-│   ├── vercel/           # Vercel provider (project, deployment, domain)
+│   ├── vercel/           # Vercel provider (project, domain)
 │   ├── github/           # GitHub provider (repository, environment, secret)
 │   ├── pragma/           # Pragma provider (secret, config, file)
 │   ├── kubernetes/       # Kubernetes provider (deployment, service, secret, ...)
