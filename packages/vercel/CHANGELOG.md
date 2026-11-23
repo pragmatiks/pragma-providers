@@ -1,3 +1,13 @@
+## vercel-v7.0.0 (2026-11-23)
+
+### BREAKING CHANGE
+
+- the vercel/deployment resource type is removed.
+
+### Feat
+
+- **vercel**: deploy from vercel/project and remove vercel/deployment
+
 ## vercel-v6.3.0 (2026-11-23)
 
 ### Feat
