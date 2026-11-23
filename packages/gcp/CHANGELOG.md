@@ -1,3 +1,9 @@
+## gcp-v7.3.14 (2026-11-23)
+
+### Fix
+
+- **gcp**: require pragmatiks-sdk 33 for the protocol 9 host
+
 ## gcp-v7.3.13 (2026-11-20)
 
 ### Fix
