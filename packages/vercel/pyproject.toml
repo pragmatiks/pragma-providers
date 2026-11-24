@@ -1,6 +1,6 @@
 [project]
 name = "pragmatiks-vercel"
-version = "7.0.0"
+version = "7.0.1"
 description = "Manage Vercel projects, deploy Git refs of their linked repository, and configure domains through declarative resources using the Vercel REST API."
 keywords = ["vercel", "hosting", "git-deployments", "projects", "domains", "frontend"]
 readme = "README.md"
@@ -25,7 +25,7 @@ vercel = "vercel_provider"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "7.0.0"
+version = "7.0.1"
 version_files = ["pyproject.toml:^version"]
 tag_format = "vercel-v$version"
 bump_message = "bump: version $current_version → $new_version [skip ci]"

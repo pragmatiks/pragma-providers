@@ -1,3 +1,9 @@
+## vercel-v7.0.1 (2026-11-24)
+
+### Fix
+
+- **deps**: update pragmatiks-sdk to v33.0.1 (#222)
+
 ## vercel-v7.0.0 (2026-11-23)
 
 ### BREAKING CHANGE
