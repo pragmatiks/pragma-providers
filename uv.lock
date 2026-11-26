@@ -2008,7 +2008,7 @@ dev = [
 requires-dist = [
     { name = "pragmatiks-kubernetes", editable = "packages/kubernetes" },
     { name = "pragmatiks-pragma", editable = "packages/pragma" },
-    { name = "pragmatiks-sdk", specifier = ">=33.0.1" },
+    { name = "pragmatiks-sdk", specifier = ">=34.0.0" },
     { name = "qdrant-client", specifier = ">=1.16.0" },
 ]
 
