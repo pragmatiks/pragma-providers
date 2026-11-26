@@ -2053,7 +2053,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
-    { name = "pragmatiks-sdk", specifier = ">=33.0.1" },
+    { name = "pragmatiks-sdk", specifier = ">=34.0.0" },
 ]
 
 [package.metadata.requires-dev]
